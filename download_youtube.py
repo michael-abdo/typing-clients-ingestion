@@ -17,7 +17,7 @@ def create_download_dir():
         print(f"Created downloads directory: {DOWNLOADS_DIR}")
     return downloads_path
 
-def download_single_video(url, video_id=None, title=None, transcript_only=False, resolution="720", output_format="mp4", yt_dlp_path="yt-dlp"):
+def download_single_video(url, video_id=None, title=None, transcript_only=False, resolution="720", output_format="mp4", transcript_format="vtt", yt_dlp_path="yt-dlp"):
     """Download a single YouTube video using yt-dlp"""
     downloads_path = create_download_dir()
     
@@ -49,16 +49,16 @@ def download_single_video(url, video_id=None, title=None, transcript_only=False,
     
     # Check if video already exists
     video_file = downloads_path / f"{video_id}.{output_format}"
+    
+    # Use proper transcript format extension
+    transcript_file = downloads_path / f"{video_id}_transcript.{transcript_format}"
+    
     if video_file.exists() and not transcript_only:
         print(f"Video already exists at {video_file}")
         # Still check for transcript
-        transcript_file = downloads_path / f"{video_id}_transcript.{output_format}"
         if transcript_file.exists():
             print(f"Transcript already exists at {transcript_file}")
             return video_file, transcript_file
-    
-    # Prepare transcript file path
-    transcript_file = downloads_path / f"{video_id}_transcript.{output_format}"
     
     # Check if transcript already exists
     has_transcript = False
@@ -66,13 +66,6 @@ def download_single_video(url, video_id=None, title=None, transcript_only=False,
         print(f"Transcript already exists at {transcript_file}")
         has_transcript = True
     else:
-        # Try to download subtitles
-        if output_format == "srt":
-            sub_format = "srt"
-        else:
-            # Default to vtt format for better compatibility
-            sub_format = "vtt"
-            
         # Command to download subtitles - also try to write automatic captions
         sub_cmd = [
             yt_dlp_path,
@@ -80,7 +73,7 @@ def download_single_video(url, video_id=None, title=None, transcript_only=False,
             "--write-subs",
             "--write-auto-subs",  # Also write automatically generated subtitles
             "--sub-langs", "en.*",
-            "--sub-format", sub_format,
+            "--sub-format", transcript_format,
             "--output", f"{downloads_path}/{video_id}",
             url
         ]
@@ -91,7 +84,7 @@ def download_single_video(url, video_id=None, title=None, transcript_only=False,
             
             # Find the subtitle file, looking for both regular and auto-generated subtitles
             # (could be .en.vtt, .en-US.vtt, .en.auto.vtt, etc.)
-            subtitle_files = list(downloads_path.glob(f"{video_id}.*.{sub_format}"))
+            subtitle_files = list(downloads_path.glob(f"{video_id}.*.{transcript_format}"))
             
             if subtitle_files:
                 # Rename the first subtitle file to our standard name
@@ -100,7 +93,7 @@ def download_single_video(url, video_id=None, title=None, transcript_only=False,
                 has_transcript = True
             else:
                 # Try one more time with a broader search in case files were saved with unexpected names
-                subtitle_files = list(downloads_path.glob(f"*.{sub_format}"))
+                subtitle_files = list(downloads_path.glob(f"*.{transcript_format}"))
                 recent_subtitle_files = sorted(
                     [f for f in subtitle_files if f.stat().st_mtime > time.time() - 300],  # Files created in last 5 minutes
                     key=lambda f: f.stat().st_mtime,
@@ -144,7 +137,7 @@ def download_single_video(url, video_id=None, title=None, transcript_only=False,
         return None, transcript_file if has_transcript else None
 
 
-def download_video(url, transcript_only=False, resolution="720", output_format="mp4"):
+def download_video(url, transcript_only=False, resolution="720", output_format="mp4", transcript_format="vtt"):
     """Download a YouTube video or playlist using yt-dlp"""
     # Get the path to yt-dlp in the virtual environment
     import os
@@ -186,6 +179,7 @@ def download_video(url, transcript_only=False, resolution="720", output_format="
                 transcript_only=transcript_only,
                 resolution=resolution,
                 output_format=output_format,
+                transcript_format=transcript_format,
                 yt_dlp_path=yt_dlp_path
             )
             
@@ -206,6 +200,7 @@ def download_video(url, transcript_only=False, resolution="720", output_format="
             transcript_only=transcript_only,
             resolution=resolution,
             output_format=output_format,
+            transcript_format=transcript_format,
             yt_dlp_path=yt_dlp_path
         )
 
@@ -224,7 +219,8 @@ def main():
         args.url, 
         args.transcript_only,
         args.resolution,
-        args.format
+        args.format,
+        args.transcript_format
     )
     
     # Summary

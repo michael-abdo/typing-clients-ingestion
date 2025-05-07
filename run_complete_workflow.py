@@ -192,7 +192,7 @@ def main():
             for i, link in enumerate(youtube_links):
                 if link:
                     print(f"\nDownloading YouTube playlist {i+1}/{len(youtube_links)}: {link}")
-                    command = [sys.executable, "download_youtube.py", link]
+                    command = [sys.executable, "download_youtube.py", link, "--transcript-format", "vtt"]
                     exit_code = run_process(command)
                     if exit_code != 0:
                         print(f"Warning: Failed to download YouTube video: {link}")
