@@ -47,67 +47,85 @@ def download_single_video(url, video_id=None, title=None, transcript_only=False,
     print(f"Video ID: {video_id}")
     print(f"Title: {title}")
     
+    # Check if video already exists
+    video_file = downloads_path / f"{video_id}.{output_format}"
+    if video_file.exists() and not transcript_only:
+        print(f"Video already exists at {video_file}")
+        # Still check for transcript
+        transcript_file = downloads_path / f"{video_id}_transcript.{output_format}"
+        if transcript_file.exists():
+            print(f"Transcript already exists at {transcript_file}")
+            return video_file, transcript_file
+    
     # Prepare transcript file path
     transcript_file = downloads_path / f"{video_id}_transcript.{output_format}"
     
-    # Try to download subtitles
+    # Check if transcript already exists
     has_transcript = False
-    if output_format == "srt":
-        sub_format = "srt"
+    if transcript_file.exists():
+        print(f"Transcript already exists at {transcript_file}")
+        has_transcript = True
     else:
-        # Default to vtt format for better compatibility
-        sub_format = "vtt"
-        
-    # Command to download subtitles - also try to write automatic captions
-    sub_cmd = [
-        yt_dlp_path,
-        "--skip-download",
-        "--write-subs",
-        "--write-auto-subs",  # Also write automatically generated subtitles
-        "--sub-langs", "en.*",
-        "--sub-format", sub_format,
-        "--output", f"{downloads_path}/{video_id}",
-        url
-    ]
-    
-    try:
-        print("Attempting to download transcript...")
-        subprocess.run(sub_cmd, check=True)
-        
-        # Find the subtitle file, looking for both regular and auto-generated subtitles
-        # (could be .en.vtt, .en-US.vtt, .en.auto.vtt, etc.)
-        subtitle_files = list(downloads_path.glob(f"{video_id}.*.{sub_format}"))
-        
-        if subtitle_files:
-            # Rename the first subtitle file to our standard name
-            subtitle_files[0].rename(transcript_file)
-            print(f"Saved transcript to {transcript_file}")
-            has_transcript = True
+        # Try to download subtitles
+        if output_format == "srt":
+            sub_format = "srt"
         else:
-            # Try one more time with a broader search in case files were saved with unexpected names
-            subtitle_files = list(downloads_path.glob(f"*.{sub_format}"))
-            recent_subtitle_files = sorted(
-                [f for f in subtitle_files if f.stat().st_mtime > time.time() - 300],  # Files created in last 5 minutes
-                key=lambda f: f.stat().st_mtime,
-                reverse=True
-            )
+            # Default to vtt format for better compatibility
+            sub_format = "vtt"
             
-            if recent_subtitle_files:
-                # Rename the most recently created subtitle file
-                recent_subtitle_files[0].rename(transcript_file)
+        # Command to download subtitles - also try to write automatic captions
+        sub_cmd = [
+            yt_dlp_path,
+            "--skip-download",
+            "--write-subs",
+            "--write-auto-subs",  # Also write automatically generated subtitles
+            "--sub-langs", "en.*",
+            "--sub-format", sub_format,
+            "--output", f"{downloads_path}/{video_id}",
+            url
+        ]
+        
+        try:
+            print("Attempting to download transcript...")
+            subprocess.run(sub_cmd, check=True)
+            
+            # Find the subtitle file, looking for both regular and auto-generated subtitles
+            # (could be .en.vtt, .en-US.vtt, .en.auto.vtt, etc.)
+            subtitle_files = list(downloads_path.glob(f"{video_id}.*.{sub_format}"))
+            
+            if subtitle_files:
+                # Rename the first subtitle file to our standard name
+                subtitle_files[0].rename(transcript_file)
                 print(f"Saved transcript to {transcript_file}")
                 has_transcript = True
             else:
-                print("No transcript found for this video")
-    except subprocess.CalledProcessError:
-        print("Error downloading transcript")
+                # Try one more time with a broader search in case files were saved with unexpected names
+                subtitle_files = list(downloads_path.glob(f"*.{sub_format}"))
+                recent_subtitle_files = sorted(
+                    [f for f in subtitle_files if f.stat().st_mtime > time.time() - 300],  # Files created in last 5 minutes
+                    key=lambda f: f.stat().st_mtime,
+                    reverse=True
+                )
+                
+                if recent_subtitle_files:
+                    # Rename the most recently created subtitle file
+                    recent_subtitle_files[0].rename(transcript_file)
+                    print(f"Saved transcript to {transcript_file}")
+                    has_transcript = True
+                else:
+                    print("No transcript found for this video")
+        except subprocess.CalledProcessError:
+            print("Error downloading transcript")
     
     # If transcript only mode, stop here
     if transcript_only:
         return None, transcript_file if has_transcript else None
     
+    # If video already exists, we already checked above
+    if video_file.exists():
+        return video_file, transcript_file if has_transcript else None
+    
     # Command to download video
-    video_file = downloads_path / f"{video_id}.{output_format}"
     video_cmd = [
         yt_dlp_path,
         "-f", f"bestvideo[height<={resolution}][ext={output_format}]+bestaudio[ext=m4a]/best[height<={resolution}][ext={output_format}]",

@@ -97,14 +97,14 @@ def get_unprocessed_links(csv_file, link_type="google_drive"):
                 video_id = item.name.split(".mp4")[0]
                 downloaded_ids.add(video_id)
             
-            # Filter links that haven't been downloaded yet
-            filtered_links = []
-            for link in links:
-                # For simplicity, just add all YouTube playlist links
-                # Individual video downloading will be handled by the download_youtube.py script
-                filtered_links.append(link)
-            
-            links = filtered_links
+            # For YouTube, we'll pass along all the playlist links
+            # but we track which videos have already been downloaded for logging
+            num_downloaded = len(downloaded_ids)
+            if num_downloaded > 0:
+                print(f"Found {num_downloaded} already downloaded YouTube videos")
+                
+            # The download_youtube.py script now checks for existing files before downloading
+            # so we don't need to filter links here, but we'll keep track of them
     
     return links
 
