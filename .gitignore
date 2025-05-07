@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Cache files
+cache/
+html_cache/
+google_sheet_cache.html
+
+# Downloads
+drive_downloads/
+youtube_downloads/
+
+# Logs
+*.log
+
+# macOS
+.DS_Store
+
+# Generated data
+output.csv
+
+# Claude debug file
+claude.md
