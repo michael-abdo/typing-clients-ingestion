@@ -192,10 +192,24 @@ def main():
             for i, link in enumerate(youtube_links):
                 if link:
                     print(f"\nDownloading YouTube playlist {i+1}/{len(youtube_links)}: {link}")
-                    command = [sys.executable, "download_youtube.py", link, "--transcript-format", "vtt"]
+                    # Add more robust options for YouTube download
+                    command = [
+                        sys.executable, 
+                        "download_youtube.py", 
+                        link, 
+                        "--transcript-format", "vtt",
+                        "--no-check-certificate"  # Add this to bypass certificate issues
+                    ]
+                    
+                    # Check if cookies file exists and add it if it does
+                    cookies_path = os.path.join(os.path.dirname(os.path.realpath(__file__)), "youtube_cookies.txt")
+                    if os.path.exists(cookies_path):
+                        command.extend(["--cookies", cookies_path])
+                    
                     exit_code = run_process(command)
                     if exit_code != 0:
                         print(f"Warning: Failed to download YouTube video: {link}")
+                        print("YouTube may require authentication. Consider creating a 'youtube_cookies.txt' file in the project directory.")
     
     print(f"\n{'=' * 80}\nAll steps completed successfully!\n{'=' * 80}")
     return 0

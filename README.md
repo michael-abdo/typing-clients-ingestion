@@ -173,7 +173,26 @@ Both Google Drive and YouTube downloaders automatically check if files already e
 python download_youtube.py https://www.youtube.com/watch?v=VIDEO_ID
 python download_youtube.py https://www.youtube.com/watch?v=VIDEO_ID --transcript-only
 python download_youtube.py https://www.youtube.com/watch?v=VIDEO_ID --resolution 1080
+
+# For YouTube videos requiring authentication
+python download_youtube.py https://www.youtube.com/watch?v=VIDEO_ID --cookies youtube_cookies.txt
 ```
+
+#### YouTube Authentication
+
+YouTube now frequently requires authentication to download videos (showing "Sign in to confirm you're not a bot" messages). To handle this:
+
+1. Create a `youtube_cookies.txt` file in the project directory with your YouTube cookies.
+2. You can export cookies using browser extensions like "Get cookies.txt" or using yt-dlp's built-in browser cookie extraction:
+   ```bash
+   yt-dlp --cookies-from-browser chrome > youtube_cookies.txt
+   ```
+3. Use the `--cookies` parameter when downloading videos:
+   ```bash
+   python download_youtube.py https://www.youtube.com/watch?v=VIDEO_ID --cookies youtube_cookies.txt
+   ```
+
+The workflow script will automatically use a `youtube_cookies.txt` file if it exists in the project directory.
 
 ### Download Google Drive Files
 

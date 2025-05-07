@@ -17,32 +17,79 @@ def create_download_dir():
         print(f"Created downloads directory: {DOWNLOADS_DIR}")
     return downloads_path
 
-def download_single_video(url, video_id=None, title=None, transcript_only=False, resolution="720", output_format="mp4", transcript_format="vtt", yt_dlp_path="yt-dlp"):
+def download_single_video(url, video_id=None, title=None, transcript_only=False, resolution="720", output_format="mp4", transcript_format="vtt", yt_dlp_path="yt-dlp", cookies=None, no_check_certificate=False):
     """Download a single YouTube video using yt-dlp"""
     downloads_path = create_download_dir()
+    
+    # Base command with common options
+    base_cmd = [yt_dlp_path]
+    
+    # Add options for handling YouTube bot detection
+    base_cmd.extend(["--no-playlist", "--geo-bypass", "--ignore-errors"])
+    
+    # Add cookies if provided
+    if cookies:
+        base_cmd.extend(["--cookies", cookies])
+    
+    # Add no-check-certificate option if requested
+    if no_check_certificate:
+        base_cmd.append("--no-check-certificate")
     
     # If video_id and title not provided, get them first
     if not video_id or not title:
         # Command to get video info
-        info_cmd = [
-            yt_dlp_path, 
+        info_cmd = base_cmd.copy()
+        info_cmd.extend([
             "--skip-download", 
             "--print", "id,title",
             url
-        ]
+        ])
         
         try:
             # Get video ID and title
+            print("Attempting to get video info...")
             result = subprocess.run(info_cmd, capture_output=True, text=True, check=True)
             info = result.stdout.strip().split('\n')
             if len(info) != 2:
                 print(f"Error: Couldn't get video information for {url}")
-                return None, None
-                
-            video_id, title = info
+                # If we have video_id but no title, we can still proceed
+                if video_id:
+                    title = f"Unknown Title - {video_id}"
+                    print(f"Using fallback title: {title}")
+                else:
+                    # Try to extract video_id from URL if not provided
+                    import re
+                    if 'youtube.com/watch?v=' in url:
+                        match = re.search(r'watch\?v=([a-zA-Z0-9_-]{11})', url)
+                        if match:
+                            video_id = match.group(1)
+                            title = f"Unknown Title - {video_id}"
+                            print(f"Extracted video ID from URL: {video_id}")
+                            print(f"Using fallback title: {title}")
+                        else:
+                            return None, None
+                    else:
+                        return None, None
+            else:
+                video_id, title = info
         except subprocess.CalledProcessError as e:
             print(f"Error getting video info: {e}")
-            return None, None
+            # Try to extract video_id from URL if not provided
+            if not video_id and 'youtube.com/watch?v=' in url:
+                import re
+                match = re.search(r'watch\?v=([a-zA-Z0-9_-]{11})', url)
+                if match:
+                    video_id = match.group(1)
+                    title = f"Unknown Title - {video_id}"
+                    print(f"Extracted video ID from URL: {video_id}")
+                    print(f"Using fallback title: {title}")
+                else:
+                    return None, None
+            elif not video_id:
+                return None, None
+            elif not title:
+                title = f"Unknown Title - {video_id}"
+                print(f"Using fallback title: {title}")
     
     print(f"Video ID: {video_id}")
     print(f"Title: {title}")
@@ -67,8 +114,8 @@ def download_single_video(url, video_id=None, title=None, transcript_only=False,
         has_transcript = True
     else:
         # Command to download subtitles - also try to write automatic captions
-        sub_cmd = [
-            yt_dlp_path,
+        sub_cmd = base_cmd.copy()
+        sub_cmd.extend([
             "--skip-download",
             "--write-subs",
             "--write-auto-subs",  # Also write automatically generated subtitles
@@ -76,7 +123,7 @@ def download_single_video(url, video_id=None, title=None, transcript_only=False,
             "--sub-format", transcript_format,
             "--output", f"{downloads_path}/{video_id}",
             url
-        ]
+        ])
         
         try:
             print("Attempting to download transcript...")
@@ -108,7 +155,7 @@ def download_single_video(url, video_id=None, title=None, transcript_only=False,
                 else:
                     print("No transcript found for this video")
         except subprocess.CalledProcessError:
-            print("Error downloading transcript")
+            print("Error downloading transcript - YouTube may require authentication")
     
     # If transcript only mode, stop here
     if transcript_only:
@@ -119,13 +166,13 @@ def download_single_video(url, video_id=None, title=None, transcript_only=False,
         return video_file, transcript_file if has_transcript else None
     
     # Command to download video
-    video_cmd = [
-        yt_dlp_path,
+    video_cmd = base_cmd.copy()
+    video_cmd.extend([
         "-f", f"bestvideo[height<={resolution}][ext={output_format}]+bestaudio[ext=m4a]/best[height<={resolution}][ext={output_format}]",
         "--merge-output-format", output_format,
         "--output", str(video_file),
         url
-    ]
+    ])
     
     try:
         print(f"\nDownloading video in {resolution}p {output_format} format...")
@@ -134,10 +181,11 @@ def download_single_video(url, video_id=None, title=None, transcript_only=False,
         return video_file, transcript_file if has_transcript else None
     except subprocess.CalledProcessError as e:
         print(f"Error downloading video: {e}")
+        print("YouTube may require authentication or the video might be restricted")
         return None, transcript_file if has_transcript else None
 
 
-def download_video(url, transcript_only=False, resolution="720", output_format="mp4", transcript_format="vtt"):
+def download_video(url, transcript_only=False, resolution="720", output_format="mp4", transcript_format="vtt", cookies=None, no_check_certificate=False):
     """Download a YouTube video or playlist using yt-dlp"""
     # Get the path to yt-dlp in the virtual environment
     import os
@@ -180,7 +228,9 @@ def download_video(url, transcript_only=False, resolution="720", output_format="
                 resolution=resolution,
                 output_format=output_format,
                 transcript_format=transcript_format,
-                yt_dlp_path=yt_dlp_path
+                yt_dlp_path=yt_dlp_path,
+                cookies=cookies,
+                no_check_certificate=no_check_certificate
             )
             
             if video_file:
@@ -201,7 +251,9 @@ def download_video(url, transcript_only=False, resolution="720", output_format="
             resolution=resolution,
             output_format=output_format,
             transcript_format=transcript_format,
-            yt_dlp_path=yt_dlp_path
+            yt_dlp_path=yt_dlp_path,
+            cookies=cookies,
+            no_check_certificate=no_check_certificate
         )
 
 def main():
@@ -211,6 +263,9 @@ def main():
     parser.add_argument('--resolution', default='720', help='Preferred video resolution (default: 720p)')
     parser.add_argument('--format', choices=['mp4', 'webm'], default='mp4', help='Video format (default: mp4)')
     parser.add_argument('--transcript-format', choices=['vtt', 'srt'], default='vtt', help='Transcript format (default: vtt)')
+    parser.add_argument('--cookies', help='Path to a cookies file for YouTube authentication')
+    parser.add_argument('--no-check-certificate', action='store_true', help='Ignore SSL certificate validation')
+    parser.add_argument('--extract-audio', action='store_true', help='Extract audio only from the video')
     
     args = parser.parse_args()
     
@@ -220,7 +275,9 @@ def main():
         args.transcript_only,
         args.resolution,
         args.format,
-        args.transcript_format
+        args.transcript_format,
+        args.cookies,
+        args.no_check_certificate
     )
     
     # Summary
@@ -229,6 +286,8 @@ def main():
         print(f"✅ Video: {video_file}")
     elif not args.transcript_only:
         print("❌ Video: Failed to download")
+        print("   This may be due to YouTube requiring authentication.")
+        print("   Try adding --cookies COOKIES_FILE argument (see yt-dlp documentation)")
         
     if transcript_file:
         print(f"✅ Transcript: {transcript_file}")
