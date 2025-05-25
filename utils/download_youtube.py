@@ -5,8 +5,12 @@ import argparse
 import subprocess
 import time
 from pathlib import Path
-from logger import setup_component_logging
-from validation import validate_youtube_url, validate_file_path, ValidationError
+try:
+    from logger import setup_component_logging
+    from validation import validate_youtube_url, validate_file_path, ValidationError
+except ImportError:
+    from .logger import setup_component_logging
+    from .validation import validate_youtube_url, validate_file_path, ValidationError
 
 # Directory to save downloaded videos and transcripts
 DOWNLOADS_DIR = "youtube_downloads"

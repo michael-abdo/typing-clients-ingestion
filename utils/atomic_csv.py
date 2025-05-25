@@ -4,7 +4,10 @@ import csv
 import tempfile
 from pathlib import Path
 from contextlib import contextmanager
-from validation import sanitize_csv_value
+try:
+    from validation import sanitize_csv_value
+except ImportError:
+    from .validation import sanitize_csv_value
 
 
 class AtomicCSVWriter:

@@ -6,8 +6,12 @@ import time
 import argparse
 import requests
 from urllib.parse import urlparse, parse_qs
-from logger import setup_component_logging
-from validation import validate_google_drive_url, validate_file_path, ValidationError
+try:
+    from logger import setup_component_logging
+    from validation import validate_google_drive_url, validate_file_path, ValidationError
+except ImportError:
+    from .logger import setup_component_logging
+    from .validation import validate_google_drive_url, validate_file_path, ValidationError
 
 # Directory to save downloaded files
 DOWNLOADS_DIR = "drive_downloads"

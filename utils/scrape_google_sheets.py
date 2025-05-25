@@ -4,7 +4,10 @@ import os
 import requests
 from bs4 import BeautifulSoup
 import sys
-from atomic_csv import write_csv_atomic, append_csv_atomic
+try:
+    from atomic_csv import write_csv_atomic, append_csv_atomic
+except ImportError:
+    from .atomic_csv import write_csv_atomic, append_csv_atomic
 
 # Increase CSV field size limit to handle large fields
 csv.field_size_limit(sys.maxsize)
