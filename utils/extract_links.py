@@ -190,7 +190,10 @@ def get_html(url, debug=False):
         
         return html
     except Exception as e:
-        print(f"Error downloading {url}: {str(e)}")
+        # Log error but don't fail completely - some URLs might be temporarily unavailable
+        print(f"Warning: Error downloading {url}: {str(e)}")
+        # Return empty string to allow processing to continue
+        # Caller should check for empty response
         return ""
 
 def extract_links(url, limit=1, debug=False):

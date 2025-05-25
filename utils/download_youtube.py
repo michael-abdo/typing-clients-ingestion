@@ -8,9 +8,11 @@ from pathlib import Path
 try:
     from logger import setup_component_logging
     from validation import validate_youtube_url, validate_file_path, ValidationError
+    from retry_utils import retry_subprocess, retry_with_backoff
 except ImportError:
     from .logger import setup_component_logging
     from .validation import validate_youtube_url, validate_file_path, ValidationError
+    from .retry_utils import retry_subprocess, retry_with_backoff
 
 # Directory to save downloaded videos and transcripts
 DOWNLOADS_DIR = "youtube_downloads"
@@ -51,16 +53,23 @@ def download_single_video(url, video_id=None, title=None, transcript_only=False,
         ]
         
         try:
-            # Get video ID and title
-            result = subprocess.run(info_cmd, capture_output=True, text=True, check=True)
+            # Get video ID and title with retry
+            result = retry_subprocess(
+                info_cmd,
+                capture_output=True,
+                text=True,
+                max_attempts=3,
+                base_delay=2.0,
+                logger=logger
+            )
             info = result.stdout.strip().split('\n')
             if len(info) != 2:
                 logger.error(f"Couldn't get video information for {url}")
                 return None, None
                 
             video_id, title = info
-        except subprocess.CalledProcessError as e:
-            logger.error(f"Error getting video info: {e}")
+        except Exception as e:
+            logger.error(f"Error getting video info after retries: {e}")
             return None, None
     
     logger.info(f"Video ID: {video_id}")
@@ -92,7 +101,12 @@ def download_single_video(url, video_id=None, title=None, transcript_only=False,
     
     try:
         logger.info("Attempting to download transcript...")
-        subprocess.run(sub_cmd, check=True)
+        retry_subprocess(
+            sub_cmd,
+            max_attempts=3,
+            base_delay=2.0,
+            logger=logger
+        )
         
         # Look for all subtitle files that yt-dlp might have created
         # Pattern 1: Our naming with language codes
@@ -148,11 +162,17 @@ def download_single_video(url, video_id=None, title=None, transcript_only=False,
     
     try:
         logger.info(f"Downloading video in {resolution}p {output_format} format...")
-        subprocess.run(video_cmd, check=True)
+        retry_subprocess(
+            video_cmd,
+            max_attempts=3,
+            base_delay=5.0,  # Longer delay for video downloads
+            logger=logger
+        )
         logger.success(f"Video downloaded to {video_file}")
         return video_file, transcript_file if has_transcript else None
-    except subprocess.CalledProcessError as e:
-        logger.error(f"Error downloading video: {e}")
+    except Exception as e:
+        logger.error(f"Error downloading video after retries: {e}")
+        # Still return transcript if we got it
         return None, transcript_file if has_transcript else None
 
 

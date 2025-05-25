@@ -9,9 +9,11 @@ from urllib.parse import urlparse, parse_qs
 try:
     from logger import setup_component_logging
     from validation import validate_google_drive_url, validate_file_path, ValidationError
+    from retry_utils import retry_request, get_with_retry, retry_with_backoff
 except ImportError:
     from .logger import setup_component_logging
     from .validation import validate_google_drive_url, validate_file_path, ValidationError
+    from .retry_utils import retry_request, get_with_retry, retry_with_backoff
 
 # Directory to save downloaded files
 DOWNLOADS_DIR = "drive_downloads"
@@ -131,6 +133,11 @@ def get_folder_contents(folder_id, logger=None):
         print(f"Please access the folder directly at: https://drive.google.com/drive/folders/{folder_id}")
     return []
 
+@retry_with_backoff(
+    max_attempts=3,
+    base_delay=5.0,
+    exceptions=(requests.RequestException, IOError)
+)
 def download_drive_file(file_id, output_filename=None, logger=None):
     """Download a file from Google Drive using file ID"""
     if not logger:
@@ -152,7 +159,7 @@ def download_drive_file(file_id, output_filename=None, logger=None):
     logger.info(f"Downloading file with ID: {file_id}")
     
     # First request to get cookies and confirmation page for large files
-    response = session.get(download_url, stream=True)
+    response = session.get(download_url, stream=True, timeout=30)
     
     # Check if we got the download confirmation page
     if 'confirm=' in response.text:
@@ -161,7 +168,7 @@ def download_drive_file(file_id, output_filename=None, logger=None):
             confirm_code = confirm_match.group(1)
             logger.info("Large file detected, bypassing confirmation...")
             download_url = f"{download_url}&confirm={confirm_code}"
-            response = session.get(download_url, stream=True)
+            response = session.get(download_url, stream=True, timeout=30)
     
     # Check response
     if response.status_code != 200:
