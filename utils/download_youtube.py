@@ -6,6 +6,7 @@ import subprocess
 import time
 from pathlib import Path
 from logger import setup_component_logging
+from validation import validate_youtube_url, validate_file_path, ValidationError
 
 # Directory to save downloaded videos and transcripts
 DOWNLOADS_DIR = "youtube_downloads"
@@ -23,6 +24,15 @@ def download_single_video(url, video_id=None, title=None, transcript_only=False,
     """Download a single YouTube video using yt-dlp"""
     if not logger:
         logger = setup_component_logging('youtube')
+    
+    # Validate URL
+    try:
+        url, validated_video_id = validate_youtube_url(url)
+        if not video_id:
+            video_id = validated_video_id
+    except ValidationError as e:
+        logger.error(f"Invalid YouTube URL: {e}")
+        return None, None
     
     downloads_path = create_download_dir(logger)
     
@@ -126,7 +136,7 @@ def download_single_video(url, video_id=None, title=None, transcript_only=False,
     video_file = downloads_path / f"{video_id}.{output_format}"
     video_cmd = [
         yt_dlp_path,
-        "-f", f"bestvideo[height<={resolution}][ext={output_format}]+bestaudio[ext=m4a]/best[height<={resolution}][ext={output_format}]",
+        "-f", f"bestvideo[height<={resolution}]+bestaudio/best[height<={resolution}]/best",
         "--merge-output-format", output_format,
         "--output", str(video_file),
         url
@@ -146,6 +156,18 @@ def download_video(url, transcript_only=False, resolution="720", output_format="
     """Download a YouTube video or playlist using yt-dlp"""
     if not logger:
         logger = setup_component_logging('youtube')
+    
+    # Basic URL validation first
+    try:
+        from validation import validate_url
+        url = validate_url(url, allowed_domains=['youtube.com', 'youtu.be'])
+    except ValidationError as e:
+        logger.error(f"Invalid URL: {e}")
+        return None, None
+    except ImportError:
+        # Fallback if validation module not available
+        pass
+    
     # Get the path to yt-dlp in the virtual environment
     import os
     import sys

@@ -4,6 +4,7 @@ import os
 import requests
 from bs4 import BeautifulSoup
 import sys
+from atomic_csv import write_csv_atomic, append_csv_atomic
 
 # Increase CSV field size limit to handle large fields
 csv.field_size_limit(sys.maxsize)
@@ -296,17 +297,12 @@ def update_csv():
         write_header = not os.path.exists(filename) or os.stat(filename).st_size == 0
         
         if write_header:
-            # Write a new file with header and all records
-            with open(filename, "w", newline="", encoding="utf-8") as csvfile:
-                writer = csv.DictWriter(csvfile, fieldnames=["name", "email", "type", "link"])
-                writer.writeheader()
-                writer.writerows(data)
+            # Write a new file with header and all records (atomic)
+            write_csv_atomic(filename, data, fieldnames=["name", "email", "type", "link"])
             print(f"Created new CSV with {len(data)} records")
         else:
-            # Append just the new records to the existing file
-            with open(filename, "a", newline="", encoding="utf-8") as csvfile:
-                writer = csv.DictWriter(csvfile, fieldnames=["name", "email", "type", "link"])
-                writer.writerows(new_records)
+            # Append just the new records to the existing file (atomic)
+            append_csv_atomic(filename, new_records, fieldnames=["name", "email", "type", "link"])
             print(f"Added {len(new_records)} new records to CSV")
 
 if __name__ == "__main__":

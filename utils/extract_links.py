@@ -4,6 +4,7 @@ import re
 import os
 import json
 import time
+import atexit
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
@@ -21,6 +22,20 @@ GOOGLE_SHEET_CACHE_FILE = os.path.join(CACHE_DIR, "google_sheet_cache.html")
 
 # Selenium driver instance (initialize lazily)
 _driver = None
+
+# Register cleanup function to run on exit
+atexit.register(lambda: cleanup_driver())
+
+def cleanup_driver():
+    """Clean up the Selenium driver"""
+    global _driver
+    if _driver is not None:
+        try:
+            _driver.quit()
+            _driver = None
+            print("Selenium driver cleaned up successfully")
+        except Exception as e:
+            print(f"Error cleaning up Selenium driver: {e}")
 
 def clean_url(url):
     """Clean up a URL by removing trailing junk and escape sequences"""
@@ -77,6 +92,14 @@ def get_selenium_driver():
             except Exception as e:
                 print(f"Could not initialize Selenium driver: {str(e)}")
                 return None
+    
+    # Ensure driver is still alive
+    try:
+        _driver.title  # Simple check to see if driver is responsive
+    except Exception:
+        print("Driver was closed, reinitializing...")
+        _driver = None
+        return get_selenium_driver()
     
     return _driver
 
@@ -517,3 +540,6 @@ if __name__ == "__main__":
     print(f"\nGoogle Drive links ({len(drive_links)}):")
     for drive_link in drive_links:
         print(f"  - {drive_link}")
+    
+    # Clean up the driver
+    cleanup_driver()

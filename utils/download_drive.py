@@ -7,6 +7,7 @@ import argparse
 import requests
 from urllib.parse import urlparse, parse_qs
 from logger import setup_component_logging
+from validation import validate_google_drive_url, validate_file_path, ValidationError
 
 # Directory to save downloaded files
 DOWNLOADS_DIR = "drive_downloads"
@@ -131,6 +132,11 @@ def download_drive_file(file_id, output_filename=None, logger=None):
     if not logger:
         logger = setup_component_logging('drive')
     
+    # Validate file ID
+    if not file_id or not re.match(r'^[a-zA-Z0-9_-]+$', file_id):
+        logger.error(f"Invalid Google Drive file ID: {file_id}")
+        return None
+    
     # Direct download URL format
     download_url = f"https://drive.google.com/uc?export=download&id={file_id}"
     
@@ -232,6 +238,13 @@ def process_drive_url(url, output_filename=None, save_metadata_flag=False, logge
     """Process a Google Drive URL (file or folder)"""
     if not logger:
         logger = setup_component_logging('drive')
+    
+    # Validate URL
+    try:
+        url, file_id = validate_google_drive_url(url)
+    except ValidationError as e:
+        logger.error(f"Invalid Google Drive URL: {e}")
+        return None, None
     
     create_download_dir(logger)
     
