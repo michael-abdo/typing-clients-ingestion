@@ -47,9 +47,6 @@ def download_single_video(url, video_id=None, title=None, transcript_only=False,
     print(f"Video ID: {video_id}")
     print(f"Title: {title}")
     
-    # Prepare transcript file path
-    transcript_file = downloads_path / f"{video_id}_transcript.{output_format}"
-    
     # Try to download subtitles
     has_transcript = False
     if output_format == "srt":
@@ -57,6 +54,9 @@ def download_single_video(url, video_id=None, title=None, transcript_only=False,
     else:
         # Default to vtt format for better compatibility
         sub_format = "vtt"
+    
+    # Prepare transcript file path with correct extension
+    transcript_file = downloads_path / f"{video_id}_transcript.{sub_format}"
         
     # Command to download subtitles - also try to write automatic captions
     sub_cmd = [
@@ -84,21 +84,7 @@ def download_single_video(url, video_id=None, title=None, transcript_only=False,
             print(f"Saved transcript to {transcript_file}")
             has_transcript = True
         else:
-            # Try one more time with a broader search in case files were saved with unexpected names
-            subtitle_files = list(downloads_path.glob(f"*.{sub_format}"))
-            recent_subtitle_files = sorted(
-                [f for f in subtitle_files if f.stat().st_mtime > time.time() - 300],  # Files created in last 5 minutes
-                key=lambda f: f.stat().st_mtime,
-                reverse=True
-            )
-            
-            if recent_subtitle_files:
-                # Rename the most recently created subtitle file
-                recent_subtitle_files[0].rename(transcript_file)
-                print(f"Saved transcript to {transcript_file}")
-                has_transcript = True
-            else:
-                print("No transcript found for this video")
+            print("No transcript found for this video")
     except subprocess.CalledProcessError:
         print("Error downloading transcript")
     
