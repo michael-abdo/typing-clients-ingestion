@@ -6,6 +6,7 @@ import subprocess
 import csv
 from pathlib import Path
 from utils.logger import pipeline_run, get_pipeline_logger
+from utils.parallel_processor import parallel_download_youtube_videos
 
 def run_process(command, description=None, component='main', logger=None):
     """Run a process with the given command and print its output in real-time"""
@@ -255,22 +256,49 @@ def main_workflow(args, logger=None):
             # Create the youtube_downloads directory if it doesn't exist
             os.makedirs("youtube_downloads", exist_ok=True)
             
-            for i, link in enumerate(youtube_links):
-                if link:
-                    if logger:
-                        logger.get_logger('youtube').info(f"Downloading YouTube playlist {i+1}/{len(youtube_links)}: {link}")
-                    else:
-                        print(f"\nDownloading YouTube playlist {i+1}/{len(youtube_links)}: {link}")
-                    command = [sys.executable, "utils/download_youtube.py", link]
-                    exit_code = run_process(command, None, 'youtube', logger)
-                    if exit_code != 0:
+            # Use parallel processing for YouTube downloads
+            if logger:
+                logger.get_logger('youtube').info(f"Starting parallel download of {len(youtube_links)} YouTube videos/playlists")
+            else:
+                print(f"\nStarting parallel download of {len(youtube_links)} YouTube videos/playlists")
+            
+            # Filter out empty links
+            valid_links = [link for link in youtube_links if link]
+            
+            if valid_links:
+                # Download videos in parallel with max 4 concurrent downloads
+                results = parallel_download_youtube_videos(
+                    valid_links,
+                    max_workers=4,  # Limit concurrent downloads
+                    transcript_only=False,
+                    resolution="720",
+                    logger=logger.get_logger('youtube') if logger else None
+                )
+                
+                # Count successes and failures
+                successful = 0
+                failed = 0
+                
+                for url, result in results:
+                    if isinstance(result, Exception):
+                        failed += 1
                         if logger:
-                            logger.log_error(f"Failed to download YouTube video: {link}")
+                            logger.log_error(f"Failed to download YouTube video: {url} - {result}")
                         else:
-                            print(f"Warning: Failed to download YouTube video: {link}")
+                            print(f"Warning: Failed to download YouTube video: {url} - {result}")
                     else:
-                        if logger:
-                            logger.update_stats(youtube_downloads=logger.run_stats['youtube_downloads'] + 1)
+                        video_file, transcript_file = result
+                        if video_file or transcript_file:
+                            successful += 1
+                            if logger:
+                                logger.update_stats(youtube_downloads=logger.run_stats['youtube_downloads'] + 1)
+                        else:
+                            failed += 1
+                
+                if logger:
+                    logger.get_logger('youtube').info(f"YouTube downloads complete: {successful} successful, {failed} failed")
+                else:
+                    print(f"\nYouTube downloads complete: {successful} successful, {failed} failed")
     
     # Update total rows processed if logger is available
     if logger and not args.skip_sheet:

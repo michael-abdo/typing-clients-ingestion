@@ -5,15 +5,18 @@ import json
 import time
 import argparse
 import requests
+from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 try:
     from logger import setup_component_logging
     from validation import validate_google_drive_url, validate_file_path, ValidationError
     from retry_utils import retry_request, get_with_retry, retry_with_backoff
+    from file_lock import file_lock, safe_file_operation
 except ImportError:
     from .logger import setup_component_logging
     from .validation import validate_google_drive_url, validate_file_path, ValidationError
     from .retry_utils import retry_request, get_with_retry, retry_with_backoff
+    from .file_lock import file_lock, safe_file_operation
 
 # Directory to save downloaded files
 DOWNLOADS_DIR = "drive_downloads"
@@ -191,41 +194,70 @@ def download_drive_file(file_id, output_filename=None, logger=None):
             output_filename = f"{file_id}.bin"
     
     output_path = os.path.join(DOWNLOADS_DIR, output_filename)
+    lock_file = Path(DOWNLOADS_DIR) / f".{file_id}.lock"
     
-    # Save file
-    total_size = int(response.headers.get('content-length', 0))
+    # First check with shared lock if file exists
+    with file_lock(lock_file, exclusive=False, timeout=30.0, logger=logger):
+        if os.path.exists(output_path):
+            logger.info(f"File already exists: {output_path}")
+            return output_path
     
-    if total_size == 0:
-        logger.warning("Could not determine file size")
-    else:
-        logger.info(f"File size: {total_size / (1024 * 1024):.2f} MB")
-    
-    # Download with progress indicator
-    try:
-        with open(output_path, 'wb') as f:
-            downloaded = 0
-            chunk_size = 1024 * 1024  # 1MB chunks
-            
-            for chunk in response.iter_content(chunk_size=chunk_size):
-                if chunk:
-                    f.write(chunk)
-                    downloaded += len(chunk)
-                    
-                    if total_size > 0:
-                        # Only show progress if we know the total size
-                        progress = int(50 * downloaded / total_size)
-                        sys.stdout.write("\r[%s%s] %s%%" % ('=' * progress, ' ' * (50-progress), int(100 * downloaded / total_size)))
-                        sys.stdout.flush()
-            
-            if total_size > 0:
-                sys.stdout.write("\n")
+    # Now acquire exclusive lock for download
+    with file_lock(lock_file, exclusive=True, timeout=300.0, logger=logger):  # 5 min timeout
+        # Double-check after acquiring exclusive lock
+        if os.path.exists(output_path):
+            logger.info(f"File already exists: {output_path}")
+            return output_path
         
-        logger.success(f"Downloaded file to {output_path}")
-        return output_path
+        # Save file
+        total_size = int(response.headers.get('content-length', 0))
         
-    except Exception as e:
-        logger.error(f"Error saving file: {str(e)}")
-        return None
+        if total_size == 0:
+            logger.warning("Could not determine file size")
+        else:
+            logger.info(f"File size: {total_size / (1024 * 1024):.2f} MB")
+        
+        # Download to a temporary file first
+        temp_path = f"{output_path}.tmp"
+        
+        # Download with progress indicator and adaptive chunk size
+        try:
+            with open(temp_path, 'wb') as f:
+                downloaded = 0
+                
+                # Adaptive chunk size based on file size
+                if total_size > 100 * 1024 * 1024:  # Files > 100MB
+                    chunk_size = 8 * 1024 * 1024  # 8MB chunks for large files
+                elif total_size > 10 * 1024 * 1024:  # Files > 10MB
+                    chunk_size = 2 * 1024 * 1024  # 2MB chunks for medium files
+                else:
+                    chunk_size = 1024 * 1024  # 1MB chunks for small files
+                
+                for chunk in response.iter_content(chunk_size=chunk_size):
+                    if chunk:
+                        f.write(chunk)
+                        downloaded += len(chunk)
+                        
+                        if total_size > 0:
+                            # Only show progress if we know the total size
+                            progress = int(50 * downloaded / total_size)
+                            sys.stdout.write("\r[%s%s] %s%%" % ('=' * progress, ' ' * (50-progress), int(100 * downloaded / total_size)))
+                            sys.stdout.flush()
+                
+                if total_size > 0:
+                    sys.stdout.write("\n")
+            
+            # Atomic rename after successful download
+            os.replace(temp_path, output_path)
+            logger.success(f"Downloaded file to {output_path}")
+            return output_path
+            
+        except Exception as e:
+            # Clean up temp file on error
+            if os.path.exists(temp_path):
+                os.unlink(temp_path)
+            logger.error(f"Error saving file: {str(e)}")
+            return None
 
 def save_metadata(file_id, url, metadata, logger=None):
     """Save file metadata to a JSON file"""
@@ -239,8 +271,17 @@ def save_metadata(file_id, url, metadata, logger=None):
     metadata['file_id'] = file_id
     metadata['downloaded_at'] = time.strftime('%Y-%m-%d %H:%M:%S')
     
-    with open(metadata_file, 'w', encoding='utf-8') as f:
-        json.dump(metadata, f, indent=2)
+    # Use file locking for metadata writes
+    lock_file = Path(DOWNLOADS_DIR) / f".{file_id}_metadata.lock"
+    
+    with file_lock(lock_file, exclusive=True, timeout=30.0, logger=logger):
+        # Write to temp file first
+        temp_file = f"{metadata_file}.tmp"
+        with open(temp_file, 'w', encoding='utf-8') as f:
+            json.dump(metadata, f, indent=2)
+        
+        # Atomic rename
+        os.replace(temp_file, metadata_file)
     
     logger.info(f"Saved metadata to {metadata_file}")
     return metadata_file

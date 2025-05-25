@@ -17,21 +17,28 @@ URL = "https://docs.google.com/spreadsheets/u/1/d/e/2PACX-1vRqqjqoaj8sEZBfZRw0Og
 CACHE_FILE = "google_sheet_cache.html"
 
 def download_sheet():
-    """Download the Google Sheet HTML and save it locally"""
+    """Download the Google Sheet HTML and save it locally using streaming"""
     print(f"Downloading Google Sheet from {URL}...")
-    response = requests.get(URL)
+    response = requests.get(URL, stream=True)
     response.raise_for_status()
     
+    # Stream the content to file to avoid loading all into memory
+    content = ""
     with open(CACHE_FILE, "w", encoding="utf-8") as f:
-        f.write(response.text)
+        for chunk in response.iter_content(chunk_size=8192, decode_unicode=True):
+            if chunk:  # filter out keep-alive chunks
+                f.write(chunk)
+                content += chunk
     
     print(f"Google Sheet HTML saved to {CACHE_FILE}")
-    return response.text
+    return content
 
 def get_sheet_html():
     """Get the sheet HTML, either from cache or by downloading"""
     if os.path.exists(CACHE_FILE):
         print(f"Using cached Google Sheet HTML from {CACHE_FILE}")
+        # For very large HTML files, we might need streaming here too
+        # but for Google Sheets, this should be manageable
         with open(CACHE_FILE, "r", encoding="utf-8") as f:
             return f.read()
     else:

@@ -9,6 +9,8 @@ sys.path.append(os.path.join(os.path.dirname(__file__), 'utils'))
 from scrape_google_sheets import fetch_table_data, update_csv
 from extract_links import process_url
 from logger import setup_component_logging
+from atomic_csv import atomic_csv_update, write_csv_atomic
+from streaming_csv import streaming_csv_update
 
 def process_links_from_csv(max_rows=None, reset_processed=False, force_download=False):
     """
@@ -37,107 +39,195 @@ def process_links_from_csv(max_rows=None, reset_processed=False, force_download=
     update_csv()
     
     input_filename = "output.csv"
-    temp_filename = "output_with_links.csv"
     
     if not os.path.exists(input_filename):
         logger.error(f"Error: {input_filename} not found. Make sure the Google Sheets scraper runs correctly.")
         return
     
-    rows = []
+    # Check file size to decide between atomic or streaming operations
+    file_size = os.path.getsize(input_filename)
+    use_streaming = file_size > 5 * 1024 * 1024  # Use streaming for files > 5MB
+    
     processed_count = 0
-    logger.info("Processing links from CSV...")
-    with open(input_filename, "r", newline="", encoding="utf-8") as csvfile:
-        reader = csv.DictReader(csvfile)
-        # Add the new columns if they don't exist
-        fieldnames = list(reader.fieldnames) if reader.fieldnames else ["name", "email", "type", "link"]
-        # Filter out None values if any
-        fieldnames = [f for f in fieldnames if f is not None]
-        if "extracted_links" not in fieldnames:
-            fieldnames.append("extracted_links")
-        if "youtube_playlist" not in fieldnames:
-            fieldnames.append("youtube_playlist")
-        if "google_drive" not in fieldnames:
-            fieldnames.append("google_drive")
-        
-        for row in reader:
-            link = row.get("link", "")
+    logger.info(f"Processing links from CSV (file size: {file_size / 1024 / 1024:.1f}MB, using {'streaming' if use_streaming else 'atomic'} mode)...")
+    
+    if use_streaming:
+        # Use streaming for large files
+        def process_chunk(rows):
+            nonlocal processed_count
+            processed_rows = []
             
-            # Check if this row already has data in any of the target columns
-            extracted_links = row.get("extracted_links", "")
-            youtube_playlist = row.get("youtube_playlist", "")
-            google_drive = row.get("google_drive", "")
-            
-            has_extracted_links = extracted_links and str(extracted_links).strip() != ""
-            has_youtube_playlist = youtube_playlist and str(youtube_playlist).strip() != ""
-            has_google_drive = google_drive and str(google_drive).strip() != ""
-            
-            # If row already has processed data and reset_processed is False, skip
-            if (has_extracted_links or has_youtube_playlist or has_google_drive) and not reset_processed:
-                logger.debug(f"Skipping already processed row for {row.get('name', 'unknown')}")
-                rows.append(row)
-                continue
+            for row in rows:
+                link = row.get("link", "")
                 
-            if link:
-                # Check if we've reached the maximum rows to process
-                if max_rows is not None and processed_count >= max_rows:
-                    logger.info(f"Reached maximum rows limit ({max_rows}), skipping remaining rows")
-                    rows.append(row)  # Add the row without processing
+                # Check if this row already has data in any of the target columns
+                extracted_links = row.get("extracted_links", "")
+                youtube_playlist = row.get("youtube_playlist", "")
+                google_drive = row.get("google_drive", "")
+                
+                has_extracted_links = extracted_links and str(extracted_links).strip() != ""
+                has_youtube_playlist = youtube_playlist and str(youtube_playlist).strip() != ""
+                has_google_drive = google_drive and str(google_drive).strip() != ""
+                
+                # If row already has processed data and reset_processed is False, skip
+                if (has_extracted_links or has_youtube_playlist or has_google_drive) and not reset_processed:
+                    logger.debug(f"Skipping already processed row for {row.get('name', 'unknown')}")
+                    processed_rows.append(row)
                     continue
                     
-                # Create directory for HTML cache if it doesn't exist
-                cache_dir = "html_cache"
-                if not os.path.exists(cache_dir):
-                    os.makedirs(cache_dir)
-                    
-                logger.info(f"Processing {link} for {row.get('name', 'unknown')}...")
-                try:
-                    # Process the URL and get links, YouTube playlist, and Google Drive links
-                    # With use_dash_for_empty=True, empty playlist or drive links will be "-"
-                    links, youtube_playlist, drive_links = process_url(link, limit=10, use_dash_for_empty=True)
-                    row["extracted_links"] = "|".join(links) if links else ""
-                    row["youtube_playlist"] = youtube_playlist  # Already "-" if empty
-                    
-                    # Check if drive_links contains only a dash
-                    if drive_links == ["-"]:
-                        row["google_drive"] = "-"
-                    else:
-                        row["google_drive"] = "|".join(drive_links)
-                    
-                    logger.info(f"  Found {len(links)} links, {'a' if youtube_playlist else 'no'} YouTube playlist, " +
-                          f"and {len(drive_links)} Google Drive links")
-                    
-                    processed_count += 1
-                except Exception as e:
-                    logger.error(f"  Error processing {link}: {str(e)}")
+                if link:
+                    # Check if we've reached the maximum rows to process
+                    if max_rows is not None and processed_count >= max_rows:
+                        logger.info(f"Reached maximum rows limit ({max_rows}), skipping remaining rows")
+                        processed_rows.append(row)  # Add the row without processing
+                        continue
+                        
+                    # Create directory for HTML cache if it doesn't exist
+                    cache_dir = "html_cache"
+                    if not os.path.exists(cache_dir):
+                        os.makedirs(cache_dir)
+                        
+                    logger.info(f"Processing {link} for {row.get('name', 'unknown')}...")
+                    try:
+                        # Process the URL and get links, YouTube playlist, and Google Drive links
+                        links, youtube_playlist, drive_links = process_url(link, limit=10, use_dash_for_empty=True)
+                        row["extracted_links"] = "|".join(links) if links else ""
+                        row["youtube_playlist"] = youtube_playlist  # Already "-" if empty
+                        
+                        # Check if drive_links contains only a dash
+                        if drive_links == ["-"]:
+                            row["google_drive"] = "-"
+                        else:
+                            row["google_drive"] = "|".join(drive_links)
+                        
+                        logger.info(f"  Found {len(links)} links, {'a' if youtube_playlist else 'no'} YouTube playlist, " +
+                              f"and {len(drive_links)} Google Drive links")
+                        
+                        processed_count += 1
+                    except Exception as e:
+                        logger.error(f"  Error processing {link}: {str(e)}")
+                        row["extracted_links"] = ""
+                        row["youtube_playlist"] = ""
+                        row["google_drive"] = ""
+                        processed_count += 1
+                else:
+                    # Mark empty link rows as processed with empty values
                     row["extracted_links"] = ""
                     row["youtube_playlist"] = ""
                     row["google_drive"] = ""
-                    processed_count += 1
+                
+                processed_rows.append(row)
+            
+            return processed_rows
+        
+        with streaming_csv_update(input_filename, process_chunk, chunk_size=100) as processor:
+            processor.process()
+    else:
+        # Use atomic operations for smaller files
+        with atomic_csv_update(input_filename) as (rows, writer):
+            if not rows:
+                logger.error("Error: CSV file is empty or has no data")
+                return
+            
+            # Get fieldnames from first row or use defaults
+            if rows:
+                fieldnames = list(rows[0].keys())
             else:
-                # Mark empty link rows as processed with empty values
-                row["extracted_links"] = ""
-                row["youtube_playlist"] = ""
-                row["google_drive"] = ""
-            rows.append(row)
-    
-    # Clean up any None keys in the dictionaries
-    clean_rows = []
-    for row in rows:
-        clean_row = {k: v for k, v in row.items() if k is not None}
-        # Make sure all required fields are present
-        for field in fieldnames:
-            if field not in clean_row:
-                clean_row[field] = ""
-        clean_rows.append(clean_row)
-    
-    # Write results to new CSV
-    with open(temp_filename, "w", newline="", encoding="utf-8") as csvfile:
-        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
-        writer.writeheader()
-        writer.writerows(clean_rows)
-    
-    # Replace original file with updated one
-    os.replace(temp_filename, input_filename)
+                fieldnames = ["name", "email", "type", "link"]
+            
+            # Filter out None values if any
+            fieldnames = [f for f in fieldnames if f is not None]
+            
+            # Add the new columns if they don't exist
+            if "extracted_links" not in fieldnames:
+                fieldnames.append("extracted_links")
+            if "youtube_playlist" not in fieldnames:
+                fieldnames.append("youtube_playlist")
+            if "google_drive" not in fieldnames:
+                fieldnames.append("google_drive")
+            
+            # Update writer fieldnames
+            writer.fieldnames = fieldnames
+            writer.writeheader()
+            
+            for row in rows:
+                link = row.get("link", "")
+                
+                # Check if this row already has data in any of the target columns
+                extracted_links = row.get("extracted_links", "")
+                youtube_playlist = row.get("youtube_playlist", "")
+                google_drive = row.get("google_drive", "")
+                
+                has_extracted_links = extracted_links and str(extracted_links).strip() != ""
+                has_youtube_playlist = youtube_playlist and str(youtube_playlist).strip() != ""
+                has_google_drive = google_drive and str(google_drive).strip() != ""
+                
+                # If row already has processed data and reset_processed is False, skip
+                if (has_extracted_links or has_youtube_playlist or has_google_drive) and not reset_processed:
+                    logger.debug(f"Skipping already processed row for {row.get('name', 'unknown')}")
+                    # Write the row without processing
+                    clean_row = {k: v for k, v in row.items() if k is not None}
+                    for field in fieldnames:
+                        if field not in clean_row:
+                            clean_row[field] = ""
+                    writer.writerow(clean_row)
+                    continue
+                    
+                if link:
+                    # Check if we've reached the maximum rows to process
+                    if max_rows is not None and processed_count >= max_rows:
+                        logger.info(f"Reached maximum rows limit ({max_rows}), skipping remaining rows")
+                        # Write the row without processing
+                        clean_row = {k: v for k, v in row.items() if k is not None}
+                        for field in fieldnames:
+                            if field not in clean_row:
+                                clean_row[field] = ""
+                        writer.writerow(clean_row)
+                        continue
+                        
+                    # Create directory for HTML cache if it doesn't exist
+                    cache_dir = "html_cache"
+                    if not os.path.exists(cache_dir):
+                        os.makedirs(cache_dir)
+                        
+                    logger.info(f"Processing {link} for {row.get('name', 'unknown')}...")
+                    try:
+                        # Process the URL and get links, YouTube playlist, and Google Drive links
+                        # With use_dash_for_empty=True, empty playlist or drive links will be "-"
+                        links, youtube_playlist, drive_links = process_url(link, limit=10, use_dash_for_empty=True)
+                        row["extracted_links"] = "|".join(links) if links else ""
+                        row["youtube_playlist"] = youtube_playlist  # Already "-" if empty
+                        
+                        # Check if drive_links contains only a dash
+                        if drive_links == ["-"]:
+                            row["google_drive"] = "-"
+                        else:
+                            row["google_drive"] = "|".join(drive_links)
+                        
+                        logger.info(f"  Found {len(links)} links, {'a' if youtube_playlist else 'no'} YouTube playlist, " +
+                              f"and {len(drive_links)} Google Drive links")
+                        
+                        processed_count += 1
+                    except Exception as e:
+                        logger.error(f"  Error processing {link}: {str(e)}")
+                        row["extracted_links"] = ""
+                        row["youtube_playlist"] = ""
+                        row["google_drive"] = ""
+                        processed_count += 1
+                else:
+                    # Mark empty link rows as processed with empty values
+                    row["extracted_links"] = ""
+                    row["youtube_playlist"] = ""
+                    row["google_drive"] = ""
+                
+                # Clean up any None keys and ensure all fields are present
+                clean_row = {k: v for k, v in row.items() if k is not None}
+                for field in fieldnames:
+                    if field not in clean_row:
+                        clean_row[field] = ""
+                
+                # Write the row
+                writer.writerow(clean_row)
     logger.success(f"Successfully updated {input_filename} with extracted links and YouTube playlists")
 
 if __name__ == "__main__":

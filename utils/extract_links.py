@@ -163,10 +163,16 @@ def get_html(url, debug=False):
             'Accept-Language': 'en-US,en;q=0.5',
         }
         
-        # Increase timeout for document rendering
-        response = requests.get(url, headers=headers, timeout=60)
+        # Increase timeout for document rendering and use streaming
+        response = requests.get(url, headers=headers, timeout=60, stream=True)
         response.raise_for_status()
-        html = response.text
+        
+        # Stream HTML content to avoid loading large pages into memory
+        html = ""
+        chunk_size = 8192
+        for chunk in response.iter_content(chunk_size=chunk_size, decode_unicode=True):
+            if chunk:
+                html += chunk
         
         # For debugging, save the HTML content
         if debug:
@@ -176,13 +182,23 @@ def get_html(url, debug=False):
                 
             debug_file = os.path.join(CACHE_DIR, f"debug_{url.replace('://', '_').replace('/', '_').replace('?', '_').replace('=', '_')}.html")
             with open(debug_file, 'w', encoding='utf-8') as f:
-                f.write(html)
+                # Write HTML in chunks if it's very large
+                if len(html) > 1024 * 1024:  # 1MB
+                    for i in range(0, len(html), chunk_size):
+                        f.write(html[i:i+chunk_size])
+                else:
+                    f.write(html)
             print(f"Saved debug HTML to {debug_file}")
         
         # Only cache Google Sheets
         if "docs.google.com/spreadsheets" in url and html:
             with open(GOOGLE_SHEET_CACHE_FILE, 'w', encoding='utf-8') as f:
-                f.write(html)
+                # Write in chunks for large Google Sheets
+                if len(html) > 1024 * 1024:  # 1MB
+                    for i in range(0, len(html), chunk_size):
+                        f.write(html[i:i+chunk_size])
+                else:
+                    f.write(html)
             print(f"Cached Google Sheet HTML to {GOOGLE_SHEET_CACHE_FILE}")
         
         # Add a small delay to ensure the page has time to render
