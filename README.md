@@ -144,8 +144,8 @@ process_links_from_csv()
 The `run_complete_workflow.py` script automates the entire process:
 1. Download and scrape a new Google Sheet
 2. Extract and process links
-3. Download all new Google Drive files (skipping already downloaded files)
-4. Download all new YouTube videos (skipping already downloaded videos)
+3. Download all new Google Drive files
+4. Download all new YouTube videos
 
 ```bash
 # Activate virtual environment
@@ -164,8 +164,6 @@ python run_complete_workflow.py --skip-drive    # Skip Google Drive downloads
 python run_complete_workflow.py --skip-youtube  # Skip YouTube downloads
 ```
 
-Both Google Drive and YouTube downloaders automatically check if files already exist before downloading, making it safe to run the workflow multiple times without downloading duplicate content.
-
 ### Download YouTube Videos and Transcripts
 
 ```bash
@@ -173,26 +171,7 @@ Both Google Drive and YouTube downloaders automatically check if files already e
 python download_youtube.py https://www.youtube.com/watch?v=VIDEO_ID
 python download_youtube.py https://www.youtube.com/watch?v=VIDEO_ID --transcript-only
 python download_youtube.py https://www.youtube.com/watch?v=VIDEO_ID --resolution 1080
-
-# For YouTube videos requiring authentication
-python download_youtube.py https://www.youtube.com/watch?v=VIDEO_ID --cookies youtube_cookies.txt
 ```
-
-#### YouTube Authentication
-
-YouTube now frequently requires authentication to download videos (showing "Sign in to confirm you're not a bot" messages). To handle this:
-
-1. Create a `youtube_cookies.txt` file in the project directory with your YouTube cookies.
-2. You can export cookies using browser extensions like "Get cookies.txt" or using yt-dlp's built-in browser cookie extraction:
-   ```bash
-   yt-dlp --cookies-from-browser chrome > youtube_cookies.txt
-   ```
-3. Use the `--cookies` parameter when downloading videos:
-   ```bash
-   python download_youtube.py https://www.youtube.com/watch?v=VIDEO_ID --cookies youtube_cookies.txt
-   ```
-
-The workflow script will automatically use a `youtube_cookies.txt` file if it exists in the project directory.
 
 ### Download Google Drive Files
 
@@ -202,78 +181,3 @@ python download_drive.py "https://drive.google.com/file/d/FILE_ID/view"
 python download_drive.py "https://drive.google.com/file/d/FILE_ID/view" --filename custom_name.ext
 python download_drive.py "https://drive.google.com/file/d/FILE_ID/view" --metadata
 ```
-
-
-
-## Development Setup
-
-1. Always use the virtual environment when running Python scripts:
-   ```bash
-   source venv/bin/activate
-   ```
-
-2. Required dependencies:
-   - Always make sure the following are installed in the virtual environment:
-     ```bash
-     pip install -r requirements.txt
-     ```
-   - Specifically ensure yt-dlp is installed for YouTube video downloading
-   
-3. Known issues and fixes:
-   - URLs with newlines or special characters: The run_complete_workflow.py script cleans any malformed YouTube playlist URLs
-   - Missing transcripts: The download_youtube.py script tries to download both regular and auto-generated subtitles
-   - YouTube playlists: The download_youtube.py script now processes each video in a playlist individually, downloading videos and transcripts for each one
-
-3. Always use the absolute path to yt-dlp in the virtual environment:
-   ```python
-   # Get the path to yt-dlp in the virtual environment
-   import os
-   import sys
-   
-   # First check if we're in a virtual environment
-   if hasattr(sys, 'real_prefix') or (hasattr(sys, 'base_prefix') and sys.base_prefix != sys.prefix):
-       # We're in a virtual environment
-       venv_path = sys.prefix
-       yt_dlp_path = os.path.join(venv_path, "bin", "yt-dlp")
-   else:
-       # Not in a virtual environment, use command as-is
-       yt_dlp_path = "yt-dlp"
-   ```
-
-## Workflow Commands
-
-1. Complete workflow (fetch sheet, extract links, download media):
-   ```bash
-   python run_complete_workflow.py
-
-   # Limit number of rows to process in the Google Sheet
-   python run_complete_workflow.py --max-rows 10
-
-   # Limit number of YouTube videos to download
-   python run_complete_workflow.py --max-youtube 5
-
-   # Limit number of Google Drive files to download
-   python run_complete_workflow.py --max-drive 5
-
-   # Skip specific steps
-   python run_complete_workflow.py --skip-sheet  # Skip Google Sheet scraping
-   python run_complete_workflow.py --skip-drive  # Skip Drive downloads
-   python run_complete_workflow.py --skip-youtube  # Skip YouTube downloads
-   ```
-
-2. Force download new Google Sheet:
-   ```bash
-   python master_scraper.py --force-download
-   ```
-
-3. Download YouTube videos:
-   ```bash
-   python download_youtube.py [URL]
-   python download_youtube.py [URL] --transcript-only  # Only download transcript
-   python download_youtube.py [URL] --resolution 1080  # Specify resolution
-   ```
-
-4. Download Google Drive files:
-   ```bash
-   python download_drive.py [URL] --metadata
-   ```

@@ -5,21 +5,26 @@ import argparse
 import subprocess
 import time
 from pathlib import Path
+from logger import setup_component_logging
 
 # Directory to save downloaded videos and transcripts
 DOWNLOADS_DIR = "youtube_downloads"
 
-def create_download_dir():
+def create_download_dir(logger=None):
     """Create download directory if it doesn't exist"""
     downloads_path = Path(DOWNLOADS_DIR)
     if not downloads_path.exists():
         downloads_path.mkdir(parents=True)
-        print(f"Created downloads directory: {DOWNLOADS_DIR}")
+        if logger:
+            logger.info(f"Created downloads directory: {DOWNLOADS_DIR}")
     return downloads_path
 
-def download_single_video(url, video_id=None, title=None, transcript_only=False, resolution="720", output_format="mp4", yt_dlp_path="yt-dlp"):
+def download_single_video(url, video_id=None, title=None, transcript_only=False, resolution="720", output_format="mp4", yt_dlp_path="yt-dlp", logger=None):
     """Download a single YouTube video using yt-dlp"""
-    downloads_path = create_download_dir()
+    if not logger:
+        logger = setup_component_logging('youtube')
+    
+    downloads_path = create_download_dir(logger)
     
     # If video_id and title not provided, get them first
     if not video_id or not title:
@@ -36,16 +41,16 @@ def download_single_video(url, video_id=None, title=None, transcript_only=False,
             result = subprocess.run(info_cmd, capture_output=True, text=True, check=True)
             info = result.stdout.strip().split('\n')
             if len(info) != 2:
-                print(f"Error: Couldn't get video information for {url}")
+                logger.error(f"Couldn't get video information for {url}")
                 return None, None
                 
             video_id, title = info
         except subprocess.CalledProcessError as e:
-            print(f"Error getting video info: {e}")
+            logger.error(f"Error getting video info: {e}")
             return None, None
     
-    print(f"Video ID: {video_id}")
-    print(f"Title: {title}")
+    logger.info(f"Video ID: {video_id}")
+    logger.info(f"Title: {title}")
     
     # Prepare transcript file path
     transcript_file = downloads_path / f"{video_id}_transcript.{output_format}"
@@ -71,7 +76,7 @@ def download_single_video(url, video_id=None, title=None, transcript_only=False,
     ]
     
     try:
-        print("Attempting to download transcript...")
+        logger.info("Attempting to download transcript...")
         subprocess.run(sub_cmd, check=True)
         
         # Find the subtitle file, looking for both regular and auto-generated subtitles
@@ -81,7 +86,7 @@ def download_single_video(url, video_id=None, title=None, transcript_only=False,
         if subtitle_files:
             # Rename the first subtitle file to our standard name
             subtitle_files[0].rename(transcript_file)
-            print(f"Saved transcript to {transcript_file}")
+            logger.success(f"Saved transcript to {transcript_file}")
             has_transcript = True
         else:
             # Try one more time with a broader search in case files were saved with unexpected names
@@ -95,12 +100,12 @@ def download_single_video(url, video_id=None, title=None, transcript_only=False,
             if recent_subtitle_files:
                 # Rename the most recently created subtitle file
                 recent_subtitle_files[0].rename(transcript_file)
-                print(f"Saved transcript to {transcript_file}")
+                logger.success(f"Saved transcript to {transcript_file}")
                 has_transcript = True
             else:
-                print("No transcript found for this video")
+                logger.warning("No transcript found for this video")
     except subprocess.CalledProcessError:
-        print("Error downloading transcript")
+        logger.error("Error downloading transcript")
     
     # If transcript only mode, stop here
     if transcript_only:
@@ -117,17 +122,19 @@ def download_single_video(url, video_id=None, title=None, transcript_only=False,
     ]
     
     try:
-        print(f"\nDownloading video in {resolution}p {output_format} format...")
+        logger.info(f"Downloading video in {resolution}p {output_format} format...")
         subprocess.run(video_cmd, check=True)
-        print(f"Video downloaded to {video_file}")
+        logger.success(f"Video downloaded to {video_file}")
         return video_file, transcript_file if has_transcript else None
     except subprocess.CalledProcessError as e:
-        print(f"Error downloading video: {e}")
+        logger.error(f"Error downloading video: {e}")
         return None, transcript_file if has_transcript else None
 
 
-def download_video(url, transcript_only=False, resolution="720", output_format="mp4"):
+def download_video(url, transcript_only=False, resolution="720", output_format="mp4", logger=None):
     """Download a YouTube video or playlist using yt-dlp"""
+    if not logger:
+        logger = setup_component_logging('youtube')
     # Get the path to yt-dlp in the virtual environment
     import os
     import sys
@@ -149,17 +156,29 @@ def download_video(url, transcript_only=False, resolution="720", output_format="
         video_ids = re.findall(r'[a-zA-Z0-9_-]{11}', video_ids_part)
         
         if not video_ids:
-            print("No valid video IDs found in playlist URL")
+            logger.error("No valid video IDs found in playlist URL")
             return None, None
         
-        print(f"Found {len(video_ids)} videos in playlist URL")
+        # Remove duplicates while preserving order
+        seen = set()
+        unique_video_ids = []
+        for vid in video_ids:
+            if vid not in seen:
+                seen.add(vid)
+                unique_video_ids.append(vid)
+        
+        if len(video_ids) != len(unique_video_ids):
+            logger.info(f"Removed {len(video_ids) - len(unique_video_ids)} duplicate video IDs")
+        
+        video_ids = unique_video_ids
+        logger.info(f"Found {len(video_ids)} unique videos in playlist URL")
         
         # Process each video separately
         successful_video_files = []
         successful_transcript_files = []
         
         for i, vid in enumerate(video_ids):
-            print(f"\nProcessing video {i+1}/{len(video_ids)}: {vid}")
+            logger.info(f"Processing video {i+1}/{len(video_ids)}: {vid}")
             video_url = f"https://www.youtube.com/watch?v={vid}"
             video_file, transcript_file = download_single_video(
                 video_url, 
@@ -168,7 +187,8 @@ def download_video(url, transcript_only=False, resolution="720", output_format="
                 transcript_only=transcript_only,
                 resolution=resolution,
                 output_format=output_format,
-                yt_dlp_path=yt_dlp_path
+                yt_dlp_path=yt_dlp_path,
+                logger=logger
             )
             
             if video_file:
@@ -188,10 +208,14 @@ def download_video(url, transcript_only=False, resolution="720", output_format="
             transcript_only=transcript_only,
             resolution=resolution,
             output_format=output_format,
-            yt_dlp_path=yt_dlp_path
+            yt_dlp_path=yt_dlp_path,
+            logger=logger
         )
 
 def main():
+    # Setup logging
+    logger = setup_component_logging('youtube')
+    
     parser = argparse.ArgumentParser(description='Download YouTube videos and transcripts using yt-dlp')
     parser.add_argument('url', help='YouTube video URL')
     parser.add_argument('--transcript-only', action='store_true', help='Download transcript only, not video')
@@ -206,20 +230,21 @@ def main():
         args.url, 
         args.transcript_only,
         args.resolution,
-        args.format
+        args.format,
+        logger
     )
     
     # Summary
-    print("\nDownload Summary:")
+    logger.info("\nDownload Summary:")
     if video_file:
-        print(f"✅ Video: {video_file}")
+        logger.success(f"Video: {video_file}")
     elif not args.transcript_only:
-        print("❌ Video: Failed to download")
+        logger.error("Video: Failed to download")
         
     if transcript_file:
-        print(f"✅ Transcript: {transcript_file}")
+        logger.success(f"Transcript: {transcript_file}")
     else:
-        print("❌ Transcript: Not available or failed to download")
+        logger.warning("Transcript: Not available or failed to download")
 
 if __name__ == "__main__":
     main()

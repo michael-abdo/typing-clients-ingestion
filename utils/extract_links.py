@@ -22,6 +22,39 @@ GOOGLE_SHEET_CACHE_FILE = os.path.join(CACHE_DIR, "google_sheet_cache.html")
 # Selenium driver instance (initialize lazily)
 _driver = None
 
+def clean_url(url):
+    """Clean up a URL by removing trailing junk and escape sequences"""
+    if not url:
+        return url
+    
+    # Remove common escape sequences
+    url = url.replace('\\n', '').replace('\\r', '').replace('\\t', '')
+    url = url.replace('\n', '').replace('\r', '').replace('\t', '')
+    
+    # Remove unicode escape sequences
+    url = re.sub(r'\\u[0-9a-fA-F]{4}', '', url)
+    
+    # Remove trailing punctuation that's not part of a URL
+    # But keep trailing slashes and common URL endings
+    url = re.sub(r'[.,;:!?\)\]\}"\'>]+$', '', url)
+    
+    # Remove any text after common URL patterns
+    # Handle YouTube URLs specifically
+    if 'youtube.com' in url or 'youtu.be' in url:
+        # For youtu.be links, extract just the video ID
+        match = re.search(r'youtu\.be/([a-zA-Z0-9_-]{11})', url)
+        if match:
+            return f'https://youtu.be/{match.group(1)}'
+        # For youtube.com watch links
+        match = re.search(r'youtube\.com/watch\?v=([a-zA-Z0-9_-]{11})', url)
+        if match:
+            return f'https://www.youtube.com/watch?v={match.group(1)}'
+    
+    # Remove any remaining non-URL characters at the end
+    url = re.sub(r'[^a-zA-Z0-9\-._~:/?#\[\]@!$&\'()*+,;=%]+$', '', url)
+    
+    return url.strip()
+
 def get_selenium_driver():
     """Initialize and return a Selenium WebDriver instance"""
     global _driver
@@ -162,10 +195,12 @@ def extract_links(url, limit=1, debug=False):
         soup = BeautifulSoup(html, 'html.parser')
         
         # Extract links from anchor tags
-        doc_links = {a.get('href') for a in soup.find_all('a', href=True)}
+        doc_links = {clean_url(a.get('href')) for a in soup.find_all('a', href=True) if a.get('href')}
         
         # Get links appearing in plain text (emails, URLs)
-        text_links = set(re.findall(r'https?://\S+', html))
+        # Updated regex to properly terminate URLs at common boundaries
+        raw_text_links = re.findall(r'https?://[^\s<>"{}\\|\^\[\]`\n\r]+(?:[.,;:!?\)\]]*(?=[\s<>"{}\\|\^\[\]`\n\r]|$))', html)
+        text_links = {clean_url(link) for link in raw_text_links if link}
         email_links = set(re.findall(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', html))
         
         # Parse meta tags for content links
@@ -174,7 +209,8 @@ def extract_links(url, limit=1, debug=False):
             content = meta.get('content', '')
             if content:
                 # Find URLs in content
-                meta_links.update(re.findall(r'https?://\S+', content))
+                raw_meta_links = re.findall(r'https?://[^\s<>"{}\\|\^\[\]`\n\r]+(?:[.,;:!?\)\]]*(?=[\s<>"{}\\|\^\[\]`\n\r]|$))', content)
+                meta_links.update(clean_url(link) for link in raw_meta_links if link)
                 # Find emails in content
                 meta_links.update([f"mailto:{email}" for email in 
                                  re.findall(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', content)])

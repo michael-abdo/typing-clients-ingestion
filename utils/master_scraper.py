@@ -8,6 +8,7 @@ sys.path.append(os.path.join(os.path.dirname(__file__), 'utils'))
 
 from scrape_google_sheets import fetch_table_data, update_csv
 from extract_links import process_url
+from logger import setup_component_logging
 
 def process_links_from_csv(max_rows=None, reset_processed=False, force_download=False):
     """
@@ -20,14 +21,17 @@ def process_links_from_csv(max_rows=None, reset_processed=False, force_download=
         reset_processed (bool, optional): If True, reprocess rows even if they have already been processed. Defaults to False.
         force_download (bool, optional): If True, force a new download of the Google Sheet. Defaults to False.
     """
+    # Setup logging
+    logger = setup_component_logging('scraper')
+    
     # First update the CSV with new data from Google Sheets
-    print("Updating CSV with latest Google Sheets data...")
+    logger.info("Updating CSV with latest Google Sheets data...")
     
     # Remove the cached HTML file if force_download is True
     if force_download:
         cache_file = "google_sheet_cache.html"
         if os.path.exists(cache_file):
-            print(f"Removing cached Google Sheet HTML: {cache_file}")
+            logger.info(f"Removing cached Google Sheet HTML: {cache_file}")
             os.remove(cache_file)
             
     update_csv()
@@ -36,12 +40,12 @@ def process_links_from_csv(max_rows=None, reset_processed=False, force_download=
     temp_filename = "output_with_links.csv"
     
     if not os.path.exists(input_filename):
-        print(f"Error: {input_filename} not found. Make sure the Google Sheets scraper runs correctly.")
+        logger.error(f"Error: {input_filename} not found. Make sure the Google Sheets scraper runs correctly.")
         return
     
     rows = []
     processed_count = 0
-    print("Processing links from CSV...")
+    logger.info("Processing links from CSV...")
     with open(input_filename, "r", newline="", encoding="utf-8") as csvfile:
         reader = csv.DictReader(csvfile)
         # Add the new columns if they don't exist
@@ -69,14 +73,14 @@ def process_links_from_csv(max_rows=None, reset_processed=False, force_download=
             
             # If row already has processed data and reset_processed is False, skip
             if (has_extracted_links or has_youtube_playlist or has_google_drive) and not reset_processed:
-                print(f"Skipping already processed row for {row.get('name', 'unknown')}")
+                logger.debug(f"Skipping already processed row for {row.get('name', 'unknown')}")
                 rows.append(row)
                 continue
                 
             if link:
                 # Check if we've reached the maximum rows to process
                 if max_rows is not None and processed_count >= max_rows:
-                    print(f"Reached maximum rows limit ({max_rows}), skipping remaining rows")
+                    logger.info(f"Reached maximum rows limit ({max_rows}), skipping remaining rows")
                     rows.append(row)  # Add the row without processing
                     continue
                     
@@ -85,7 +89,7 @@ def process_links_from_csv(max_rows=None, reset_processed=False, force_download=
                 if not os.path.exists(cache_dir):
                     os.makedirs(cache_dir)
                     
-                print(f"Processing {link} for {row.get('name', 'unknown')}...")
+                logger.info(f"Processing {link} for {row.get('name', 'unknown')}...")
                 try:
                     # Process the URL and get links, YouTube playlist, and Google Drive links
                     # With use_dash_for_empty=True, empty playlist or drive links will be "-"
@@ -99,12 +103,12 @@ def process_links_from_csv(max_rows=None, reset_processed=False, force_download=
                     else:
                         row["google_drive"] = "|".join(drive_links)
                     
-                    print(f"  Found {len(links)} links, {'a' if youtube_playlist else 'no'} YouTube playlist, " +
+                    logger.info(f"  Found {len(links)} links, {'a' if youtube_playlist else 'no'} YouTube playlist, " +
                           f"and {len(drive_links)} Google Drive links")
                     
                     processed_count += 1
                 except Exception as e:
-                    print(f"  Error processing {link}: {str(e)}")
+                    logger.error(f"  Error processing {link}: {str(e)}")
                     row["extracted_links"] = ""
                     row["youtube_playlist"] = ""
                     row["google_drive"] = ""
@@ -134,7 +138,7 @@ def process_links_from_csv(max_rows=None, reset_processed=False, force_download=
     
     # Replace original file with updated one
     os.replace(temp_filename, input_filename)
-    print(f"Successfully updated {input_filename} with extracted links and YouTube playlists")
+    logger.success(f"Successfully updated {input_filename} with extracted links and YouTube playlists")
 
 if __name__ == "__main__":
     import argparse

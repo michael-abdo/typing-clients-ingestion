@@ -41,3 +41,4 @@ output.csv
 
 # Claude debug file
 claude.md
+**/.claude/settings.local.json

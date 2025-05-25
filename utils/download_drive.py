@@ -6,15 +6,17 @@ import time
 import argparse
 import requests
 from urllib.parse import urlparse, parse_qs
+from logger import setup_component_logging
 
 # Directory to save downloaded files
 DOWNLOADS_DIR = "drive_downloads"
 
-def create_download_dir():
+def create_download_dir(logger=None):
     """Create download directory if it doesn't exist"""
     if not os.path.exists(DOWNLOADS_DIR):
         os.makedirs(DOWNLOADS_DIR)
-        print(f"Created downloads directory: {DOWNLOADS_DIR}")
+        if logger:
+            logger.info(f"Created downloads directory: {DOWNLOADS_DIR}")
 
 def extract_file_id(url):
     """Extract Google Drive file ID from URL"""
@@ -114,14 +116,21 @@ def extract_folder_id(url):
     
     return None
 
-def get_folder_contents(folder_id):
+def get_folder_contents(folder_id, logger=None):
     """Not implemented - Google Drive API requires authentication"""
-    print("Folder downloading is not supported without API keys.")
-    print(f"Please access the folder directly at: https://drive.google.com/drive/folders/{folder_id}")
+    if logger:
+        logger.warning("Folder downloading is not supported without API keys.")
+        logger.info(f"Please access the folder directly at: https://drive.google.com/drive/folders/{folder_id}")
+    else:
+        print("Folder downloading is not supported without API keys.")
+        print(f"Please access the folder directly at: https://drive.google.com/drive/folders/{folder_id}")
     return []
 
-def download_drive_file(file_id, output_filename=None):
+def download_drive_file(file_id, output_filename=None, logger=None):
     """Download a file from Google Drive using file ID"""
+    if not logger:
+        logger = setup_component_logging('drive')
+    
     # Direct download URL format
     download_url = f"https://drive.google.com/uc?export=download&id={file_id}"
     
@@ -130,7 +139,7 @@ def download_drive_file(file_id, output_filename=None):
     
     session = requests.Session()
     
-    print(f"Downloading file with ID: {file_id}")
+    logger.info(f"Downloading file with ID: {file_id}")
     
     # First request to get cookies and confirmation page for large files
     response = session.get(download_url, stream=True)
@@ -140,13 +149,13 @@ def download_drive_file(file_id, output_filename=None):
         confirm_match = re.search(r'confirm=([0-9a-zA-Z_-]+)', response.text)
         if confirm_match:
             confirm_code = confirm_match.group(1)
-            print("Large file detected, bypassing confirmation...")
+            logger.info("Large file detected, bypassing confirmation...")
             download_url = f"{download_url}&confirm={confirm_code}"
             response = session.get(download_url, stream=True)
     
     # Check response
     if response.status_code != 200:
-        print(f"Error downloading file: HTTP status {response.status_code}")
+        logger.error(f"Error downloading file: HTTP status {response.status_code}")
         return None
     
     # Get filename if not provided
@@ -170,9 +179,9 @@ def download_drive_file(file_id, output_filename=None):
     total_size = int(response.headers.get('content-length', 0))
     
     if total_size == 0:
-        print("Warning: Could not determine file size")
+        logger.warning("Could not determine file size")
     else:
-        print(f"File size: {total_size / (1024 * 1024):.2f} MB")
+        logger.info(f"File size: {total_size / (1024 * 1024):.2f} MB")
     
     # Download with progress indicator
     try:
@@ -194,15 +203,18 @@ def download_drive_file(file_id, output_filename=None):
             if total_size > 0:
                 sys.stdout.write("\n")
         
-        print(f"Downloaded file to {output_path}")
+        logger.success(f"Downloaded file to {output_path}")
         return output_path
         
     except Exception as e:
-        print(f"Error saving file: {str(e)}")
+        logger.error(f"Error saving file: {str(e)}")
         return None
 
-def save_metadata(file_id, url, metadata):
+def save_metadata(file_id, url, metadata, logger=None):
     """Save file metadata to a JSON file"""
+    if not logger:
+        logger = setup_component_logging('drive')
+    
     metadata_file = os.path.join(DOWNLOADS_DIR, f"{file_id}_metadata.json")
     
     # Add URL to metadata
@@ -213,32 +225,36 @@ def save_metadata(file_id, url, metadata):
     with open(metadata_file, 'w', encoding='utf-8') as f:
         json.dump(metadata, f, indent=2)
     
-    print(f"Saved metadata to {metadata_file}")
+    logger.info(f"Saved metadata to {metadata_file}")
     return metadata_file
 
-def process_drive_url(url, output_filename=None, save_metadata_flag=False):
+def process_drive_url(url, output_filename=None, save_metadata_flag=False, logger=None):
     """Process a Google Drive URL (file or folder)"""
-    create_download_dir()
+    if not logger:
+        logger = setup_component_logging('drive')
+    
+    create_download_dir(logger)
     
     # Check if it's a folder
     if is_folder_url(url):
         folder_id = extract_folder_id(url)
         if not folder_id:
-            print(f"Could not extract folder ID from URL: {url}")
+            logger.error(f"Could not extract folder ID from URL: {url}")
             return None, None
         
-        print(f"Folder ID: {folder_id}")
-        print("Note: Folder downloading requires Google Drive API authentication")
-        print("Try accessing the folder directly in your browser")
+        logger.info(f"Folder ID: {folder_id}")
+        logger.warning("Note: Folder downloading requires Google Drive API authentication")
+        logger.info("Try accessing the folder directly in your browser")
+        get_folder_contents(folder_id, logger)
         return None, None
     
     # Process single file
     file_id = extract_file_id(url)
     if not file_id:
-        print(f"Could not extract file ID from URL: {url}")
+        logger.error(f"Could not extract file ID from URL: {url}")
         return None, None
     
-    print(f"File ID: {file_id}")
+    logger.info(f"File ID: {file_id}")
     
     # Check if file already exists
     if output_filename:
@@ -253,12 +269,12 @@ def process_drive_url(url, output_filename=None, save_metadata_flag=False):
             file_path = None
     
     if file_path and os.path.exists(file_path):
-        print(f"File already exists at {file_path}")
+        logger.info(f"File already exists at {file_path}")
         
         # Check for existing metadata
         metadata_path = os.path.join(DOWNLOADS_DIR, f"{file_id}_metadata.json")
         if os.path.exists(metadata_path):
-            print(f"Metadata already exists at {metadata_path}")
+            logger.info(f"Metadata already exists at {metadata_path}")
             return file_path, metadata_path
         
         # If metadata requested but doesn't exist, we'll create it
@@ -270,13 +286,13 @@ def process_drive_url(url, output_filename=None, save_metadata_flag=False):
                 'downloaded_at': 'previously',
                 'file_size_bytes': os.path.getsize(file_path)
             }
-            metadata_path = save_metadata(file_id, url, metadata)
+            metadata_path = save_metadata(file_id, url, metadata, logger)
             return file_path, metadata_path
         
         return file_path, None
     
     # Download file
-    downloaded_path = download_drive_file(file_id, output_filename)
+    downloaded_path = download_drive_file(file_id, output_filename, logger)
     
     # Save metadata if requested
     metadata_path = None
@@ -287,11 +303,14 @@ def process_drive_url(url, output_filename=None, save_metadata_flag=False):
             'filename': os.path.basename(downloaded_path),
             'file_size_bytes': os.path.getsize(downloaded_path)
         }
-        metadata_path = save_metadata(file_id, url, metadata)
+        metadata_path = save_metadata(file_id, url, metadata, logger)
     
     return downloaded_path, metadata_path
 
 def main():
+    # Setup logging
+    logger = setup_component_logging('drive')
+    
     parser = argparse.ArgumentParser(description='Download Google Drive files')
     parser.add_argument('url', help='Google Drive file or folder URL')
     parser.add_argument('--filename', help='Output filename (optional)')
@@ -300,21 +319,22 @@ def main():
     
     args = parser.parse_args()
     
-    create_download_dir()
+    create_download_dir(logger)
     
     # Process the URL
     file_path, metadata_path = process_drive_url(
         args.url, 
         args.filename,
-        args.metadata
+        args.metadata,
+        logger
     )
     
     if file_path:
-        print(f"\nDownload complete: {file_path}")
+        logger.success(f"Download complete: {file_path}")
         if metadata_path:
-            print(f"Metadata saved: {metadata_path}")
+            logger.info(f"Metadata saved: {metadata_path}")
     else:
-        print("\nDownload failed.")
+        logger.error("Download failed.")
 
 if __name__ == "__main__":
     main()
