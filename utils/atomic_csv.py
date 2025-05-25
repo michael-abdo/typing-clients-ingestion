@@ -6,30 +6,52 @@ from pathlib import Path
 from contextlib import contextmanager
 try:
     from validation import sanitize_csv_value
+    from file_lock import file_lock, atomic_write_with_lock
+    from csv_backup import get_backup_manager
+    from config import get_config
+    from logging_config import get_logger
 except ImportError:
     from .validation import sanitize_csv_value
-try:
-    from file_lock import file_lock, atomic_write_with_lock
-except ImportError:
     from .file_lock import file_lock, atomic_write_with_lock
+    from .csv_backup import get_backup_manager
+    from .config import get_config
+    from .logging_config import get_logger
+
+# Setup module logger
+logger = get_logger(__name__)
+
+# Get configuration
+config = get_config()
 
 
 class AtomicCSVWriter:
-    """Context manager for atomic CSV writes with file locking"""
+    """Context manager for atomic CSV writes with file locking and automatic backup"""
     
-    def __init__(self, filename, mode='w', fieldnames=None, encoding='utf-8', use_lock=True, timeout=30.0):
+    def __init__(self, filename, mode='w', fieldnames=None, encoding='utf-8', use_lock=True, timeout=30.0, auto_backup=None):
         self.filename = Path(filename)
         self.mode = mode
         self.fieldnames = fieldnames
         self.encoding = encoding
         self.use_lock = use_lock
         self.timeout = timeout
+        self.auto_backup = auto_backup if auto_backup is not None else config.get('csv_backup.auto_backup_before_write', True)
         self.temp_file = None
         self.writer = None
         self.file_handle = None
         self.lock = None
+        self.backup_path = None
     
     def __enter__(self):
+        # Create backup if requested and file exists
+        if self.auto_backup and self.filename.exists() and config.get('csv_backup.enabled', True):
+            try:
+                backup_manager = get_backup_manager()
+                self.backup_path = backup_manager.auto_backup_before_write(self.filename)
+                if self.backup_path:
+                    logger.debug(f"Created backup before write: {self.backup_path}")
+            except Exception as e:
+                logger.warning(f"Failed to create backup for {self.filename}: {e}")
+        
         # Acquire file lock if requested
         if self.use_lock:
             self.lock = file_lock(self.filename, exclusive=True, timeout=self.timeout)

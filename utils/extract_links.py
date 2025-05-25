@@ -15,9 +15,14 @@ from selenium.webdriver.support import expected_conditions as EC
 try:
     from http_pool import get as http_get
     from config import get_config
+    from logging_config import get_logger
 except ImportError:
     from .http_pool import get as http_get
     from .config import get_config
+    from .logging_config import get_logger
+
+# Setup module logger
+logger = get_logger(__name__)
 
 # Get configuration
 config = get_config()
@@ -42,9 +47,9 @@ def cleanup_driver():
         try:
             _driver.quit()
             _driver = None
-            print("Selenium driver cleaned up successfully")
+            logger.info("Selenium driver cleaned up successfully")
         except Exception as e:
-            print(f"Error cleaning up Selenium driver: {e}")
+            logger.error(f"Error cleaning up Selenium driver: {e}")
 
 def clean_url(url):
     """Clean up a URL by removing trailing junk and escape sequences"""
@@ -83,7 +88,7 @@ def get_selenium_driver():
     """Initialize and return a Selenium WebDriver instance"""
     global _driver
     if _driver is None:
-        print("Initializing Selenium Chrome driver...")
+        logger.info("Initializing Selenium Chrome driver...")
         chrome_options = Options()
         chrome_options.add_argument("--headless")  # Run in headless mode
         chrome_options.add_argument("--disable-gpu")
@@ -94,19 +99,19 @@ def get_selenium_driver():
         try:
             _driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
         except Exception as e:
-            print(f"Error initializing Selenium driver: {str(e)}")
+            logger.error(f"Error initializing Selenium driver: {str(e)}")
             # Try fallback method - requires Chrome driver to be installed manually
             try:
                 _driver = webdriver.Chrome(options=chrome_options)
             except Exception as e:
-                print(f"Could not initialize Selenium driver: {str(e)}")
+                logger.error(f"Could not initialize Selenium driver: {str(e)}")
                 return None
     
     # Ensure driver is still alive
     try:
         _driver.title  # Simple check to see if driver is responsive
     except Exception:
-        print("Driver was closed, reinitializing...")
+        logger.warning("Driver was closed, reinitializing...")
         _driver = None
         return get_selenium_driver()
     
@@ -116,10 +121,10 @@ def get_html_with_selenium(url, debug=False):
     """Get HTML using Selenium for JavaScript rendering"""
     driver = get_selenium_driver()
     if not driver:
-        print("Failed to initialize Selenium driver")
+        logger.error("Failed to initialize Selenium driver")
         return ""
     
-    print(f"Loading {url} with Selenium...")
+    logger.info(f"Loading {url} with Selenium...")
     try:
         driver.get(url)
         # Wait for page to load
@@ -150,11 +155,11 @@ def get_html_with_selenium(url, debug=False):
             debug_file = os.path.join(CACHE_DIR, f"selenium_debug_{url.replace('://', '_').replace('/', '_').replace('?', '_').replace('=', '_')}.html")
             with open(debug_file, 'w', encoding='utf-8') as f:
                 f.write(html)
-            print(f"Saved Selenium debug HTML to {debug_file}")
+            logger.debug(f"Saved Selenium debug HTML to {debug_file}")
         
         return html
     except Exception as e:
-        print(f"Error loading {url} with Selenium: {str(e)}")
+        logger.error(f"Error loading {url} with Selenium: {str(e)}")
         return ""
 
 def get_html(url, debug=False):
@@ -163,7 +168,7 @@ def get_html(url, debug=False):
     if "docs.google.com/document" in url:
         return get_html_with_selenium(url, debug)
     
-    print(f"Downloading HTML for {url}")
+    logger.info(f"Downloading HTML for {url}")
     try:
         # Headers are already configured in http_pool
         # Just use streaming
@@ -191,7 +196,7 @@ def get_html(url, debug=False):
                         f.write(html[i:i+chunk_size])
                 else:
                     f.write(html)
-            print(f"Saved debug HTML to {debug_file}")
+            logger.debug(f"Saved debug HTML to {debug_file}")
         
         # Only cache Google Sheets
         if "docs.google.com/spreadsheets" in url and html:
@@ -202,7 +207,7 @@ def get_html(url, debug=False):
                         f.write(html[i:i+chunk_size])
                 else:
                     f.write(html)
-            print(f"Cached Google Sheet HTML to {GOOGLE_SHEET_CACHE_FILE}")
+            logger.info(f"Cached Google Sheet HTML to {GOOGLE_SHEET_CACHE_FILE}")
         
         # Add a small delay to ensure the page has time to render
         time.sleep(1)
@@ -210,7 +215,7 @@ def get_html(url, debug=False):
         return html
     except Exception as e:
         # Log error but don't fail completely - some URLs might be temporarily unavailable
-        print(f"Warning: Error downloading {url}: {str(e)}")
+        logger.warning(f"Error downloading {url}: {str(e)}")
         # Return empty string to allow processing to continue
         # Caller should check for empty response
         return ""
@@ -228,11 +233,11 @@ def extract_links(url, limit=1, debug=False):
         return []
     
     if debug:
-        print(f"Downloaded HTML for debugging purposes ({len(html)} bytes)")
+        logger.debug(f"Downloaded HTML for debugging purposes ({len(html)} bytes)")
     
     # Google Docs special handling
     if "docs.google.com/document" in url:
-        print(f"Google document detected: {url}")
+        logger.info(f"Google document detected: {url}")
         # Add original URL to results
         result = [url]
         
@@ -355,7 +360,7 @@ def extract_links(url, limit=1, debug=False):
     
     # Regular drive.google.com links
     elif "drive.google.com" in url:
-        print(f"Google Drive detected: {url}")
+        logger.info(f"Google Drive detected: {url}")
         # Add original URL to results
         result = [url]
         

@@ -105,3 +105,11 @@ limits:
   max_retries: 3
   max_concurrent_downloads: 10
   max_file_size: 5368709120  # 5GB max file size
+
+# CSV Backup Configuration
+csv_backup:
+  enabled: true
+  backup_dir: "backups"
+  max_backups: 10
+  compress: true
+  auto_backup_before_write: true

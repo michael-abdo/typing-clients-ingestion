@@ -9,14 +9,19 @@ from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 try:
     from logger import setup_component_logging
+    from logging_config import get_logger
     from validation import validate_google_drive_url, validate_file_path, ValidationError
     from retry_utils import retry_request, get_with_retry, retry_with_backoff
     from file_lock import file_lock, safe_file_operation
 except ImportError:
     from .logger import setup_component_logging
+    from .logging_config import get_logger
     from .validation import validate_google_drive_url, validate_file_path, ValidationError
     from .retry_utils import retry_request, get_with_retry, retry_with_backoff
     from .file_lock import file_lock, safe_file_operation
+
+# Setup module logger
+logger = get_logger(__name__)
 
 # Directory to save downloaded files
 DOWNLOADS_DIR = "drive_downloads"
@@ -132,8 +137,8 @@ def get_folder_contents(folder_id, logger=None):
         logger.warning("Folder downloading is not supported without API keys.")
         logger.info(f"Please access the folder directly at: https://drive.google.com/drive/folders/{folder_id}")
     else:
-        print("Folder downloading is not supported without API keys.")
-        print(f"Please access the folder directly at: https://drive.google.com/drive/folders/{folder_id}")
+        logger.warning("Folder downloading is not supported without API keys.")
+        logger.info(f"Please access the folder directly at: https://drive.google.com/drive/folders/{folder_id}")
     return []
 
 @retry_with_backoff(

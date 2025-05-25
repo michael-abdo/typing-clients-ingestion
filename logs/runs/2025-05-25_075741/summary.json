@@ -1,0 +1,12 @@
+{
+  "start_time": "2025-05-25T07:57:41.344923",
+  "end_time": "2025-05-25T07:57:41.732307",
+  "rows_processed": 0,
+  "youtube_downloads": 0,
+  "drive_downloads": 0,
+  "errors": 2,
+  "status": "completed",
+  "run_id": "2025-05-25_075741",
+  "duration_seconds": 0.387384,
+  "log_path": "logs/runs/2025-05-25_075741"
+}

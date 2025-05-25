@@ -259,7 +259,8 @@ def parallel_download_youtube_videos(
 if __name__ == "__main__":
     import random
     
-    print("Testing parallel processing utilities...")
+    logger = setup_component_logging('main')
+    logger.info("Testing parallel processing utilities...")
     
     # Test function that simulates work
     def simulate_work(item):
@@ -276,7 +277,7 @@ if __name__ == "__main__":
     # Test with small batch
     test_items = [f"item_{i}" for i in range(20)]
     
-    print(f"\nProcessing {len(test_items)} items in parallel...")
+    logger.info(f"Processing {len(test_items)} items in parallel...")
     start_time = time.time()
     
     results = parallel_process(
@@ -292,18 +293,18 @@ if __name__ == "__main__":
     successes = sum(1 for _, result in results if not isinstance(result, Exception))
     failures = sum(1 for _, result in results if isinstance(result, Exception))
     
-    print(f"\nResults:")
-    print(f"  Total time: {elapsed:.2f}s")
-    print(f"  Successful: {successes}")
-    print(f"  Failed: {failures}")
-    print(f"  Average time per item: {elapsed / len(test_items):.2f}s")
+    logger.info("Results:")
+    logger.info(f"  Total time: {elapsed:.2f}s")
+    logger.info(f"  Successful: {successes}")
+    logger.info(f"  Failed: {failures}")
+    logger.info(f"  Average time per item: {elapsed / len(test_items):.2f}s")
     
     # Show some results
-    print("\nSample results:")
+    logger.info("Sample results:")
     for item, result in results[:5]:
         if isinstance(result, Exception):
-            print(f"  {item}: ERROR - {result}")
+            logger.error(f"  {item}: ERROR - {result}")
         else:
-            print(f"  {item}: {result}")
+            logger.info(f"  {item}: {result}")
     
-    print("\nParallel processing utilities ready!")
+    logger.info("Parallel processing utilities ready!")

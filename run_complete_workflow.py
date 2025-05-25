@@ -6,6 +6,7 @@ import subprocess
 import csv
 from pathlib import Path
 from utils.logger import pipeline_run, get_pipeline_logger
+from utils.logging_config import get_logger
 from utils.parallel_processor import parallel_download_youtube_videos
 
 def run_process(command, description=None, component='main', logger=None):
@@ -52,8 +53,9 @@ def get_unprocessed_links(csv_file, link_type="google_drive"):
     Returns:
         List of links that haven't been processed yet
     """
+    logger = get_logger(__name__)
     if not os.path.exists(csv_file):
-        print(f"CSV file not found: {csv_file}")
+        logger.warning(f"CSV file not found: {csv_file}")
         return []
     
     links = []
@@ -132,8 +134,8 @@ def main():
     if args.no_logging:
         return main_workflow(args)
     else:
-        with pipeline_run() as logger:
-            return main_workflow(args, logger)
+        with pipeline_run() as pipeline_logger:
+            return main_workflow(args, pipeline_logger)
 
 def main_workflow(args, logger=None):
     """Main workflow logic"""
