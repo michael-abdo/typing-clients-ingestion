@@ -113,3 +113,20 @@ csv_backup:
   max_backups: 10
   compress: true
   auto_backup_before_write: true
+
+# Rate Limiting Configuration
+rate_limiting:
+  default_rate: 2.0  # requests per second
+  services:
+    youtube:
+      rate: 2.0  # 2 requests per second
+      burst: 5   # Allow burst of 5 requests
+    google_drive:
+      rate: 3.0  # 3 requests per second
+      burst: 10  # Allow burst of 10 requests
+    google_docs:
+      rate: 1.0  # 1 request per second
+      burst: 3   # Allow burst of 3 requests
+    selenium:
+      rate: 0.5  # 1 request every 2 seconds
+      burst: 2   # Allow burst of 2 requests

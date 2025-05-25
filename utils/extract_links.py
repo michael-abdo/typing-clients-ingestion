@@ -16,10 +16,12 @@ try:
     from http_pool import get as http_get
     from config import get_config
     from logging_config import get_logger
+    from rate_limiter import rate_limit, wait_for_rate_limit
 except ImportError:
     from .http_pool import get as http_get
     from .config import get_config
     from .logging_config import get_logger
+    from .rate_limiter import rate_limit, wait_for_rate_limit
 
 # Setup module logger
 logger = get_logger(__name__)
@@ -117,6 +119,7 @@ def get_selenium_driver():
     
     return _driver
 
+@rate_limit('selenium')
 def get_html_with_selenium(url, debug=False):
     """Get HTML using Selenium for JavaScript rendering"""
     driver = get_selenium_driver()

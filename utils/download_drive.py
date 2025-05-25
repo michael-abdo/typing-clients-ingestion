@@ -13,12 +13,14 @@ try:
     from validation import validate_google_drive_url, validate_file_path, ValidationError
     from retry_utils import retry_request, get_with_retry, retry_with_backoff
     from file_lock import file_lock, safe_file_operation
+    from rate_limiter import rate_limit, wait_for_rate_limit
 except ImportError:
     from .logger import setup_component_logging
     from .logging_config import get_logger
     from .validation import validate_google_drive_url, validate_file_path, ValidationError
     from .retry_utils import retry_request, get_with_retry, retry_with_backoff
     from .file_lock import file_lock, safe_file_operation
+    from .rate_limiter import rate_limit, wait_for_rate_limit
 
 # Setup module logger
 logger = get_logger(__name__)
@@ -146,6 +148,7 @@ def get_folder_contents(folder_id, logger=None):
     base_delay=5.0,
     exceptions=(requests.RequestException, IOError)
 )
+@rate_limit('google_drive')
 def download_drive_file(file_id, output_filename=None, logger=None):
     """Download a file from Google Drive using file ID"""
     if not logger:

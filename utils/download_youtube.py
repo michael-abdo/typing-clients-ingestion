@@ -11,12 +11,14 @@ try:
     from retry_utils import retry_subprocess, retry_with_backoff
     from file_lock import file_lock, safe_file_operation
     from config import get_config, get_youtube_downloads_dir, get_timeout
+    from rate_limiter import rate_limit, wait_for_rate_limit
 except ImportError:
     from .logger import setup_component_logging
     from .validation import validate_youtube_url, validate_file_path, ValidationError
     from .retry_utils import retry_subprocess, retry_with_backoff
     from .file_lock import file_lock, safe_file_operation
     from .config import get_config, get_youtube_downloads_dir, get_timeout
+    from .rate_limiter import rate_limit, wait_for_rate_limit
 
 # Get configuration
 config = get_config()
@@ -33,6 +35,7 @@ def create_download_dir(logger=None):
             logger.info(f"Created downloads directory: {DOWNLOADS_DIR}")
     return downloads_path
 
+@rate_limit('youtube')
 def download_single_video(url, video_id=None, title=None, transcript_only=False, resolution=None, output_format=None, yt_dlp_path="yt-dlp", logger=None):
     """Download a single YouTube video using yt-dlp"""
     if not logger:
