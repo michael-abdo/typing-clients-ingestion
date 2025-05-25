@@ -5,6 +5,7 @@ selenium>=4.8.0
 webdriver-manager>=3.8.5
 pathlib>=1.0.1
 yt-dlp>=2025.4.30  # For YouTube video downloading
+pyyaml>=6.0.0  # For configuration file parsing
 
 # Optional dependencies
 python-dotenv>=1.0.0  # For environment variable management

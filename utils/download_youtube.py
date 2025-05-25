@@ -10,14 +10,19 @@ try:
     from validation import validate_youtube_url, validate_file_path, ValidationError
     from retry_utils import retry_subprocess, retry_with_backoff
     from file_lock import file_lock, safe_file_operation
+    from config import get_config, get_youtube_downloads_dir, get_timeout
 except ImportError:
     from .logger import setup_component_logging
     from .validation import validate_youtube_url, validate_file_path, ValidationError
     from .retry_utils import retry_subprocess, retry_with_backoff
     from .file_lock import file_lock, safe_file_operation
+    from .config import get_config, get_youtube_downloads_dir, get_timeout
 
-# Directory to save downloaded videos and transcripts
-DOWNLOADS_DIR = "youtube_downloads"
+# Get configuration
+config = get_config()
+
+# Directory to save downloaded videos and transcripts (from config)
+DOWNLOADS_DIR = get_youtube_downloads_dir()
 
 def create_download_dir(logger=None):
     """Create download directory if it doesn't exist"""
@@ -28,10 +33,16 @@ def create_download_dir(logger=None):
             logger.info(f"Created downloads directory: {DOWNLOADS_DIR}")
     return downloads_path
 
-def download_single_video(url, video_id=None, title=None, transcript_only=False, resolution="720", output_format="mp4", yt_dlp_path="yt-dlp", logger=None):
+def download_single_video(url, video_id=None, title=None, transcript_only=False, resolution=None, output_format=None, yt_dlp_path="yt-dlp", logger=None):
     """Download a single YouTube video using yt-dlp"""
     if not logger:
         logger = setup_component_logging('youtube')
+    
+    # Use config defaults if not provided
+    if resolution is None:
+        resolution = config.get('downloads.youtube.default_resolution', '720')
+    if output_format is None:
+        output_format = config.get('downloads.youtube.default_format', 'mp4')
     
     # Validate URL
     try:
@@ -82,8 +93,8 @@ def download_single_video(url, video_id=None, title=None, transcript_only=False,
     if output_format == "srt":
         sub_format = "srt"
     else:
-        # Default to vtt format for better compatibility
-        sub_format = "vtt"
+        # Get subtitle format from config
+        sub_format = config.get('downloads.youtube.subtitle_format', 'vtt')
     
     # Prepare transcript file path with correct extension
     transcript_file = downloads_path / f"{video_id}_transcript.{sub_format}"
@@ -91,7 +102,7 @@ def download_single_video(url, video_id=None, title=None, transcript_only=False,
     # Use file locking to prevent race conditions when downloading transcripts
     lock_file = downloads_path / f".{video_id}_transcript.lock"
     
-    with file_lock(lock_file, exclusive=True, timeout=60.0, logger=logger):
+    with file_lock(lock_file, exclusive=True, timeout=get_timeout('video_download'), logger=logger):
         # Check if transcript already exists
         if transcript_file.exists():
             logger.info(f"Transcript already exists: {transcript_file}")
@@ -103,7 +114,7 @@ def download_single_video(url, video_id=None, title=None, transcript_only=False,
                 "--skip-download",
                 "--write-subs",
                 "--write-auto-subs",  # Also write automatically generated subtitles
-                "--sub-langs", "en.*",
+                "--sub-langs", config.get('downloads.youtube.subtitle_languages', 'en.*'),
                 "--sub-format", sub_format,
                 "--convert-subs", sub_format,  # Ensure consistent format
                 "--output", f"{downloads_path}/{video_id}_transcript",  # Use our naming convention directly

@@ -1,31 +1,38 @@
 #!/usr/bin/env python3
 import csv
 import os
-import requests
 from bs4 import BeautifulSoup
 import sys
 try:
     from atomic_csv import write_csv_atomic, append_csv_atomic
+    from config import get_config, get_google_sheets_url
+    from http_pool import get as http_get
 except ImportError:
     from .atomic_csv import write_csv_atomic, append_csv_atomic
+    from .config import get_config, get_google_sheets_url
+    from .http_pool import get as http_get
+
+# Get configuration
+config = get_config()
 
 # Increase CSV field size limit to handle large fields
-csv.field_size_limit(sys.maxsize)
+csv.field_size_limit(config.get('file_processing.max_csv_field_size', sys.maxsize))
 
-# Google Sheets published URL
-URL = "https://docs.google.com/spreadsheets/u/1/d/e/2PACX-1vRqqjqoaj8sEZBfZRw0Og7g8ms_0yTL2MsegTubcjhhBnXr1s1jFBwIVAsbkyj1xD0TMj06LvGTQIHU/pubhtml?pli=1#"
-CACHE_FILE = "google_sheet_cache.html"
+# Google Sheets published URL (from config)
+URL = get_google_sheets_url()
+CACHE_FILE = config.get('google_sheets.cache_file', 'google_sheet_cache.html')
 
 def download_sheet():
     """Download the Google Sheet HTML and save it locally using streaming"""
     print(f"Downloading Google Sheet from {URL}...")
-    response = requests.get(URL, stream=True)
+    response = http_get(URL, stream=True)
     response.raise_for_status()
     
     # Stream the content to file to avoid loading all into memory
     content = ""
+    chunk_size = config.get('web_scraping.streaming_chunk_size', 8192)
     with open(CACHE_FILE, "w", encoding="utf-8") as f:
-        for chunk in response.iter_content(chunk_size=8192, decode_unicode=True):
+        for chunk in response.iter_content(chunk_size=chunk_size, decode_unicode=True):
             if chunk:  # filter out keep-alive chunks
                 f.write(chunk)
                 content += chunk
@@ -64,16 +71,17 @@ def extract_actual_url(google_url):
 def fetch_table_data():
     html = get_sheet_html()
     soup = BeautifulSoup(html, "html.parser")
-    print("HTML retrieved, looking for specific div ID 1159146182...")
+    target_div_id = str(config.get('google_sheets.target_div_id', 1159146182))
+    print(f"HTML retrieved, looking for specific div ID {target_div_id}...")
     
-    # Look for the specific div with ID 1159146182
-    target_div = soup.find("div", {"id": "1159146182"})
+    # Look for the specific div with configured ID
+    target_div = soup.find("div", {"id": target_div_id})
     if target_div:
-        print("Found the target div with ID 1159146182")
+        print(f"Found the target div with ID {target_div_id}")
         # Find table inside this div
         table = target_div.find("table")
     else:
-        print("Div with ID 1159146182 not found, falling back to generic table search")
+        print(f"Div with ID {target_div_id} not found, falling back to generic table search")
         # Try different table selectors
         table = soup.find("table", {"class": "waffle"})
         if not table:
@@ -277,7 +285,7 @@ def fetch_table_data():
     return records
 
 def update_csv():
-    filename = "output.csv"
+    filename = config.get('paths.output_csv', 'output.csv')
     existing_links = set()
     
     # Check if file exists and read existing links

@@ -8,6 +8,14 @@ from pathlib import Path
 from typing import Optional, Union, IO
 import logging
 
+try:
+    from config import get_config, get_timeout
+except ImportError:
+    from .config import get_config, get_timeout
+
+# Get configuration
+config = get_config()
+
 
 class FileLockError(Exception):
     """Exception raised when file locking fails."""
@@ -24,8 +32,8 @@ class FileLock:
     
     def __init__(self, 
                  lock_file: Union[str, Path],
-                 timeout: float = 30.0,
-                 check_interval: float = 0.1,
+                 timeout: float = None,
+                 check_interval: float = None,
                  logger: Optional[logging.Logger] = None):
         """
         Initialize a file lock.
@@ -37,8 +45,8 @@ class FileLock:
             logger: Optional logger for debugging
         """
         self.lock_file = Path(lock_file)
-        self.timeout = timeout
-        self.check_interval = check_interval
+        self.timeout = timeout if timeout is not None else get_timeout('file_lock')
+        self.check_interval = check_interval if check_interval is not None else config.get('file_locking.check_interval', 0.1)
         self.logger = logger or logging.getLogger(__name__)
         self._lock_fd: Optional[IO] = None
         
@@ -110,7 +118,7 @@ class FileLock:
 @contextlib.contextmanager
 def file_lock(file_path: Union[str, Path], 
               exclusive: bool = True,
-              timeout: float = 30.0,
+              timeout: float = None,
               logger: Optional[logging.Logger] = None):
     """
     Context manager for file locking.

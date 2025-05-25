@@ -1,4 +1,3 @@
-import requests
 from bs4 import BeautifulSoup
 import re
 import os
@@ -12,6 +11,16 @@ from selenium.webdriver.chrome.options import Options
 from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+
+try:
+    from http_pool import get as http_get
+    from config import get_config
+except ImportError:
+    from .http_pool import get as http_get
+    from .config import get_config
+
+# Get configuration
+config = get_config()
 
 # Base directories
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -156,15 +165,9 @@ def get_html(url, debug=False):
     
     print(f"Downloading HTML for {url}")
     try:
-        # Add headers to mimic a browser
-        headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
-            'Accept-Language': 'en-US,en;q=0.5',
-        }
-        
-        # Increase timeout for document rendering and use streaming
-        response = requests.get(url, headers=headers, timeout=60, stream=True)
+        # Headers are already configured in http_pool
+        # Just use streaming
+        response = http_get(url, stream=True)
         response.raise_for_status()
         
         # Stream HTML content to avoid loading large pages into memory
