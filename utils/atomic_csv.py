@@ -231,27 +231,3 @@ def append_csv_atomic(filename, rows, fieldnames=None, encoding='utf-8', use_loc
         writer.writerows(rows)
 
 
-# Example usage
-if __name__ == "__main__":
-    # Test atomic write
-    test_data = [
-        {"name": "Alice", "age": "30", "email": "alice@example.com"},
-        {"name": "Bob", "age": "25", "email": "bob@example.com"},
-        {"name": "=cmd.exe", "age": "99", "email": "'; DROP TABLE users;--"}  # Test sanitization
-    ]
-    
-    print("Testing atomic CSV write...")
-    write_csv_atomic("test_atomic.csv", test_data, fieldnames=["name", "age", "email"])
-    print("Write complete. Check test_atomic.csv")
-    
-    # Test atomic update
-    print("\nTesting atomic CSV update...")
-    with atomic_csv_update("test_atomic.csv") as (existing, writer):
-        writer.writeheader()
-        for row in existing:
-            row['age'] = str(int(row['age']) + 1)  # Increment age
-            writer.writerow(row)
-        # Add a new row
-        writer.writerow({"name": "Charlie", "age": "35", "email": "charlie@example.com"})
-    
-    print("Update complete. Check test_atomic.csv")
