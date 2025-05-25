@@ -62,8 +62,8 @@ def download_single_video(url, video_id=None, title=None, transcript_only=False,
     
     # Prepare transcript file path with correct extension
     transcript_file = downloads_path / f"{video_id}_transcript.{sub_format}"
-        
-    # Command to download subtitles - also try to write automatic captions
+    
+    # Command to download subtitles with our specific naming convention
     sub_cmd = [
         yt_dlp_path,
         "--skip-download",
@@ -71,7 +71,8 @@ def download_single_video(url, video_id=None, title=None, transcript_only=False,
         "--write-auto-subs",  # Also write automatically generated subtitles
         "--sub-langs", "en.*",
         "--sub-format", sub_format,
-        "--output", f"{downloads_path}/{video_id}",
+        "--convert-subs", sub_format,  # Ensure consistent format
+        "--output", f"{downloads_path}/{video_id}_transcript",  # Use our naming convention directly
         url
     ]
     
@@ -79,13 +80,37 @@ def download_single_video(url, video_id=None, title=None, transcript_only=False,
         logger.info("Attempting to download transcript...")
         subprocess.run(sub_cmd, check=True)
         
-        # Find the subtitle file, looking for both regular and auto-generated subtitles
-        # (could be .en.vtt, .en-US.vtt, .en.auto.vtt, etc.)
-        subtitle_files = list(downloads_path.glob(f"{video_id}.*.{sub_format}"))
+        # Look for all subtitle files that yt-dlp might have created
+        # Pattern 1: Our naming with language codes
+        subtitle_files = list(downloads_path.glob(f"{video_id}_transcript.*.{sub_format}"))
+        
+        if not subtitle_files:
+            # Pattern 2: Standard yt-dlp naming
+            subtitle_files = list(downloads_path.glob(f"{video_id}.*.{sub_format}"))
         
         if subtitle_files:
-            # Rename the first subtitle file to our standard name
-            subtitle_files[0].rename(transcript_file)
+            # If our target file doesn't exist, create it from the best available subtitle
+            if not transcript_file.exists():
+                # Prefer files with 'orig' in the name as they're unprocessed
+                orig_files = [f for f in subtitle_files if '-orig' in f.name or '.orig' in f.name]
+                if orig_files:
+                    source_file = orig_files[0]
+                else:
+                    # Otherwise use the largest file
+                    source_file = max(subtitle_files, key=lambda f: f.stat().st_size)
+                
+                source_file.rename(transcript_file)
+                logger.success(f"Saved transcript to {transcript_file}")
+            
+            # Clean up any remaining language-coded files
+            for f in subtitle_files:
+                if f.exists() and f != transcript_file:
+                    f.unlink()
+                    logger.debug(f"Cleaned up: {f.name}")
+            
+            has_transcript = True
+        elif transcript_file.exists():
+            # File was created directly with correct name
             logger.success(f"Saved transcript to {transcript_file}")
             has_transcript = True
         else:
