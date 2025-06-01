@@ -243,7 +243,7 @@ def fetch_table_data():
             logger.debug(f"Using hard-coded indices: Name={name_index}, Type={type_index}")
             
             # Loop through all the rows
-            for row_index in range(15, len(rows)):  # Start from row 15 which we know has links
+            for row_index in range(1, len(rows)):  # Start from row 1 (after header) to capture all people
                 row = rows[row_index]  # Get the current row based on the row_index
                 cells = row.find_all("td")
                 
@@ -252,6 +252,9 @@ def fetch_table_data():
                     continue
                 
                 # Get cells data
+                row_id_cell = cells[0]  # Column 0 (Row ID)
+                row_id = row_id_cell.get_text(strip=True)
+                
                 name_cell = cells[name_index]  # Column 2 (Name)
                 name = name_cell.get_text(strip=True)
                 
@@ -278,8 +281,9 @@ def fetch_table_data():
                             doc_link = extract_actual_url(href)
                 
                 # Add the record regardless of whether it has a link
-                logger.debug(f"Found record: Name={name}, Email={email}, Type={type_val}, Link={doc_link}")
+                logger.debug(f"Found record: Row_ID={row_id}, Name={name}, Email={email}, Type={type_val}, Link={doc_link}")
                 records.append({
+                    "row_id": row_id,
                     "name": name,
                     "email": email,
                     "type": type_val,
@@ -292,12 +296,17 @@ def fetch_table_data():
 def update_csv():
     filename = config.get('paths.output_csv', 'output.csv')
     existing_links = set()
+    existing_row_ids = set()
     
-    # Check if file exists and read existing links
+    # Check if file exists and read existing links and row_ids
     if os.path.exists(filename):
         with open(filename, "r", newline="", encoding="utf-8") as csvfile:
             reader = csv.DictReader(csvfile)
             for row in reader:
+                # Track row_ids (primary duplicate detection)
+                if row.get("row_id"):
+                    existing_row_ids.add(row["row_id"])
+                # Track links (legacy duplicate detection)
                 if row.get("link"):
                     existing_links.add(row["link"])
     
@@ -305,12 +314,24 @@ def update_csv():
     data = fetch_table_data()
     logger.info(f"Found {len(data)} records in the Google Sheet")
     
-    # Filter to only new records with links not already in CSV
+    # Filter to only new records using row_id and link-based duplicate detection
     new_records = []
     for record in data:
-        if record["link"] and record["link"] in existing_links:
+        # Primary: Check row_id (most reliable)
+        if record.get("row_id") and record["row_id"] in existing_row_ids:
+            continue  # Skip if row_id exists
+        
+        # Secondary: Check link (legacy compatibility)
+        if record.get("link") and record["link"] in existing_links:
             continue  # Skip if link exists
+            
         new_records.append(record)
+        
+        # Add to tracking sets to prevent duplicates within this batch
+        if record.get("row_id"):
+            existing_row_ids.add(record["row_id"])
+        if record.get("link"):
+            existing_links.add(record["link"])
     
     logger.info(f"{len(new_records)} new records to add to CSV")
     
@@ -321,11 +342,11 @@ def update_csv():
         
         if write_header:
             # Write a new file with header and all records (atomic)
-            write_csv_atomic(filename, data, fieldnames=["name", "email", "type", "link"])
+            write_csv_atomic(filename, data, fieldnames=["row_id", "name", "email", "type", "link"])
             logger.info(f"Created new CSV with {len(data)} records")
         else:
             # Append just the new records to the existing file (atomic)
-            append_csv_atomic(filename, new_records, fieldnames=["name", "email", "type", "link"])
+            append_csv_atomic(filename, new_records, fieldnames=["row_id", "name", "email", "type", "link"])
             logger.info(f"Added {len(new_records)} new records to CSV")
 
 if __name__ == "__main__":
