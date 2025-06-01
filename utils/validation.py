@@ -46,7 +46,7 @@ def validate_url(url, allowed_domains=None):
     
     # Check for suspicious characters that might indicate injection
     suspicious_patterns = [
-        r'[;&|`$]',  # Command separators
+        r'[;|`$]',  # Command separators (removed & which is valid in URLs)
         r'\.\./',     # Path traversal
         r'%00',       # Null byte
         r'\$\(',      # Command substitution
@@ -82,11 +82,13 @@ def validate_youtube_url(url):
     video_id = None
     
     if 'youtu.be' in url:
-        match = re.search(r'youtu\.be/([a-zA-Z0-9_-]{11})', url)
+        # Match video ID followed by end of string, /, ? or #
+        match = re.search(r'youtu\.be/([a-zA-Z0-9_-]{11})(?:[/?#]|$)', url)
         if match:
             video_id = match.group(1)
     else:
-        match = re.search(r'[?&]v=([a-zA-Z0-9_-]{11})', url)
+        # Match video ID followed by &, #, or end of string
+        match = re.search(r'[?&]v=([a-zA-Z0-9_-]{11})(?:[&#]|$)', url)
         if match:
             video_id = match.group(1)
     
@@ -138,6 +140,80 @@ def validate_google_drive_url(url):
         raise ValidationError(f"Invalid Google Drive file ID format: {file_id}")
     
     return url, file_id
+
+
+def validate_youtube_playlist_url(url):
+    """
+    Validate a YouTube playlist URL (watch_videos format)
+    
+    Returns:
+        tuple: (sanitized_url, list of video_ids)
+    """
+    url = validate_url(url, allowed_domains=['youtube.com'])
+    
+    video_ids = []
+    
+    # Check for watch_videos format
+    if 'watch_videos?video_ids=' in url:
+        match = re.search(r'watch_videos\?video_ids=([a-zA-Z0-9_,-]+)', url)
+        if match:
+            ids_string = match.group(1)
+            # Split by comma and validate each ID
+            potential_ids = ids_string.split(',')
+            for pid in potential_ids:
+                # Validate each video ID using the dedicated function
+                try:
+                    validate_youtube_video_id(pid)
+                    video_ids.append(pid)
+                except ValidationError:
+                    # Skip invalid IDs instead of failing
+                    continue
+    
+    # Check for playlist format
+    elif 'playlist?list=' in url:
+        match = re.search(r'playlist\?list=([a-zA-Z0-9_-]+)', url)
+        if match:
+            # For regular playlists, we can't extract individual video IDs
+            # Just validate the playlist ID format
+            playlist_id = match.group(1)
+            if not re.match(r'^[a-zA-Z0-9_-]+$', playlist_id):
+                raise ValidationError(f"Invalid YouTube playlist ID format: {playlist_id}")
+            return url, []
+    
+    if not video_ids and 'playlist?list=' not in url:
+        raise ValidationError(f"No valid YouTube video IDs found in playlist URL: {url}")
+    
+    # Reconstruct clean URL with only valid video IDs
+    if video_ids:
+        clean_url = f"https://www.youtube.com/watch_videos?video_ids={','.join(video_ids)}"
+        return clean_url, video_ids
+    
+    return url, video_ids
+
+
+def validate_youtube_video_id(video_id):
+    """
+    Validate a YouTube video ID format
+    
+    Returns:
+        bool: True if valid, raises ValidationError if not
+    """
+    if not video_id:
+        raise ValidationError("Video ID cannot be empty")
+    
+    if not isinstance(video_id, str):
+        raise ValidationError("Video ID must be a string")
+    
+    # YouTube video IDs are exactly 11 characters: alphanumeric, underscore, or hyphen
+    if not re.match(r'^[a-zA-Z0-9_-]{11}$', video_id):
+        raise ValidationError(f"Invalid YouTube video ID format: {video_id}. Must be exactly 11 characters.")
+    
+    # Additional check for common patterns that indicate corrupted IDs
+    # These patterns suggest the ID contains control characters or encoding issues
+    if any(pattern in video_id.lower() for pattern in ['u00', '\\u', 'origin', 'null']):
+        raise ValidationError(f"Video ID appears to be corrupted: {video_id}")
+    
+    return True
 
 
 def validate_file_path(path, base_dir=None, must_exist=False):

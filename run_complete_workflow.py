@@ -197,9 +197,12 @@ def main_workflow(args, logger=None):
     if not args.skip_youtube:
         youtube_links = get_unprocessed_links("output.csv", "youtube_playlist")
         if youtube_links:
-            # Clean YouTube playlist URLs - remove newlines and extract only valid video IDs
+            # Clean and validate YouTube URLs using proper validation
+            from utils.validation import validate_youtube_url, validate_youtube_playlist_url, ValidationError
+            from utils.extract_links import clean_url
+            
             cleaned_youtube_links = []
-            import re
+            
             for link in youtube_links:
                 if not link:
                     continue
@@ -208,38 +211,78 @@ def main_workflow(args, logger=None):
                 if any(link.endswith(ext) for ext in ['.css', '.js', '.png', '.jpg', '.gif']):
                     continue
                 
-                # Skip URLs that don't contain youtube.com
-                if "youtube.com" not in link:
+                # Skip URLs that don't contain youtube.com or youtu.be
+                if "youtube.com" not in link and "youtu.be" not in link:
                     continue
-                    
+                
+                # First clean the URL to remove control characters
+                try:
+                    cleaned_link = clean_url(link)
+                except Exception as e:
+                    if logger:
+                        logger.log_error(f"Failed to clean YouTube URL: {link} - {str(e)}")
+                    else:
+                        print(f"Warning: Failed to clean YouTube URL: {link} - {str(e)}")
+                    continue
+                
                 # Handle playlist URLs
-                if "watch_videos?video_ids=" in link:
-                    # Extract the video IDs, removing any newlines or other unwanted characters
+                if "watch_videos?video_ids=" in cleaned_link:
                     try:
-                        video_ids_part = link.split("watch_videos?video_ids=")[1]
-                        # Extract only valid video ID characters
-                        video_ids = re.findall(r'[a-zA-Z0-9_-]{11}', video_ids_part)
-                        if video_ids:
-                            # Remove duplicates while preserving order
-                            seen = set()
-                            unique_ids = []
-                            for vid in video_ids:
-                                if vid not in seen:
-                                    seen.add(vid)
-                                    unique_ids.append(vid)
-                            # Reconstruct the URL properly
-                            cleaned_link = f"https://www.youtube.com/watch_videos?video_ids={','.join(unique_ids)}"
-                            cleaned_youtube_links.append(cleaned_link)
+                        # Validate and clean the playlist URL
+                        validated_url, video_ids = validate_youtube_playlist_url(cleaned_link)
+                        if video_ids:  # Only add if there are valid video IDs
+                            cleaned_youtube_links.append(validated_url)
+                        else:
+                            if logger:
+                                logger.log_error(f"No valid video IDs found in playlist URL: {link}")
+                            else:
+                                print(f"Warning: No valid video IDs found in playlist URL: {link}")
+                    except ValidationError as e:
+                        if logger:
+                            logger.log_error(f"Invalid YouTube playlist URL: {link} - {str(e)}")
+                        else:
+                            print(f"Warning: Invalid YouTube playlist URL: {link} - {str(e)}")
                     except Exception as e:
                         if logger:
-                            logger.log_error(f"Failed to parse YouTube playlist URL: {link} - {str(e)}")
+                            logger.log_error(f"Failed to validate YouTube playlist URL: {link} - {str(e)}")
                         else:
-                            print(f"Warning: Failed to parse YouTube playlist URL: {link} - {str(e)}")
+                            print(f"Warning: Failed to validate YouTube playlist URL: {link} - {str(e)}")
+                
                 # Handle regular YouTube URLs
-                elif "/watch?v=" in link or "youtu.be/" in link:
-                    cleaned_youtube_links.append(link)
+                elif "/watch?v=" in cleaned_link or "youtu.be/" in cleaned_link:
+                    try:
+                        # Validate single video URL
+                        validated_url, video_id = validate_youtube_url(cleaned_link)
+                        cleaned_youtube_links.append(validated_url)
+                    except ValidationError as e:
+                        if logger:
+                            logger.log_error(f"Invalid YouTube URL: {link} - {str(e)}")
+                        else:
+                            print(f"Warning: Invalid YouTube URL: {link} - {str(e)}")
+                    except Exception as e:
+                        if logger:
+                            logger.log_error(f"Failed to validate YouTube URL: {link} - {str(e)}")
+                        else:
+                            print(f"Warning: Failed to validate YouTube URL: {link} - {str(e)}")
+                
+                # Handle regular playlist URLs
+                elif "playlist?list=" in cleaned_link:
+                    try:
+                        # Validate playlist URL
+                        validated_url, _ = validate_youtube_playlist_url(cleaned_link)
+                        cleaned_youtube_links.append(validated_url)
+                    except ValidationError as e:
+                        if logger:
+                            logger.log_error(f"Invalid YouTube playlist URL: {link} - {str(e)}")
+                        else:
+                            print(f"Warning: Invalid YouTube playlist URL: {link} - {str(e)}")
+                    except Exception as e:
+                        if logger:
+                            logger.log_error(f"Failed to validate YouTube playlist URL: {link} - {str(e)}")
+                        else:
+                            print(f"Warning: Failed to validate YouTube playlist URL: {link} - {str(e)}")
             
-            # Replace the original links with the cleaned ones
+            # Replace the original links with the cleaned and validated ones
             youtube_links = cleaned_youtube_links
             
             # Apply max-youtube limit if specified
