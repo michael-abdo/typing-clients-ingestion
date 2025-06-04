@@ -14,12 +14,22 @@ A collection of Python utilities for scraping web content, Google Sheets data, a
 
 ## Directory Structure
 
-- `/` - Main executable scripts
-- `/utils` - Core utility modules 
-- `/scripts` - Helper scripts for specific tasks
-- `/cache` - Cached HTML and debug files
-- `/youtube_downloads` - Downloaded YouTube videos and transcripts
-- `/drive_downloads` - Downloaded Google Drive files
+- `/` - Main executable scripts and core project files
+- `/utils/` - Core utility modules for web scraping and data processing
+- `/docs/` - Project documentation and analysis files
+- `/data/` - CSV output files and cached data
+- `/tests/` - Unit tests for validation, rate limiting, and utilities
+- `/utilities/` - Helper scripts organized by purpose:
+  - `/utilities/scripts/` - General purpose scripts
+  - `/utilities/alternative_workflows/` - Alternative processing workflows
+  - `/utilities/maintenance/` - Cleanup and maintenance scripts
+- `/cache/` - Cached HTML and debug files from web scraping
+- `/html_cache/` - Additional HTML cache storage
+- `/backups/` - Automated backups of output files
+- `/logs/` - Application logs organized by run timestamp
+- `/youtube_downloads/` - Downloaded YouTube videos and transcripts
+- `/drive_downloads/` - Downloaded Google Drive files with metadata
+- `/venv/` - Python virtual environment
 
 ## Google Sheet Table Structure
 

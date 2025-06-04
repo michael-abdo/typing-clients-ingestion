@@ -2,6 +2,10 @@
 import csv
 import os
 import sys
+
+# Add utils directory to the Python path
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'utils'))
+
 from extract_links import process_url
 
 # Get the first N rows from CSV file
@@ -45,7 +49,7 @@ def process_first_n_rows(csv_path, n=5):
     return results
 
 if __name__ == "__main__":
-    csv_path = '/Users/Mike/ops_typing_log/ongoing_clients/output.csv'
+    csv_path = '/Users/Mike/ops_typing_log/ongoing_clients/data/output.csv'
     
     # Get number of rows to process
     n = 5
