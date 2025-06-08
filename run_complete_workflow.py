@@ -5,6 +5,10 @@ import argparse
 import subprocess
 import csv
 from pathlib import Path
+
+# Add parent directory to path to access utils
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from utils.logger import pipeline_run, get_pipeline_logger
 from utils.logging_config import get_logger
 from utils.parallel_processor import parallel_download_youtube_videos

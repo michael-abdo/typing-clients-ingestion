@@ -60,17 +60,24 @@ def process_links_from_csv(max_rows=None, reset_processed=False, force_download=
             for row in rows:
                 link = row.get("link", "")
                 
-                # Check if this row already has data in any of the target columns
+                # Check if this row has been processed (streaming version)
+                processed_status = row.get("processed", "")
                 extracted_links = row.get("extracted_links", "")
                 youtube_playlist = row.get("youtube_playlist", "")
                 google_drive = row.get("google_drive", "")
                 
-                has_extracted_links = extracted_links and str(extracted_links).strip() != ""
-                has_youtube_playlist = youtube_playlist and str(youtube_playlist).strip() != ""
-                has_google_drive = google_drive and str(google_drive).strip() != ""
+                # Backward compatibility: if no processed status but has link data, mark as processed
+                has_link_data = (extracted_links and str(extracted_links).strip() != "") or \
+                               (youtube_playlist and str(youtube_playlist).strip() != "") or \
+                               (google_drive and str(google_drive).strip() != "")
                 
-                # If row already has processed data and reset_processed is False, skip
-                if (has_extracted_links or has_youtube_playlist or has_google_drive) and not reset_processed:
+                if not processed_status and has_link_data:
+                    # Migrate existing data: mark as processed if has link data
+                    row["processed"] = "yes"
+                    processed_status = "yes"
+                
+                # If row is already processed and reset_processed is False, skip
+                if processed_status in ["yes", "failed"] and not reset_processed:
                     logger.debug(f"Skipping already processed row for {row.get('name', 'unknown')}")
                     processed_rows.append(row)
                     continue
@@ -103,18 +110,23 @@ def process_links_from_csv(max_rows=None, reset_processed=False, force_download=
                         logger.info(f"  Found {len(links)} links, {'a' if youtube_playlist else 'no'} YouTube playlist, " +
                               f"and {len(drive_links)} Google Drive links")
                         
+                        # Mark as successfully processed
+                        row["processed"] = "yes"
                         processed_count += 1
                     except Exception as e:
                         logger.error(f"  Error processing {link}: {str(e)}")
                         row["extracted_links"] = ""
                         row["youtube_playlist"] = ""
                         row["google_drive"] = ""
+                        # Mark as failed processing
+                        row["processed"] = "failed"
                         processed_count += 1
                 else:
                     # Mark empty link rows as processed with empty values
                     row["extracted_links"] = ""
                     row["youtube_playlist"] = ""
                     row["google_drive"] = ""
+                    row["processed"] = "yes"  # Empty links are still considered processed
                 
                 processed_rows.append(row)
             
@@ -145,6 +157,8 @@ def process_links_from_csv(max_rows=None, reset_processed=False, force_download=
                 fieldnames.append("youtube_playlist")
             if "google_drive" not in fieldnames:
                 fieldnames.append("google_drive")
+            if "processed" not in fieldnames:
+                fieldnames.append("processed")
             
             # Update writer fieldnames
             writer.fieldnames = fieldnames
@@ -153,18 +167,25 @@ def process_links_from_csv(max_rows=None, reset_processed=False, force_download=
             for row in rows:
                 link = row.get("link", "")
                 
-                # Check if this row already has data in any of the target columns
+                # Check if this row has been processed
+                processed_status = row.get("processed", "")
                 extracted_links = row.get("extracted_links", "")
                 youtube_playlist = row.get("youtube_playlist", "")
                 google_drive = row.get("google_drive", "")
                 
-                has_extracted_links = extracted_links and str(extracted_links).strip() != ""
-                has_youtube_playlist = youtube_playlist and str(youtube_playlist).strip() != ""
-                has_google_drive = google_drive and str(google_drive).strip() != ""
+                # Backward compatibility: if no processed status but has link data, mark as processed
+                has_link_data = (extracted_links and str(extracted_links).strip() != "") or \
+                               (youtube_playlist and str(youtube_playlist).strip() != "") or \
+                               (google_drive and str(google_drive).strip() != "")
                 
-                # If row already has processed data and reset_processed is False, skip
-                if (has_extracted_links or has_youtube_playlist or has_google_drive) and not reset_processed:
-                    logger.debug(f"Skipping already processed row for {row.get('name', 'unknown')}")
+                if not processed_status and has_link_data:
+                    # Migrate existing data: mark as processed if has link data
+                    row["processed"] = "yes"
+                    processed_status = "yes"
+                
+                # If row is already processed and reset_processed is False, skip
+                if processed_status in ["yes", "failed"] and not reset_processed:
+                    logger.debug(f"Skipping already processed row for {row.get('name', 'unknown')} (status: {processed_status})")
                     # Write the row without processing
                     clean_row = {k: v for k, v in row.items() if k is not None}
                     for field in fieldnames:
@@ -207,18 +228,23 @@ def process_links_from_csv(max_rows=None, reset_processed=False, force_download=
                         logger.info(f"  Found {len(links)} links, {'a' if youtube_playlist else 'no'} YouTube playlist, " +
                               f"and {len(drive_links)} Google Drive links")
                         
+                        # Mark as successfully processed
+                        row["processed"] = "yes"
                         processed_count += 1
                     except Exception as e:
                         logger.error(f"  Error processing {link}: {str(e)}")
                         row["extracted_links"] = ""
                         row["youtube_playlist"] = ""
                         row["google_drive"] = ""
+                        # Mark as failed processing
+                        row["processed"] = "failed"
                         processed_count += 1
                 else:
                     # Mark empty link rows as processed with empty values
                     row["extracted_links"] = ""
                     row["youtube_playlist"] = ""
                     row["google_drive"] = ""
+                    row["processed"] = "yes"  # Empty links are still considered processed
                 
                 # Clean up any None keys and ensure all fields are present
                 clean_row = {k: v for k, v in row.items() if k is not None}

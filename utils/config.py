@@ -20,10 +20,10 @@ class Config:
             config_path: Path to config file. If None, looks for config.yaml in project root.
         """
         if config_path is None:
-            # Look for config.yaml in project root (parent of utils directory)
+            # Look for config.yaml in config directory (relative to project root)
             utils_dir = Path(__file__).parent
             project_root = utils_dir.parent
-            config_path = project_root / "config.yaml"
+            config_path = project_root / "config" / "config.yaml"
         
         self.config_path = Path(config_path)
         self._data = {}
