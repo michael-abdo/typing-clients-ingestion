@@ -117,8 +117,8 @@ if __name__ == "__main__":
     import argparse
     
     parser = argparse.ArgumentParser(description='Process unprocessed rows in CSV file')
-    parser.add_argument('--csv', default='/Users/Mike/ops_typing_log/ongoing_clients/output.csv',
-                      help='Path to CSV file (default: output.csv)')
+    parser.add_argument('--csv', default='/Users/Mike/ops_typing_log/ongoing_clients/outputs/output.csv',
+                      help='Path to CSV file (default: outputs/output.csv)')
     parser.add_argument('--start', type=int, default=0,
                       help='Row number to start processing from (0-based, after header)')
     parser.add_argument('--max', type=int, default=None,

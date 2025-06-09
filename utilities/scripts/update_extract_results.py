@@ -56,7 +56,7 @@ def update_csv_with_extracts(csv_path, rows_to_process=None):
 if __name__ == "__main__":
     import sys
     
-    csv_path = '/Users/Mike/ops_typing_log/ongoing_clients/output.csv'
+    csv_path = '/Users/Mike/ops_typing_log/ongoing_clients/outputs/output.csv'
     
     # Get number of rows to process
     rows_to_process = None

@@ -9,7 +9,7 @@ google_sheets:
 
 # File Paths and Directories
 paths:
-  output_csv: "data/output.csv"
+  output_csv: "outputs/output.csv"
   youtube_downloads: "youtube_downloads"
   drive_downloads: "drive_downloads"
   html_cache: "html_cache"

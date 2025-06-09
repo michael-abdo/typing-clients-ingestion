@@ -38,7 +38,7 @@ def process_links_from_csv(max_rows=None, reset_processed=False, force_download=
             
     update_csv()
     
-    input_filename = "output.csv"
+    input_filename = "outputs/output.csv"
     
     if not os.path.exists(input_filename):
         logger.error(f"Error: {input_filename} not found. Make sure the Google Sheets scraper runs correctly.")

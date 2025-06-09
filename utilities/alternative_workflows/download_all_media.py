@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Download all Google Drive files and YouTube videos from output.csv.
+Download all Google Drive files and YouTube videos from outputs/output.csv.
 """
 import csv
 import os
@@ -124,8 +124,8 @@ def download_all_media(csv_path, start_row=0, max_rows=None, delay=2,
     
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Download all Google Drive files and YouTube videos from CSV')
-    parser.add_argument('--csv', default='/Users/Mike/ops_typing_log/ongoing_clients/output.csv',
-                      help='Path to CSV file (default: output.csv)')
+    parser.add_argument('--csv', default='/Users/Mike/ops_typing_log/ongoing_clients/outputs/output.csv',
+                      help='Path to CSV file (default: outputs/output.csv)')
     parser.add_argument('--start', type=int, default=0,
                       help='Row number to start processing from (0-based, after header)')
     parser.add_argument('--max', type=int, default=None,

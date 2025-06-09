@@ -1,0 +1,54 @@
+{
+  "report_generated": "2025-06-08T18:43:52.054303",
+  "system_status": "warning",
+  "current_metrics": {
+    "timestamp": "2025-06-08T18:43:52.028390",
+    "total_rows": 482,
+    "pending_downloads": 962,
+    "completed_downloads": 1,
+    "failed_downloads": 1,
+    "success_rate": 0.5,
+    "avg_download_time": null,
+    "disk_usage_gb": 358.58194732666016,
+    "error_rate": 0.5,
+    "active_processes": 0
+  },
+  "download_stats": {
+    "youtube_pending": 481,
+    "youtube_completed": 0,
+    "youtube_failed": 1,
+    "youtube_success_rate": 0.0,
+    "drive_pending": 481,
+    "drive_completed": 1,
+    "drive_failed": 0,
+    "drive_success_rate": 1.0,
+    "total_files_downloaded": 158,
+    "total_size_mb": 17277.873565673828
+  },
+  "historical_summary": {
+    "metrics_count": 8,
+    "avg_success_rate_24h": 0.5,
+    "trend": "stable"
+  },
+  "alerts": [
+    {
+      "name": "high_failure_rate",
+      "severity": "warning",
+      "message": "High failure rate: 50.0% (threshold: 20.0%)",
+      "timestamp": "2025-06-08T18:43:52.054370",
+      "metric_value": 0.5
+    },
+    {
+      "name": "stuck_downloads",
+      "severity": "warning",
+      "message": "Many pending downloads: 962 (threshold: 100)",
+      "timestamp": "2025-06-08T18:43:52.054519",
+      "metric_value": 962
+    }
+  ],
+  "recommendations": [
+    "High error rate detected. Check failed downloads and retry with --retry-failed",
+    "YouTube download success rate is low. Check yt-dlp version and network connectivity",
+    "Many pending downloads. Consider increasing max-youtube and max-drive limits"
+  ]
+}

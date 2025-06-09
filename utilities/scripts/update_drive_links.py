@@ -9,8 +9,8 @@ def is_drive_link(url):
             'drive.google.com/open?id=' in url or
             'drive.google.com/drive/folders/' in url)
 
-input_file = '/Users/Mike/ops_typing_log/ongoing_clients/output.csv'
-temp_file = '/Users/Mike/ops_typing_log/ongoing_clients/output_temp.csv'
+input_file = '/Users/Mike/ops_typing_log/ongoing_clients/outputs/output.csv'
+temp_file = '/Users/Mike/ops_typing_log/ongoing_clients/outputs/output_temp.csv'
 
 drive_links_found = 0
 

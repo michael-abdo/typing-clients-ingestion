@@ -68,7 +68,7 @@ class AlertCondition:
 class DownloadMonitor:
     """Production monitoring system for download tracking"""
     
-    def __init__(self, csv_path: str = 'output.csv', metrics_dir: str = 'logs/metrics'):
+    def __init__(self, csv_path: str = 'outputs/output.csv', metrics_dir: str = 'logs/metrics'):
         self.csv_path = csv_path
         self.metrics_dir = Path(metrics_dir)
         self.metrics_dir.mkdir(parents=True, exist_ok=True)
@@ -450,8 +450,8 @@ if __name__ == "__main__":
                        help='Check alert conditions')
     parser.add_argument('--detailed', action='store_true',
                        help='Include detailed information')
-    parser.add_argument('--csv-path', default='output.csv',
-                       help='Path to CSV file (default: output.csv)')
+    parser.add_argument('--csv-path', default='outputs/output.csv',
+                       help='Path to CSV file (default: outputs/output.csv)')
     
     args = parser.parse_args()
     

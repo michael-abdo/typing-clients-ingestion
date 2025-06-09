@@ -31,7 +31,7 @@ csv.field_size_limit(config.get('file_processing.max_csv_field_size', sys.maxsiz
 
 class DriveFileDownloader:
     def __init__(self):
-        self.output_csv = config.get('paths.output_csv', 'output.csv')
+        self.output_csv = config.get('paths.output_csv', 'outputs/output.csv')
         self.drive_downloads_dir = Path(config.get('paths.drive_downloads', 'drive_downloads'))
         self.html_dir = self.drive_downloads_dir
         self.files_dir = self.drive_downloads_dir / 'files'

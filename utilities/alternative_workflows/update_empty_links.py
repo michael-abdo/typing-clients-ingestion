@@ -12,7 +12,7 @@ def update_empty_links_in_csv(max_rows=None):
     Args:
         max_rows (int, optional): Maximum number of rows to process. Defaults to None (process all).
     """
-    input_filename = "output.csv"
+    input_filename = "outputs/output.csv"
     temp_filename = "output_with_links.csv"
     
     if not os.path.exists(input_filename):

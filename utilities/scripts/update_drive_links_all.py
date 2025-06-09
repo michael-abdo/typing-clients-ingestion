@@ -67,7 +67,7 @@ def update_drive_links(csv_path, rows_to_process=None):
 
 if __name__ == "__main__":
     # Get parameters from command line
-    csv_path = '/Users/Mike/ops_typing_log/ongoing_clients/output.csv'
+    csv_path = '/Users/Mike/ops_typing_log/ongoing_clients/outputs/output.csv'
     
     # Get number of rows to process
     rows_to_process = None

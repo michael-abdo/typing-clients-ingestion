@@ -49,7 +49,7 @@ def process_first_n_rows(csv_path, n=5):
     return results
 
 if __name__ == "__main__":
-    csv_path = '/Users/Mike/ops_typing_log/ongoing_clients/data/output.csv'
+    csv_path = '/Users/Mike/ops_typing_log/ongoing_clients/outputs/output.csv'
     
     # Get number of rows to process
     n = 5

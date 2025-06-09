@@ -65,7 +65,7 @@ class DownloadResult:
         }
 
 
-def ensure_tracking_columns(csv_path: str = 'output.csv') -> bool:
+def ensure_tracking_columns(csv_path: str = 'outputs/output.csv') -> bool:
     """Add tracking columns to CSV if they don't exist"""
     print(f"Enhancing CSV schema with tracking columns: {csv_path}")
     
@@ -116,7 +116,7 @@ def ensure_tracking_columns(csv_path: str = 'output.csv') -> bool:
         return False
 
 
-def get_pending_downloads(csv_path: str = 'output.csv', download_type: str = 'both', 
+def get_pending_downloads(csv_path: str = 'outputs/output.csv', download_type: str = 'both', 
                          include_failed: bool = True, retry_attempts: int = 3) -> List[RowContext]:
     """Get list of rows that need downloads"""
     df = pd.read_csv(csv_path)
@@ -180,12 +180,12 @@ def _get_retry_attempts(error_message: str) -> int:
     return error_message.count(';') + 1
 
 
-def get_failed_downloads(csv_path: str = 'output.csv', download_type: str = 'both') -> List[RowContext]:
+def get_failed_downloads(csv_path: str = 'outputs/output.csv', download_type: str = 'both') -> List[RowContext]:
     """Get list of rows with failed downloads"""
     return get_pending_downloads(csv_path, download_type, include_failed=True, retry_attempts=0)
 
 
-def reset_download_status(row_id: str, download_type: str, csv_path: str = 'output.csv') -> bool:
+def reset_download_status(row_id: str, download_type: str, csv_path: str = 'outputs/output.csv') -> bool:
     """Reset download status for a specific row"""
     with file_lock(f'{csv_path}.lock'):
         # Read with proper string dtypes
@@ -227,7 +227,7 @@ def reset_download_status(row_id: str, download_type: str, csv_path: str = 'outp
 
 
 def update_csv_download_status(row_index: int, download_type: str, 
-                             result: DownloadResult, csv_path: str = 'output.csv'):
+                             result: DownloadResult, csv_path: str = 'outputs/output.csv'):
     """Atomically update CSV with download results while preserving all existing data"""
     
     with file_lock(f'{csv_path}.lock'):
@@ -285,7 +285,7 @@ def update_csv_download_status(row_index: int, download_type: str,
         print(f"  Updated CSV: {summary['status']} - {len(summary['files'].split(',') if summary['files'] else [])} files")
 
 
-def get_download_status_summary(csv_path: str = 'output.csv') -> Dict[str, Any]:
+def get_download_status_summary(csv_path: str = 'outputs/output.csv') -> Dict[str, Any]:
     """Get summary statistics of download status"""
     df = pd.read_csv(csv_path)
     
@@ -366,8 +366,8 @@ if __name__ == "__main__":
                        help='Type of download to reset (used with --reset-status)')
     parser.add_argument('--detailed', action='store_true',
                        help='Show detailed information')
-    parser.add_argument('--csv-path', default='output.csv',
-                       help='Path to CSV file (default: output.csv)')
+    parser.add_argument('--csv-path', default='outputs/output.csv',
+                       help='Path to CSV file (default: outputs/output.csv)')
     
     args = parser.parse_args()
     

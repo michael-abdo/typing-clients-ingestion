@@ -23,7 +23,7 @@ def cleanup_csv():
     csv.field_size_limit(sys.maxsize)
     
     # Get file paths
-    input_file = "output.csv"  # Current location
+    input_file = "outputs/output.csv"  # Current location
     output_file = "output_cleaned.csv"
     max_field_size = 100000  # 100KB limit to be safe
     
@@ -88,8 +88,8 @@ if __name__ == "__main__":
     success = cleanup_csv()
     if success:
         print("\nCleanup successful! To replace the original file:")
-        print("  mv output.csv output.csv.backup_large_fields")
-        print("  mv output_cleaned.csv output.csv")
+        print("  mv outputs/output.csv outputs/output.csv.backup_large_fields")
+        print("  mv output_cleaned.csv outputs/output.csv")
     else:
         print("\nCleanup failed. Check the logs for details.")
         sys.exit(1)

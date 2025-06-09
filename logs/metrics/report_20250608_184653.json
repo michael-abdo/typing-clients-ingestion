@@ -1,0 +1,156 @@
+{
+  "report_generated": "2025-06-08T18:46:53.144602",
+  "system_status": "warning",
+  "current_metrics": {
+    "timestamp": "2025-06-08T18:46:53.084121",
+    "total_rows": 482,
+    "pending_downloads": 956,
+    "completed_downloads": 6,
+    "failed_downloads": 2,
+    "success_rate": 0.75,
+    "avg_download_time": 59.635633,
+    "disk_usage_gb": 358.3878059387207,
+    "error_rate": 0.25,
+    "active_processes": 0
+  },
+  "download_stats": {
+    "youtube_pending": 477,
+    "youtube_completed": 5,
+    "youtube_failed": 0,
+    "youtube_success_rate": 1.0,
+    "drive_pending": 479,
+    "drive_completed": 1,
+    "drive_failed": 2,
+    "drive_success_rate": 0.3333333333333333,
+    "total_files_downloaded": 163,
+    "total_size_mb": 17365.11843395233
+  },
+  "historical_summary": {
+    "metrics_count": 9,
+    "avg_success_rate_24h": 0.5277777777777778,
+    "trend": "improving"
+  },
+  "alerts": [
+    {
+      "name": "high_failure_rate",
+      "severity": "warning",
+      "message": "High failure rate: 25.0% (threshold: 20.0%)",
+      "timestamp": "2025-06-08T18:46:53.144664",
+      "metric_value": 0.25
+    },
+    {
+      "name": "stuck_downloads",
+      "severity": "warning",
+      "message": "Many pending downloads: 956 (threshold: 100)",
+      "timestamp": "2025-06-08T18:46:53.144816",
+      "metric_value": 956
+    }
+  ],
+  "recommendations": [
+    "High error rate detected. Check failed downloads and retry with --retry-failed",
+    "Google Drive download success rate is low. Check permissions and rate limits",
+    "Many pending downloads. Consider increasing max-youtube and max-drive limits"
+  ],
+  "failed_downloads": [
+    {
+      "row_id": "477",
+      "name": "Shelly Chen",
+      "type": "FF-Si/Te-BS/C(P) #1"
+    },
+    {
+      "row_id": "476",
+      "name": "Patryk Makara",
+      "type": "FM-Ti/Ni-SC/B(P) #4"
+    },
+    {
+      "row_id": "474",
+      "name": "Brenden Ohlsson",
+      "type": "MM-Ne/Ti-CP/S(B) #4"
+    },
+    {
+      "row_id": "469",
+      "name": "Ifrah Mohamed Mohamoud",
+      "type": "FF-Se/Fi-CP/B(S) #4"
+    },
+    {
+      "row_id": "468",
+      "name": "Melike Kerpic",
+      "type": "FF-Fe/Ne-PC/B(S) #4"
+    },
+    {
+      "row_id": "464",
+      "name": "Jackson Sellers",
+      "type": "MM-Ti/Si-SB/P(C) #1"
+    },
+    {
+      "row_id": "462",
+      "name": "Miranda Story Ruiz",
+      "type": "FM-Te/Se-PC/S(B) #3"
+    },
+    {
+      "row_id": "461",
+      "name": "Samuel Kotevski",
+      "type": "MF-Ne/Ti-CP/B(S) #1"
+    },
+    {
+      "row_id": "460",
+      "name": "Erin Golder",
+      "type": "MF-Te/Se-PC/S(B) #3"
+    },
+    {
+      "row_id": "459",
+      "name": "Gugu",
+      "type": "FM-Fi/Ne-CS/P(B) #3"
+    },
+    {
+      "row_id": "457",
+      "name": "James Hanley",
+      "type": "MF-Fi/Ni-SB/P(C) #4"
+    },
+    {
+      "row_id": "451",
+      "name": "Christina",
+      "type": "FM-Se/Ti-CS/B(P) #2"
+    },
+    {
+      "row_id": "450",
+      "name": "Eleanor Dennison",
+      "type": "FM-Si/Te-BP/S(C) #4"
+    },
+    {
+      "row_id": "448",
+      "name": "Nayeon Son",
+      "type": "FF-Si/Te-BS/C(P) #2"
+    },
+    {
+      "row_id": "443",
+      "name": "Carolyn Singh",
+      "type": "FF-Ni/Fi-SB/C(P) #1"
+    },
+    {
+      "row_id": "442",
+      "name": "Fan Xingdong",
+      "type": "FF-Fi/Ne-CS/P(B) #1"
+    },
+    {
+      "row_id": "439",
+      "name": "Evan Weiler",
+      "type": "FF-Ne/Ti-CS/P(B) #4"
+    },
+    {
+      "row_id": "437",
+      "name": "Christina Eng",
+      "type": "FF-Se/Fi-CS/P(B) #3"
+    },
+    {
+      "row_id": "436",
+      "name": "Janita Shelton",
+      "type": "FF-Se/Te-PC/S(B) #3"
+    },
+    {
+      "row_id": "434",
+      "name": "Yann Mohedano",
+      "type": "MF-Ti/Ne-CP/B(S) #2"
+    }
+  ]
+}
