@@ -1,0 +1,47 @@
+{
+  "report_generated": "2025-06-08T19:09:07.465482",
+  "system_status": "degraded",
+  "current_metrics": {
+    "timestamp": "2025-06-08T19:09:07.436909",
+    "total_rows": 482,
+    "pending_downloads": 964,
+    "completed_downloads": 0,
+    "failed_downloads": 0,
+    "success_rate": 0.0,
+    "avg_download_time": null,
+    "disk_usage_gb": 355.6729927062988,
+    "error_rate": 0.0,
+    "active_processes": 0
+  },
+  "download_stats": {
+    "youtube_pending": 482,
+    "youtube_completed": 0,
+    "youtube_failed": 0,
+    "youtube_success_rate": 0.0,
+    "drive_pending": 482,
+    "drive_completed": 0,
+    "drive_failed": 0,
+    "drive_success_rate": 0.0,
+    "total_files_downloaded": 163,
+    "total_size_mb": 17365.11843395233
+  },
+  "historical_summary": {
+    "metrics_count": 15,
+    "avg_success_rate_24h": 0.36666666666666664,
+    "trend": "declining"
+  },
+  "alerts": [
+    {
+      "name": "stuck_downloads",
+      "severity": "warning",
+      "message": "Many pending downloads: 964 (threshold: 100)",
+      "timestamp": "2025-06-08T19:09:07.465559",
+      "metric_value": 964
+    }
+  ],
+  "recommendations": [
+    "YouTube download success rate is low. Check yt-dlp version and network connectivity",
+    "Google Drive download success rate is low. Check permissions and rate limits",
+    "Many pending downloads. Consider increasing max-youtube and max-drive limits"
+  ]
+}
