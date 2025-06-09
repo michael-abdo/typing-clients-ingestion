@@ -190,4 +190,13 @@ python download_youtube.py https://www.youtube.com/watch?v=VIDEO_ID --resolution
 python download_drive.py "https://drive.google.com/file/d/FILE_ID/view"
 python download_drive.py "https://drive.google.com/file/d/FILE_ID/view" --filename custom_name.ext
 python download_drive.py "https://drive.google.com/file/d/FILE_ID/view" --metadata
+
+# Download large files with virus scan warnings
+python download_drive.py "https://drive.usercontent.google.com/download?id=FILE_ID&export=download&confirm=t&uuid=UUID"
+
+# The script now automatically handles:
+# - Large files (>100MB) that show virus scan warnings
+# - Direct download URLs from drive.usercontent.google.com
+# - Progress tracking with speed and ETA
+# - Automatic retry for confirmation pages
 ```

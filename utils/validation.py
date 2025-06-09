@@ -109,7 +109,7 @@ def validate_google_drive_url(url):
     Returns:
         tuple: (sanitized_url, file_id)
     """
-    url = validate_url(url, allowed_domains=['drive.google.com', 'docs.google.com'])
+    url = validate_url(url, allowed_domains=['drive.google.com', 'docs.google.com', 'drive.usercontent.google.com'])
     
     # Extract file ID from various Google Drive URL formats
     file_id = None

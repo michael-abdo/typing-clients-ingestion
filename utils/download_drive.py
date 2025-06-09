@@ -173,13 +173,38 @@ def download_drive_file(file_id, output_filename=None, logger=None):
     response = session.get(download_url, stream=True, timeout=30)
     
     # Check if we got the download confirmation page
-    if 'confirm=' in response.text:
+    content_type = response.headers.get('Content-Type', '')
+    if 'text/html' in content_type and 'virus scan warning' in response.text:
+        # This is a virus scan warning page - we need to parse it
         confirm_match = re.search(r'confirm=([0-9a-zA-Z_-]+)', response.text)
+        uuid_match = re.search(r'uuid=([0-9a-zA-Z_-]+)', response.text)
+        
         if confirm_match:
             confirm_code = confirm_match.group(1)
-            logger.info("Large file detected, bypassing confirmation...")
-            download_url = f"{download_url}&confirm={confirm_code}"
-            response = session.get(download_url, stream=True, timeout=30)
+            logger.info("Large file detected with virus scan warning, bypassing confirmation...")
+            
+            # Build the proper download URL with all parameters
+            download_params = {
+                'id': file_id,
+                'export': 'download',
+                'confirm': confirm_code
+            }
+            
+            if uuid_match:
+                download_params['uuid'] = uuid_match.group(1)
+            
+            # Use drive.usercontent.google.com for direct downloads
+            direct_download_url = "https://drive.usercontent.google.com/download"
+            
+            # Make the download request with all parameters
+            response = session.get(direct_download_url, params=download_params, stream=True, timeout=30)
+    
+    # Also check if the initial URL was already a direct download link
+    elif 'drive.usercontent.google.com' in download_url and response.headers.get('Content-Type', '') == 'text/html':
+        # We might have been given a direct download URL but still got HTML
+        # Just retry the same URL - it should work on second attempt
+        logger.info("Retrying direct download URL...")
+        response = session.get(download_url, stream=True, timeout=30)
     
     # Check response
     if response.status_code != 200:
@@ -294,12 +319,140 @@ def save_metadata(file_id, url, metadata, logger=None):
     logger.info(f"Saved metadata to {metadata_file}")
     return metadata_file
 
+def process_direct_download_url(url, output_filename=None, logger=None):
+    """Process a direct drive.usercontent.google.com download URL"""
+    if not logger:
+        logger = setup_component_logging('drive')
+    
+    # Extract parameters from URL
+    parsed_url = urlparse(url)
+    query_params = parse_qs(parsed_url.query)
+    
+    file_id = query_params.get('id', [None])[0]
+    if not file_id:
+        logger.error("Could not extract file ID from direct download URL")
+        return None
+    
+    # For direct download URLs, we just download directly
+    create_download_dir(logger)
+    
+    # Create a session to handle the download
+    session = requests.Session()
+    
+    # Make the download request
+    response = session.get(url, stream=True, timeout=30)
+    
+    # Handle virus scan warning if present
+    content_type = response.headers.get('Content-Type', '')
+    if 'text/html' in content_type:
+        # Extract filename from HTML if available
+        html_content = response.text
+        filename_match = re.search(r'>([^<]+\.[^<]+)</a>', html_content)
+        suggested_filename = filename_match.group(1) if filename_match else None
+        
+        # Retry the same URL - it should work on second attempt
+        logger.info("Retrying direct download URL after virus scan page...")
+        response = session.get(url, stream=True, timeout=30)
+    else:
+        suggested_filename = None
+    
+    if response.status_code != 200:
+        logger.error(f"Error downloading file: HTTP status {response.status_code}")
+        return None
+    
+    # Determine filename
+    if not output_filename:
+        # Try Content-Disposition header
+        cd = response.headers.get('Content-Disposition', '')
+        filename_match = re.search(r'filename="?([^";]+)"?', cd)
+        if filename_match:
+            output_filename = filename_match.group(1)
+        elif suggested_filename:
+            output_filename = suggested_filename
+        else:
+            output_filename = f"{file_id}.bin"
+    
+    output_path = os.path.join(DOWNLOADS_DIR, output_filename)
+    lock_file = Path(DOWNLOADS_DIR) / f".{file_id}.lock"
+    
+    # Check if file exists
+    with file_lock(lock_file, exclusive=False, timeout=30.0, logger=logger):
+        if os.path.exists(output_path):
+            logger.info(f"File already exists: {output_path}")
+            return output_path
+    
+    # Download with exclusive lock
+    with file_lock(lock_file, exclusive=True, timeout=300.0, logger=logger):
+        if os.path.exists(output_path):
+            logger.info(f"File already exists: {output_path}")
+            return output_path
+        
+        # Download to temp file
+        temp_path = f"{output_path}.tmp"
+        total_size = int(response.headers.get('Content-Length', 0))
+        
+        if total_size > 0:
+            logger.info(f"File size: {total_size / (1024 * 1024):.2f} MB")
+        
+        try:
+            with open(temp_path, 'wb') as f:
+                downloaded = 0
+                chunk_size = 8 * 1024 * 1024 if total_size > 100 * 1024 * 1024 else 1024 * 1024
+                
+                for chunk in response.iter_content(chunk_size=chunk_size):
+                    if chunk:
+                        f.write(chunk)
+                        downloaded += len(chunk)
+                        
+                        if total_size > 0:
+                            progress = int(50 * downloaded / total_size)
+                            sys.stdout.write("\r[%s%s] %s%%" % ('=' * progress, ' ' * (50-progress), int(100 * downloaded / total_size)))
+                            sys.stdout.flush()
+                
+                if total_size > 0:
+                    sys.stdout.write("\n")
+            
+            # Atomic rename
+            os.replace(temp_path, output_path)
+            logger.success(f"Downloaded file to {output_path}")
+            return output_path
+            
+        except Exception as e:
+            if os.path.exists(temp_path):
+                os.unlink(temp_path)
+            logger.error(f"Error saving file: {str(e)}")
+            return None
+
+
 def process_drive_url(url, output_filename=None, save_metadata_flag=False, logger=None):
     """Process a Google Drive URL (file or folder)"""
     if not logger:
         logger = setup_component_logging('drive')
     
-    # Validate URL
+    # Check if this is a direct download URL
+    if 'drive.usercontent.google.com/download' in url:
+        logger.info("Processing direct download URL...")
+        downloaded_path = process_direct_download_url(url, output_filename, logger)
+        
+        # Handle metadata if requested
+        metadata_path = None
+        if downloaded_path and save_metadata_flag:
+            parsed_url = urlparse(url)
+            query_params = parse_qs(parsed_url.query)
+            file_id = query_params.get('id', [None])[0]
+            
+            if file_id:
+                metadata = {
+                    'file_id': file_id,
+                    'url': url,
+                    'filename': os.path.basename(downloaded_path),
+                    'file_size_bytes': os.path.getsize(downloaded_path)
+                }
+                metadata_path = save_metadata(file_id, url, metadata, logger)
+        
+        return downloaded_path, metadata_path
+    
+    # Validate URL for regular Drive URLs
     try:
         url, file_id = validate_google_drive_url(url)
     except ValidationError as e:
