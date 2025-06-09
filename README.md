@@ -1,16 +1,28 @@
-# Web Scraping Utilities
+# Personality Typing Content Manager
 
-A collection of Python utilities for scraping web content, Google Sheets data, and downloading files from Google Drive and YouTube.
+A production-ready system for downloading and tracking personality typing videos, documents, and transcripts with complete CSV row integrity and type preservation.
 
 ## Features
 
-- Extract all links from a webpage, including embedded Google Drive links
-- Extract YouTube video IDs from links
-- Generate YouTube playlist URLs from extracted video IDs
-- Scrape data from published Google Sheets
-- Export scraped data to CSV, avoiding duplicates
-- Download YouTube videos and transcripts
-- Download files from Google Drive
+### Core Download & Tracking System
+- **Row-centric download tracking** - Maintains perfect CSV row relationships throughout download pipeline
+- **Type column preservation** - Protects critical personality type data (e.g., "FF-Fi/Se-CP/B(S) #4")
+- **Atomic CSV updates** - Prevents data corruption during concurrent operations
+- **Bidirectional file mapping** - Links downloaded files back to source CSV rows via metadata
+- **Intelligent retry system** - Categorizes errors and retries based on failure type
+- **Production monitoring** - Real-time health checks with configurable alerts
+
+### Media Downloads
+- Download YouTube videos and transcripts with playlist support
+- Download Google Drive files (including large files >100MB with virus scan warnings)
+- Embedded metadata in all downloads for complete traceability
+- Rate limiting and error handling for reliable batch processing
+
+### Data Processing
+- Extract all links from webpages, including embedded Google Drive links
+- Scrape data from published Google Sheets with automatic updates
+- Export scraped data to CSV with duplicate prevention
+- Link extraction and YouTube playlist generation
 
 ## Directory Structure
 
@@ -151,28 +163,63 @@ process_links_from_csv()
 
 ### Complete Workflow Automation
 
-The `run_complete_workflow.py` script automates the entire process:
-1. Download and scrape a new Google Sheet
-2. Extract and process links
-3. Download all new Google Drive files
-4. Download all new YouTube videos
+The `run_complete_workflow.py` script provides production-ready automation with row-centric tracking:
+1. **Enhanced CSV Schema** - Automatically adds 8 tracking columns for download status
+2. **Intelligent Processing** - Only processes pending downloads, skips completed rows
+3. **Row Context Preservation** - Maintains personality type data throughout pipeline
+4. **Atomic Updates** - Updates CSV after each download with full error tracking
+5. **Production Logging** - Comprehensive logs with duration, success rates, and error counts
 
 ```bash
 # Activate virtual environment
 source venv/bin/activate
 
-# Run complete workflow
+# Run complete workflow with row tracking
 python run_complete_workflow.py
 
-# Run with specific options
-python run_complete_workflow.py --max-rows 10   # Process only 10 rows 
-python run_complete_workflow.py --reset         # Reprocess all rows
+# Production batch processing with limits
+python run_complete_workflow.py --max-youtube 10 --max-drive 5
 
-# Skip specific steps if needed
+# Skip specific steps while maintaining tracking
 python run_complete_workflow.py --skip-sheet    # Skip Google Sheet scraping
 python run_complete_workflow.py --skip-drive    # Skip Google Drive downloads
 python run_complete_workflow.py --skip-youtube  # Skip YouTube downloads
 ```
+
+### Production Monitoring & Management
+
+```bash
+# System health monitoring
+python utils/monitoring.py --status           # Quick system status
+python utils/monitoring.py --report           # Full status report with recommendations
+python utils/monitoring.py --alerts           # Check alert conditions
+python utils/monitoring.py --metrics --detailed  # Detailed metrics
+
+# Download status management
+python utils/csv_tracker.py --status          # Download summary statistics
+python utils/csv_tracker.py --failed both     # Show failed downloads
+python utils/csv_tracker.py --reset-status 151 --reset-type both  # Reset specific row
+
+# Error handling and validation
+python utils/error_handling.py --validate-csv output.csv      # Validate CSV integrity
+python utils/error_handling.py --validate-environment         # Check system dependencies
+python utils/error_handling.py --test-error-handling         # Test error categorization
+```
+
+### CSV Schema Enhancement
+
+The system automatically enhances your CSV with 8 tracking columns:
+
+| Column | Purpose | Values |
+|--------|---------|--------|
+| `youtube_status` | YouTube download status | pending, downloading, completed, failed |
+| `youtube_files` | List of downloaded YouTube files | Comma-separated filenames |
+| `youtube_media_id` | YouTube video ID | Video identifier for tracking |
+| `drive_status` | Google Drive download status | pending, downloading, completed, failed |
+| `drive_files` | List of downloaded Drive files | Comma-separated filenames |
+| `drive_media_id` | Google Drive file ID | File identifier for tracking |
+| `last_download_attempt` | Timestamp of last attempt | ISO 8601 format |
+| `download_errors` | Error messages from failures | Semicolon-separated error history |
 
 ### Download YouTube Videos and Transcripts
 
