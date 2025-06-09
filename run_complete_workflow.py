@@ -12,6 +12,11 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from utils.logger import pipeline_run, get_pipeline_logger
 from utils.logging_config import get_logger
 from utils.parallel_processor import parallel_download_youtube_videos
+from utils.config import get_config
+
+# Get configuration and set CSV field size limit
+config = get_config()
+csv.field_size_limit(config.get('file_processing.max_csv_field_size', sys.maxsize))
 
 def run_process(command, description=None, component='main', logger=None):
     """Run a process with the given command and print its output in real-time"""
@@ -162,7 +167,8 @@ def main_workflow(args, logger=None):
     
     # Step 2: Download Google Drive files for unprocessed links
     if not args.skip_drive:
-        drive_links = get_unprocessed_links("output.csv", "google_drive")
+        output_csv_path = config.get('paths.output_csv', 'output.csv')
+        drive_links = get_unprocessed_links(output_csv_path, "google_drive")
         if drive_links:
             # Apply max-drive limit if specified
             if args.max_drive is not None and args.max_drive > 0:
@@ -199,7 +205,8 @@ def main_workflow(args, logger=None):
     
     # Step 3: Download YouTube videos for unprocessed links
     if not args.skip_youtube:
-        youtube_links = get_unprocessed_links("output.csv", "youtube_playlist")
+        output_csv_path = config.get('paths.output_csv', 'output.csv')
+        youtube_links = get_unprocessed_links(output_csv_path, "youtube_playlist")
         if youtube_links:
             # Clean and validate YouTube URLs using proper validation
             from utils.validation import validate_youtube_url, validate_youtube_playlist_url, ValidationError
@@ -352,8 +359,9 @@ def main_workflow(args, logger=None):
     # Update total rows processed if logger is available
     if logger and not args.skip_sheet:
         csv_rows = 0
-        if os.path.exists("output.csv"):
-            with open("output.csv", 'r', newline='', encoding='utf-8') as f:
+        output_csv_path = config.get('paths.output_csv', 'output.csv')
+        if os.path.exists(output_csv_path):
+            with open(output_csv_path, 'r', newline='', encoding='utf-8') as f:
                 csv_rows = sum(1 for _ in csv.DictReader(f))
         logger.update_stats(rows_processed=csv_rows)
     

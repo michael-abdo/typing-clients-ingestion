@@ -128,6 +128,13 @@ def process_links_from_csv(max_rows=None, reset_processed=False, force_download=
                     row["google_drive"] = ""
                     row["processed"] = "yes"  # Empty links are still considered processed
                 
+                # Validate field sizes before adding to processed rows
+                max_field_size = 100000  # 100KB limit to be safe (CSV default is 131KB)
+                for field, value in row.items():
+                    if value and len(str(value)) > max_field_size:
+                        logger.warning(f"Field '{field}' for {row.get('name', 'unknown')} exceeds {max_field_size} bytes, truncating...")
+                        row[field] = str(value)[:max_field_size] + "... [TRUNCATED]"
+                
                 processed_rows.append(row)
             
             return processed_rows
@@ -251,6 +258,13 @@ def process_links_from_csv(max_rows=None, reset_processed=False, force_download=
                 for field in fieldnames:
                     if field not in clean_row:
                         clean_row[field] = ""
+                
+                # Validate field sizes before writing
+                max_field_size = 100000  # 100KB limit to be safe (CSV default is 131KB)
+                for field, value in clean_row.items():
+                    if value and len(str(value)) > max_field_size:
+                        logger.warning(f"Field '{field}' for {clean_row.get('name', 'unknown')} exceeds {max_field_size} bytes, truncating...")
+                        clean_row[field] = str(value)[:max_field_size] + "... [TRUNCATED]"
                 
                 # Write the row
                 writer.writerow(clean_row)

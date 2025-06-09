@@ -557,6 +557,15 @@ def process_url(url, limit=1, debug=False, use_dash_for_empty=True):
     Returns:
         tuple: (list of links, YouTube playlist URL or "-", list of Google Drive links or "-")
     """
+    # Check if this is a YouTube video URL (not a playlist)
+    if url and ('youtube.com/watch' in url or 'youtu.be/' in url):
+        # Skip processing individual YouTube videos to avoid large data extraction
+        logger.info(f"Skipping link extraction for YouTube video: {url}")
+        if use_dash_for_empty:
+            return [], "-", ["-"]
+        else:
+            return [], None, []
+    
     # First get the HTML content
     html = ""
     if "docs.google.com/document" in url:
