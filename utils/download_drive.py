@@ -14,6 +14,7 @@ try:
     from retry_utils import retry_request, get_with_retry, retry_with_backoff
     from file_lock import file_lock, safe_file_operation
     from rate_limiter import rate_limit, wait_for_rate_limit
+    from row_context import RowContext, DownloadResult
 except ImportError:
     from .logger import setup_component_logging
     from .logging_config import get_logger
@@ -21,6 +22,7 @@ except ImportError:
     from .retry_utils import retry_request, get_with_retry, retry_with_backoff
     from .file_lock import file_lock, safe_file_operation
     from .rate_limiter import rate_limit, wait_for_rate_limit
+    from .row_context import RowContext, DownloadResult
 
 # Setup module logger
 logger = get_logger(__name__)
@@ -422,6 +424,65 @@ def process_direct_download_url(url, output_filename=None, logger=None):
                 os.unlink(temp_path)
             logger.error(f"Error saving file: {str(e)}")
             return None
+
+
+def download_drive_with_context(url: str, row_context: RowContext) -> DownloadResult:
+    """Download Google Drive file with full row context tracking"""
+    logger = setup_component_logging('drive')
+    
+    logger.info(f"Starting Google Drive download for {row_context.name} (Row {row_context.row_id}, Type: {row_context.type})")
+    
+    try:
+        # Extract file ID first
+        file_id = extract_file_id(url)
+        if not file_id:
+            raise ValueError(f"Could not extract file ID from URL: {url}")
+        
+        # Download using existing functionality  
+        downloaded_path, metadata_path = process_drive_url(
+            url, output_filename=None, save_metadata_flag=True, logger=logger
+        )
+        
+        # Collect downloaded files
+        downloaded_files = []
+        if downloaded_path and os.path.exists(downloaded_path):
+            downloaded_files.append(os.path.basename(downloaded_path))
+        
+        # Create context-aware metadata file
+        suffix = row_context.to_filename_suffix()
+        context_metadata_filename = f"{file_id}{suffix}_metadata.json"
+        
+        success = len(downloaded_files) > 0
+        error_msg = None if success else f"Failed to download file {file_id}"
+        
+        result = DownloadResult(
+            success=success,
+            files_downloaded=downloaded_files,
+            media_id=file_id,
+            error_message=error_msg,
+            metadata_file=context_metadata_filename,
+            row_context=row_context,
+            download_type='drive'
+        )
+        
+        # Save metadata with row context
+        if success:
+            result.save_metadata(DOWNLOADS_DIR)
+            
+        logger.info(f"Google Drive download completed for {row_context.name}: {len(downloaded_files)} files")
+        return result
+        
+    except Exception as e:
+        logger.error(f"Google Drive download failed for {row_context.name} (Row {row_context.row_id}): {str(e)}")
+        return DownloadResult(
+            success=False,
+            files_downloaded=[],
+            media_id=None,
+            error_message=str(e),
+            metadata_file=None,
+            row_context=row_context,
+            download_type='drive'
+        )
 
 
 def process_drive_url(url, output_filename=None, save_metadata_flag=False, logger=None):

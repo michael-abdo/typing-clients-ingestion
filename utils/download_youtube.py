@@ -12,6 +12,7 @@ try:
     from file_lock import file_lock, safe_file_operation
     from config import get_config, get_youtube_downloads_dir, get_timeout
     from rate_limiter import rate_limit, wait_for_rate_limit
+    from row_context import RowContext, DownloadResult
 except ImportError:
     from .logger import setup_component_logging
     from .validation import validate_youtube_url, validate_file_path, ValidationError
@@ -19,6 +20,7 @@ except ImportError:
     from .file_lock import file_lock, safe_file_operation
     from .config import get_config, get_youtube_downloads_dir, get_timeout
     from .rate_limiter import rate_limit, wait_for_rate_limit
+    from .row_context import RowContext, DownloadResult
 
 # Get configuration
 config = get_config()
@@ -208,6 +210,83 @@ def download_single_video(url, video_id=None, title=None, transcript_only=False,
             logger.error(f"Error downloading video after retries: {e}")
             # Still return transcript if we got it
             return None, transcript_file if has_transcript else None
+
+
+def download_youtube_with_context(url: str, row_context: RowContext, 
+                                 transcript_only=False, resolution=None, output_format=None) -> DownloadResult:
+    """Download YouTube video with full row context tracking"""
+    logger = setup_component_logging('youtube')
+    
+    # Use config defaults if not provided
+    if resolution is None:
+        resolution = config.get('downloads.youtube.default_resolution', '720')
+    if output_format is None:
+        output_format = config.get('downloads.youtube.default_format', 'mp4')
+    
+    logger.info(f"Starting YouTube download for {row_context.name} (Row {row_context.row_id}, Type: {row_context.type})")
+    
+    try:
+        # Download using existing functionality
+        video_file, transcript_file = download_video(
+            url, transcript_only, resolution, output_format, logger
+        )
+        
+        # Extract video ID from URL for tracking
+        video_id = None
+        try:
+            if "watch_videos?video_ids=" in url:
+                import re
+                video_ids = re.findall(r'[a-zA-Z0-9_-]{11}', url)
+                video_id = video_ids[0] if video_ids else None
+            else:
+                _, video_id = validate_youtube_url(url)
+        except:
+            pass
+        
+        # Collect downloaded files
+        downloaded_files = []
+        if video_file and os.path.exists(video_file):
+            downloaded_files.append(os.path.basename(video_file))
+        if transcript_file and os.path.exists(transcript_file):
+            downloaded_files.append(os.path.basename(transcript_file))
+        
+        # Create context-aware metadata file
+        metadata_filename = None
+        if video_id:
+            suffix = row_context.to_filename_suffix()
+            metadata_filename = f"{video_id}{suffix}_metadata.json"
+        
+        success = len(downloaded_files) > 0
+        error_msg = None if success else "No files were downloaded"
+        
+        result = DownloadResult(
+            success=success,
+            files_downloaded=downloaded_files,
+            media_id=video_id,
+            error_message=error_msg,
+            metadata_file=metadata_filename,
+            row_context=row_context,
+            download_type='youtube'
+        )
+        
+        # Save metadata with row context
+        if metadata_filename:
+            result.save_metadata(DOWNLOADS_DIR)
+            
+        logger.info(f"YouTube download completed for {row_context.name}: {len(downloaded_files)} files")
+        return result
+        
+    except Exception as e:
+        logger.error(f"YouTube download failed for {row_context.name} (Row {row_context.row_id}): {str(e)}")
+        return DownloadResult(
+            success=False,
+            files_downloaded=[],
+            media_id=None,
+            error_message=str(e),
+            metadata_file=None,
+            row_context=row_context,
+            download_type='youtube'
+        )
 
 
 def download_video(url, transcript_only=False, resolution="720", output_format="mp4", logger=None):
