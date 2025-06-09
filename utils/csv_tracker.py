@@ -73,25 +73,26 @@ def ensure_tracking_columns(csv_path: str = 'output.csv') -> bool:
     df = pd.read_csv(csv_path)
     print(f"Current CSV has {len(df)} rows and columns: {list(df.columns)}")
     
-    # Define tracking columns with default values
+    # Define tracking columns with default values and explicit dtypes
     tracking_columns = {
-        'youtube_status': 'pending',      # pending|downloading|completed|failed
-        'youtube_files': '',              # Comma-separated list of downloaded files
-        'youtube_media_id': '',           # YouTube video ID
-        'drive_status': 'pending',        # pending|downloading|completed|failed
-        'drive_files': '',                # Comma-separated list of downloaded files
-        'drive_media_id': '',             # Google Drive file ID
-        'last_download_attempt': '',      # ISO timestamp of last attempt
-        'download_errors': ''             # Error messages from failed downloads
+        'youtube_status': ('pending', 'string'),      # pending|downloading|completed|failed
+        'youtube_files': ('', 'string'),              # Comma-separated list of downloaded files
+        'youtube_media_id': ('', 'string'),           # YouTube video ID
+        'drive_status': ('pending', 'string'),        # pending|downloading|completed|failed
+        'drive_files': ('', 'string'),                # Comma-separated list of downloaded files
+        'drive_media_id': ('', 'string'),             # Google Drive file ID
+        'last_download_attempt': ('', 'string'),      # ISO timestamp of last attempt
+        'download_errors': ('', 'string')             # Error messages from failed downloads
     }
     
-    # Add missing columns
+    # Add missing columns with proper data types
     modified = False
-    for col, default_value in tracking_columns.items():
+    for col, (default_value, dtype) in tracking_columns.items():
         if col not in df.columns:
             df[col] = default_value
+            df[col] = df[col].astype(dtype)
             modified = True
-            print(f"  Added column: {col}")
+            print(f"  Added column: {col} ({dtype})")
     
     # Save enhanced CSV if modified
     if modified:
@@ -115,7 +116,8 @@ def ensure_tracking_columns(csv_path: str = 'output.csv') -> bool:
         return False
 
 
-def get_pending_downloads(csv_path: str = 'output.csv', download_type: str = 'both') -> List[RowContext]:
+def get_pending_downloads(csv_path: str = 'output.csv', download_type: str = 'both', 
+                         include_failed: bool = True, retry_attempts: int = 3) -> List[RowContext]:
     """Get list of rows that need downloads"""
     df = pd.read_csv(csv_path)
     
@@ -135,21 +137,93 @@ def get_pending_downloads(csv_path: str = 'output.csv', download_type: str = 'bo
         
         # Check YouTube downloads needed
         if download_type in ['both', 'youtube']:
+            youtube_status = row.get('youtube_status', 'pending')
             if (pd.notna(row.get('youtube_playlist')) and 
-                str(row.get('youtube_playlist', '')).strip() not in ['', '-'] and
-                row.get('youtube_status', 'pending') in ['pending', 'failed']):
-                pending_rows.append(row_context)
-                continue
+                str(row.get('youtube_playlist', '')).strip() not in ['', '-']):
+                
+                # Include pending downloads
+                if youtube_status == 'pending':
+                    pending_rows.append(row_context)
+                    continue
+                # Include failed downloads if retry is enabled and under attempt limit
+                elif include_failed and youtube_status == 'failed':
+                    attempt_count = _get_retry_attempts(str(row.get('download_errors', '')))
+                    if attempt_count < retry_attempts:
+                        pending_rows.append(row_context)
+                        continue
                 
         # Check Drive downloads needed  
         if download_type in ['both', 'drive']:
+            drive_status = row.get('drive_status', 'pending')
             if (pd.notna(row.get('google_drive')) and 
-                str(row.get('google_drive', '')).strip() not in ['', '-'] and
-                row.get('drive_status', 'pending') in ['pending', 'failed']):
-                if row_context not in pending_rows:  # Avoid duplicates
-                    pending_rows.append(row_context)
+                str(row.get('google_drive', '')).strip() not in ['', '-']):
+                
+                # Include pending downloads
+                if drive_status == 'pending':
+                    if row_context not in pending_rows:  # Avoid duplicates
+                        pending_rows.append(row_context)
+                # Include failed downloads if retry is enabled and under attempt limit
+                elif include_failed and drive_status == 'failed':
+                    attempt_count = _get_retry_attempts(str(row.get('download_errors', '')))
+                    if attempt_count < retry_attempts:
+                        if row_context not in pending_rows:  # Avoid duplicates
+                            pending_rows.append(row_context)
                     
     return pending_rows
+
+
+def _get_retry_attempts(error_message: str) -> int:
+    """Count retry attempts from error message"""
+    if not error_message or error_message in ['nan', '<NA>', '']:
+        return 0
+    # Count semicolons which separate multiple error attempts
+    return error_message.count(';') + 1
+
+
+def get_failed_downloads(csv_path: str = 'output.csv', download_type: str = 'both') -> List[RowContext]:
+    """Get list of rows with failed downloads"""
+    return get_pending_downloads(csv_path, download_type, include_failed=True, retry_attempts=0)
+
+
+def reset_download_status(row_id: str, download_type: str, csv_path: str = 'output.csv') -> bool:
+    """Reset download status for a specific row"""
+    with file_lock(f'{csv_path}.lock'):
+        # Read with proper string dtypes
+        df = pd.read_csv(csv_path, dtype={
+            'youtube_status': 'string',
+            'youtube_files': 'string', 
+            'youtube_media_id': 'string',
+            'drive_status': 'string',
+            'drive_files': 'string',
+            'drive_media_id': 'string',
+            'last_download_attempt': 'string',
+            'download_errors': 'string'
+        })
+        
+        # Find the row
+        row_mask = df['row_id'].astype(str) == str(row_id)
+        if not row_mask.any():
+            print(f"Row ID {row_id} not found")
+            return False
+            
+        row_index = df[row_mask].index[0]
+        
+        if download_type in ['youtube', 'both']:
+            df.loc[row_index, 'youtube_status'] = 'pending'
+            df.loc[row_index, 'youtube_files'] = ''
+            df.loc[row_index, 'youtube_media_id'] = ''
+            
+        if download_type in ['drive', 'both']:
+            df.loc[row_index, 'drive_status'] = 'pending'
+            df.loc[row_index, 'drive_files'] = ''
+            df.loc[row_index, 'drive_media_id'] = ''
+            
+        df.loc[row_index, 'download_errors'] = ''
+        df.loc[row_index, 'last_download_attempt'] = ''
+        
+        df.to_csv(csv_path, index=False)
+        print(f"Reset {download_type} status for row {row_id}")
+        return True
 
 
 def update_csv_download_status(row_index: int, download_type: str, 
@@ -157,8 +231,17 @@ def update_csv_download_status(row_index: int, download_type: str,
     """Atomically update CSV with download results while preserving all existing data"""
     
     with file_lock(f'{csv_path}.lock'):
-        # Read current state
-        df = pd.read_csv(csv_path)
+        # Read current state with proper string dtypes
+        df = pd.read_csv(csv_path, dtype={
+            'youtube_status': 'string',
+            'youtube_files': 'string', 
+            'youtube_media_id': 'string',
+            'drive_status': 'string',
+            'drive_files': 'string',
+            'drive_media_id': 'string',
+            'last_download_attempt': 'string',
+            'download_errors': 'string'
+        })
         
         # Verify row exists and preserve critical data
         if row_index >= len(df):
@@ -170,28 +253,28 @@ def update_csv_download_status(row_index: int, download_type: str,
         
         print(f"Updating {download_type} status for row {row_index}: {original_name} (Type: {original_type})")
         
-        # Update only download-specific columns
+        # Update only download-specific columns with proper string conversion
         summary = result.get_summary()
         
         if download_type == 'youtube':
-            df.loc[row_index, 'youtube_status'] = summary['status']
-            df.loc[row_index, 'youtube_files'] = summary['files']
-            df.loc[row_index, 'youtube_media_id'] = summary['media_id']
+            df.loc[row_index, 'youtube_status'] = str(summary['status'])
+            df.loc[row_index, 'youtube_files'] = str(summary['files'])
+            df.loc[row_index, 'youtube_media_id'] = str(summary['media_id'])
         elif download_type == 'drive':
-            df.loc[row_index, 'drive_status'] = summary['status']
-            df.loc[row_index, 'drive_files'] = summary['files']  
-            df.loc[row_index, 'drive_media_id'] = summary['media_id']
+            df.loc[row_index, 'drive_status'] = str(summary['status'])
+            df.loc[row_index, 'drive_files'] = str(summary['files'])
+            df.loc[row_index, 'drive_media_id'] = str(summary['media_id'])
         else:
             raise ValueError(f"Invalid download_type: {download_type}")
             
-        # Update common columns
-        df.loc[row_index, 'last_download_attempt'] = summary['last_attempt']
+        # Update common columns with string conversion
+        df.loc[row_index, 'last_download_attempt'] = str(summary['last_attempt'])
         if summary['error']:
             current_errors = str(df.loc[row_index, 'download_errors'])
-            if current_errors and current_errors != 'nan':
+            if current_errors and current_errors not in ['nan', '<NA>', '']:
                 df.loc[row_index, 'download_errors'] = f"{current_errors}; {summary['error']}"
             else:
-                df.loc[row_index, 'download_errors'] = summary['error']
+                df.loc[row_index, 'download_errors'] = str(summary['error'])
                 
         # CRITICAL: Verify type column unchanged
         if str(df.loc[row_index, 'type']) != str(original_type):
@@ -273,6 +356,16 @@ if __name__ == "__main__":
                        help='Show download status summary')
     parser.add_argument('--pending', choices=['both', 'youtube', 'drive'], default='both',
                        help='Show pending downloads')
+    parser.add_argument('--failed', choices=['both', 'youtube', 'drive'], 
+                       help='Show failed downloads')
+    parser.add_argument('--retry-failed', choices=['both', 'youtube', 'drive'],
+                       help='Retry all failed downloads')
+    parser.add_argument('--reset-status', type=str, metavar='ROW_ID',
+                       help='Reset download status for specific row ID')
+    parser.add_argument('--reset-type', choices=['both', 'youtube', 'drive'], default='both',
+                       help='Type of download to reset (used with --reset-status)')
+    parser.add_argument('--detailed', action='store_true',
+                       help='Show detailed information')
     parser.add_argument('--csv-path', default='output.csv',
                        help='Path to CSV file (default: output.csv)')
     
@@ -294,6 +387,28 @@ if __name__ == "__main__":
         print(f"  Pending: {summary['drive']['pending']}")
         print(f"  Completed: {summary['drive']['completed']}")
         print(f"  Failed: {summary['drive']['failed']}")
+    elif args.failed:
+        failed = get_failed_downloads(args.csv_path, args.failed)
+        print(f"\nFailed {args.failed} downloads: {len(failed)}")
+        for i, row in enumerate(failed):
+            print(f"  {i+1}. Row {row.row_id}: {row.name} (Type: {row.type})")
+            if args.detailed:
+                # Show error details
+                df = pd.read_csv(args.csv_path)
+                row_data = df[df['row_id'].astype(str) == row.row_id].iloc[0]
+                if row_data.get('download_errors'):
+                    print(f"      Error: {row_data['download_errors']}")
+    elif args.retry_failed:
+        failed = get_failed_downloads(args.csv_path, args.retry_failed)
+        print(f"\nFound {len(failed)} failed {args.retry_failed} downloads to retry")
+        print("Use run_complete_workflow.py to process these retries automatically")
+        print("Or reset individual downloads with --reset-status ROW_ID")
+    elif args.reset_status:
+        success = reset_download_status(args.reset_status, args.reset_type, args.csv_path)
+        if success:
+            print(f"✓ Reset {args.reset_type} status for row {args.reset_status}")
+        else:
+            print(f"✗ Failed to reset status for row {args.reset_status}")
     else:
         pending = get_pending_downloads(args.csv_path, args.pending)
         print(f"\nPending {args.pending} downloads: {len(pending)}")
