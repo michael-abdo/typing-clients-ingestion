@@ -266,7 +266,8 @@ def download_youtube_with_context(url: str, row_context: RowContext,
             error_message=error_msg,
             metadata_file=metadata_filename,
             row_context=row_context,
-            download_type='youtube'
+            download_type='youtube',
+            permanent_failure=False
         )
         
         # Save metadata with row context
@@ -278,6 +279,14 @@ def download_youtube_with_context(url: str, row_context: RowContext,
         
     except Exception as e:
         logger.error(f"YouTube download failed for {row_context.name} (Row {row_context.row_id}): {str(e)}")
+        
+        # Check for permanent failure conditions
+        error_msg = str(e).lower()
+        is_permanent = any(phrase in error_msg for phrase in [
+            'video unavailable', 'removed by uploader', 'deleted', 
+            'private video', 'video not available', 'this video has been removed'
+        ])
+        
         return DownloadResult(
             success=False,
             files_downloaded=[],
@@ -285,7 +294,8 @@ def download_youtube_with_context(url: str, row_context: RowContext,
             error_message=str(e),
             metadata_file=None,
             row_context=row_context,
-            download_type='youtube'
+            download_type='youtube',
+            permanent_failure=is_permanent
         )
 
 

@@ -13,10 +13,12 @@ A production-ready system for downloading and tracking personality typing videos
 - **Production monitoring** - Real-time health checks with configurable alerts
 
 ### Media Downloads
-- Download YouTube videos and transcripts with playlist support
-- Download Google Drive files (including large files >100MB with virus scan warnings)
-- Embedded metadata in all downloads for complete traceability
-- Rate limiting and error handling for reliable batch processing
+- **YouTube downloads** with playlist support and automatic transcript extraction
+- **Google Drive individual files** (including large files >100MB with virus scan warnings)
+- **Google Drive folder downloads** (1:many relationship) - Downloads all files from public folders
+- **Permanent failure detection** - Marks deleted/private videos to skip future retries
+- **Embedded metadata** in all downloads for complete traceability
+- **Rate limiting and error handling** for reliable batch processing
 
 ### Data Processing
 - Extract all links from webpages, including embedded Google Drive links
@@ -164,11 +166,13 @@ process_links_from_csv()
 ### Complete Workflow Automation
 
 The `run_complete_workflow.py` script provides production-ready automation with row-centric tracking:
-1. **Enhanced CSV Schema** - Automatically adds 8 tracking columns for download status
-2. **Intelligent Processing** - Only processes pending downloads, skips completed rows
+1. **Enhanced CSV Schema** - Automatically adds 9 tracking columns for download status
+2. **Intelligent Processing** - Only processes pending downloads, skips completed and permanently failed rows
 3. **Row Context Preservation** - Maintains personality type data throughout pipeline
 4. **Atomic Updates** - Updates CSV after each download with full error tracking
-5. **Production Logging** - Comprehensive logs with duration, success rates, and error counts
+5. **Permanent Failure Tracking** - Marks deleted/private content to prevent retry loops
+6. **Google Drive Folder Support** - Downloads all files from public Drive folders (1:many relationship)
+7. **Production Logging** - Comprehensive logs with duration, success rates, and error counts
 
 ```bash
 # Activate virtual environment
@@ -220,6 +224,7 @@ The system automatically enhances your CSV with 8 tracking columns:
 | `drive_media_id` | Google Drive file ID | File identifier for tracking |
 | `last_download_attempt` | Timestamp of last attempt | ISO 8601 format |
 | `download_errors` | Error messages from failures | Semicolon-separated error history |
+| `permanent_failure` | Permanent failure markers | youtube,drive (skip future retries) |
 
 ### Download YouTube Videos and Transcripts
 
@@ -230,20 +235,88 @@ python download_youtube.py https://www.youtube.com/watch?v=VIDEO_ID --transcript
 python download_youtube.py https://www.youtube.com/watch?v=VIDEO_ID --resolution 1080
 ```
 
-### Download Google Drive Files
+### Download Google Drive Files and Folders
 
 ```bash
-# Command-line usage
+# Individual file download
 python download_drive.py "https://drive.google.com/file/d/FILE_ID/view"
 python download_drive.py "https://drive.google.com/file/d/FILE_ID/view" --filename custom_name.ext
 python download_drive.py "https://drive.google.com/file/d/FILE_ID/view" --metadata
+
+# Folder download (NEW: Downloads all files from public folders)
+python download_drive.py "https://drive.google.com/drive/folders/FOLDER_ID"
 
 # Download large files with virus scan warnings
 python download_drive.py "https://drive.usercontent.google.com/download?id=FILE_ID&export=download&confirm=t&uuid=UUID"
 
 # The script now automatically handles:
+# - **Google Drive folders** (1:many relationship) - Downloads all contained files
 # - Large files (>100MB) that show virus scan warnings
 # - Direct download URLs from drive.usercontent.google.com
 # - Progress tracking with speed and ETA
 # - Automatic retry for confirmation pages
+# - Folder metadata with individual file tracking
 ```
+
+## New Features - Enhanced Error Handling & Folder Support
+
+### Permanent Failure Detection (YouTube)
+
+The system now intelligently detects and marks permanent YouTube failures to prevent endless retry loops:
+
+**Detected Conditions:**
+- "Video unavailable" / "This video has been removed by the uploader"
+- "Private video" / "Video not available" 
+- "Deleted" videos
+
+**Behavior:**
+- Automatically marks failures as permanent in the `permanent_failure` CSV column
+- Skips permanently failed content in future workflow runs
+- Preserves detailed error messages for debugging
+- Maintains row integrity and personality type data
+
+**CSV Tracking:**
+```
+permanent_failure: "youtube" (skips YouTube retries for this row)
+```
+
+### Google Drive Folder Downloads (1:Many Relationship)
+
+**NEW:** The system now supports downloading entire Google Drive folders, not just individual files.
+
+**Capabilities:**
+- **Automatic Detection**: Recognizes folder URLs (`/drive/folders/FOLDER_ID`)
+- **Bulk Download**: Downloads all publicly accessible files in the folder
+- **Individual Tracking**: Each file gets its own metadata and tracking
+- **Combined Metadata**: Folder-level metadata with download statistics
+- **Error Resilience**: Continues downloading other files if some fail
+
+**Supported URL Formats:**
+```bash
+# Individual files (existing)
+https://drive.google.com/file/d/FILE_ID/view
+
+# Folders (NEW)
+https://drive.google.com/drive/folders/FOLDER_ID
+```
+
+**CSV Integration:**
+- `drive_media_id`: Contains folder ID for folder downloads
+- `drive_files`: Lists all successfully downloaded files from folder
+- `download_errors`: Individual file failures within folder
+- Row-centric tracking maintains personality type relationships
+
+**Limitations:**
+- Only works with publicly accessible folders
+- Private folders return "No files found or folder not accessible"
+- Uses HTML scraping (production would benefit from Google Drive API)
+
+### Enhanced CSV Schema
+
+The tracking system now includes 9 columns (was 8):
+
+| Column | Purpose | Values |
+|--------|---------|--------|
+| `permanent_failure` | Skip retry markers | `youtube`, `drive`, `youtube,drive` |
+
+This prevents the system from repeatedly attempting downloads that will never succeed, improving efficiency and reducing log noise.

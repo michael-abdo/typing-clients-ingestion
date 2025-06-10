@@ -53,6 +53,7 @@ class DownloadResult:
     error_message: Optional[str]
     metadata_file: Optional[str]    # Path to metadata file
     row_context: RowContext         # Preserve complete source data
+    permanent_failure: bool = False # Mark as permanent failure to skip retries
     
     def get_summary(self) -> Dict[str, Any]:
         """Generate summary for CSV update"""
@@ -82,7 +83,8 @@ def ensure_tracking_columns(csv_path: str = 'outputs/output.csv') -> bool:
         'drive_files': ('', 'string'),                # Comma-separated list of downloaded files
         'drive_media_id': ('', 'string'),             # Google Drive file ID
         'last_download_attempt': ('', 'string'),      # ISO timestamp of last attempt
-        'download_errors': ('', 'string')             # Error messages from failed downloads
+        'download_errors': ('', 'string'),            # Error messages from failed downloads
+        'permanent_failure': ('', 'string')           # Mark permanent failures to skip retries
     }
     
     # Add missing columns with proper data types
@@ -138,9 +140,15 @@ def get_pending_downloads(csv_path: str = 'outputs/output.csv', download_type: s
         # Check YouTube downloads needed
         if download_type in ['both', 'youtube']:
             youtube_status = row.get('youtube_status', 'pending')
+            permanent_failure = str(row.get('permanent_failure', '')).strip()
+            
             if (pd.notna(row.get('youtube_playlist')) and 
                 str(row.get('youtube_playlist', '')).strip() not in ['', '-']):
                 
+                # Skip permanent failures 
+                if 'youtube' in permanent_failure.lower():
+                    continue
+                    
                 # Include pending downloads
                 if youtube_status == 'pending':
                     pending_rows.append(row_context)
@@ -155,9 +163,15 @@ def get_pending_downloads(csv_path: str = 'outputs/output.csv', download_type: s
         # Check Drive downloads needed  
         if download_type in ['both', 'drive']:
             drive_status = row.get('drive_status', 'pending')
+            permanent_failure = str(row.get('permanent_failure', '')).strip()
+            
             if (pd.notna(row.get('google_drive')) and 
                 str(row.get('google_drive', '')).strip() not in ['', '-']):
                 
+                # Skip permanent failures
+                if 'drive' in permanent_failure.lower():
+                    continue
+                    
                 # Include pending downloads
                 if drive_status == 'pending':
                     if row_context not in pending_rows:  # Avoid duplicates
@@ -197,7 +211,8 @@ def reset_download_status(row_id: str, download_type: str, csv_path: str = 'outp
             'drive_files': 'string',
             'drive_media_id': 'string',
             'last_download_attempt': 'string',
-            'download_errors': 'string'
+            'download_errors': 'string',
+            'permanent_failure': 'string'
         })
         
         # Find the row
@@ -220,6 +235,7 @@ def reset_download_status(row_id: str, download_type: str, csv_path: str = 'outp
             
         df.loc[row_index, 'download_errors'] = ''
         df.loc[row_index, 'last_download_attempt'] = ''
+        df.loc[row_index, 'permanent_failure'] = ''
         
         df.to_csv(csv_path, index=False)
         print(f"Reset {download_type} status for row {row_id}")
@@ -240,7 +256,8 @@ def update_csv_download_status(row_index: int, download_type: str,
             'drive_files': 'string',
             'drive_media_id': 'string',
             'last_download_attempt': 'string',
-            'download_errors': 'string'
+            'download_errors': 'string',
+            'permanent_failure': 'string'
         })
         
         # Verify row exists and preserve critical data
@@ -275,6 +292,15 @@ def update_csv_download_status(row_index: int, download_type: str,
                 df.loc[row_index, 'download_errors'] = f"{current_errors}; {summary['error']}"
             else:
                 df.loc[row_index, 'download_errors'] = str(summary['error'])
+                
+        # Mark permanent failures to skip future retries
+        if result.permanent_failure:
+            current_permanent = str(df.loc[row_index, 'permanent_failure']).strip()
+            if current_permanent and current_permanent not in ['nan', '<NA>', '']:
+                if download_type not in current_permanent.lower():
+                    df.loc[row_index, 'permanent_failure'] = f"{current_permanent},{download_type}"
+            else:
+                df.loc[row_index, 'permanent_failure'] = download_type
                 
         # CRITICAL: Verify type column unchanged
         if str(df.loc[row_index, 'type']) != str(original_type):

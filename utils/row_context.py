@@ -56,6 +56,7 @@ class DownloadResult:
     metadata_file: Optional[str]    # Path to metadata file
     row_context: RowContext         # Preserve complete source data
     download_type: str              # 'youtube' or 'drive'
+    permanent_failure: bool = False # Mark as permanent failure to skip retries
     
     def get_summary(self) -> Dict[str, Any]:
         """Generate summary for CSV update"""

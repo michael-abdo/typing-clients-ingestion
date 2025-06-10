@@ -62,6 +62,213 @@ def extract_file_id(url):
     
     return None
 
+
+def extract_folder_id(url):
+    """Extract Google Drive folder ID from URL"""
+    # Pattern for folder URLs
+    folder_patterns = [
+        r'/drive/folders/([a-zA-Z0-9_-]+)',  # /drive/folders/{folderId}
+        r'folders/([a-zA-Z0-9_-]+)',         # folders/{folderId}
+    ]
+    
+    for pattern in folder_patterns:
+        match = re.search(pattern, url)
+        if match:
+            return match.group(1)
+    
+    return None
+
+
+def is_folder_url(url):
+    """Check if URL is a Google Drive folder"""
+    return '/drive/folders/' in url or 'folders/' in url
+
+
+def list_folder_files(folder_url, logger=None):
+    """
+    List files in a Google Drive folder by scraping the public folder page
+    Returns list of file dictionaries with id and name
+    """
+    if not logger:
+        logger = setup_component_logging('drive')
+    
+    folder_id = extract_folder_id(folder_url)
+    if not folder_id:
+        logger.error(f"Could not extract folder ID from URL: {folder_url}")
+        return []
+    
+    try:
+        # Import here to avoid circular imports
+        try:
+            from http_pool import get as http_get
+        except ImportError:
+            from .http_pool import get as http_get
+        
+        # Try to access the folder page
+        folder_page_url = f"https://drive.google.com/drive/folders/{folder_id}"
+        logger.info(f"Attempting to list files in folder: {folder_id}")
+        
+        response = http_get(folder_page_url, timeout=30)
+        
+        if response.status_code != 200:
+            logger.error(f"Failed to access folder page: HTTP {response.status_code}")
+            return []
+        
+        html_content = response.text
+        
+        # Parse the HTML to find file references
+        files = []
+        
+        # Look for file patterns in the HTML
+        # Google Drive embeds file information in JSON-like structures
+        import re
+        
+        # Pattern to match file entries with IDs and names
+        # This is a simplified approach - in production, you'd want Google Drive API
+        file_patterns = [
+            # Match file/d/ links with names
+            r'"https://drive\.google\.com/file/d/([a-zA-Z0-9_-]+)[^"]*"[^>]*>([^<]+)',
+            # Match data-id attributes with nearby text
+            r'data-id="([a-zA-Z0-9_-]+)"[^>]*>[^<]*([^<]+)',
+        ]
+        
+        for pattern in file_patterns:
+            matches = re.findall(pattern, html_content)
+            for match in matches:
+                file_id, name = match[0], match[1].strip()
+                if file_id and name and len(file_id) > 10:  # Valid Drive file ID
+                    files.append({
+                        'id': file_id,
+                        'name': name,
+                        'url': f"https://drive.google.com/file/d/{file_id}/view"
+                    })
+        
+        # Remove duplicates based on file ID
+        seen_ids = set()
+        unique_files = []
+        for file_info in files:
+            if file_info['id'] not in seen_ids:
+                seen_ids.add(file_info['id'])
+                unique_files.append(file_info)
+        
+        logger.info(f"Found {len(unique_files)} files in folder")
+        return unique_files
+        
+    except Exception as e:
+        logger.error(f"Error listing folder contents: {str(e)}")
+        return []
+
+
+def download_folder_files(folder_url, row_context, logger=None):
+    """
+    Download all files from a Google Drive folder
+    Returns DownloadResult with all downloaded files
+    """
+    if not logger:
+        logger = setup_component_logging('drive')
+    
+    logger.info(f"Starting Google Drive folder download for {row_context.name} (Row {row_context.row_id})")
+    
+    downloaded_files = []
+    metadata_files = []
+    errors = []
+    
+    try:
+        # List files in the folder
+        folder_files = list_folder_files(folder_url, logger)
+        
+        if not folder_files:
+            logger.warning("No files found in folder or folder is not publicly accessible")
+            return DownloadResult(
+                success=False,
+                files_downloaded=[],
+                media_id=extract_folder_id(folder_url),
+                error_message="No files found in folder or folder is not publicly accessible",
+                metadata_file=None,
+                row_context=row_context,
+                download_type='drive'
+            )
+        
+        logger.info(f"Found {len(folder_files)} files to download from folder")
+        
+        # Download each file
+        for file_info in folder_files:
+            try:
+                logger.info(f"Downloading file: {file_info['name']} (ID: {file_info['id']})")
+                
+                # Download individual file (avoid recursion by calling internal function)
+                result = _download_individual_file_with_context(file_info['url'], row_context, logger)
+                
+                if result.success:
+                    downloaded_files.extend(result.files_downloaded)
+                    if result.metadata_file:
+                        metadata_files.append(result.metadata_file)
+                else:
+                    errors.append(f"Failed to download {file_info['name']}: {result.error_message}")
+                    
+            except Exception as e:
+                error_msg = f"Error downloading {file_info['name']}: {str(e)}"
+                logger.error(error_msg)
+                errors.append(error_msg)
+        
+        # Create combined metadata for the folder download
+        folder_id = extract_folder_id(folder_url)
+        if folder_id and downloaded_files:
+            suffix = row_context.to_filename_suffix()
+            combined_metadata_filename = f"folder_{folder_id}{suffix}_metadata.json"
+        else:
+            combined_metadata_filename = None
+        
+        success = len(downloaded_files) > 0
+        error_msg = "; ".join(errors) if errors else None
+        
+        result = DownloadResult(
+            success=success,
+            files_downloaded=downloaded_files,
+            media_id=folder_id,
+            error_message=error_msg,
+            metadata_file=combined_metadata_filename,
+            row_context=row_context,
+            download_type='drive'
+        )
+        
+        # Save combined metadata
+        if combined_metadata_filename and downloaded_files:
+            folder_metadata = {
+                'folder_id': folder_id,
+                'folder_url': folder_url,
+                'files_in_folder': len(folder_files),
+                'files_downloaded': len(downloaded_files),
+                'individual_metadata_files': metadata_files,
+                'download_errors': errors
+            }
+            
+            # Save the metadata
+            metadata_path = os.path.join(DOWNLOADS_DIR, combined_metadata_filename)
+            folder_metadata.update(row_context.to_metadata_dict())
+            
+            try:
+                with open(metadata_path, 'w') as f:
+                    json.dump(folder_metadata, f, indent=2)
+                logger.info(f"Saved folder metadata to {combined_metadata_filename}")
+            except Exception as e:
+                logger.warning(f"Could not save folder metadata: {e}")
+        
+        logger.info(f"Folder download completed for {row_context.name}: {len(downloaded_files)} files downloaded")
+        return result
+        
+    except Exception as e:
+        logger.error(f"Folder download failed for {row_context.name} (Row {row_context.row_id}): {str(e)}")
+        return DownloadResult(
+            success=False,
+            files_downloaded=[],
+            media_id=extract_folder_id(folder_url),
+            error_message=str(e),
+            metadata_file=None,
+            row_context=row_context,
+            download_type='drive'
+        )
+
 def get_filename_from_url(url):
     """Try to extract the filename from Drive URL or Content-Disposition header"""
     # First check if the filename is in the URL
@@ -426,14 +633,10 @@ def process_direct_download_url(url, output_filename=None, logger=None):
             return None
 
 
-def download_drive_with_context(url: str, row_context: RowContext) -> DownloadResult:
-    """Download Google Drive file with full row context tracking"""
-    logger = setup_component_logging('drive')
-    
-    logger.info(f"Starting Google Drive download for {row_context.name} (Row {row_context.row_id}, Type: {row_context.type})")
-    
+def _download_individual_file_with_context(url: str, row_context: RowContext, logger) -> DownloadResult:
+    """Download a single Google Drive file with context tracking (internal function)"""
     try:
-        # Extract file ID first
+        # Extract file ID for individual files
         file_id = extract_file_id(url)
         if not file_id:
             raise ValueError(f"Could not extract file ID from URL: {url}")
@@ -469,8 +672,36 @@ def download_drive_with_context(url: str, row_context: RowContext) -> DownloadRe
         if success:
             result.save_metadata(DOWNLOADS_DIR)
             
-        logger.info(f"Google Drive download completed for {row_context.name}: {len(downloaded_files)} files")
         return result
+        
+    except Exception as e:
+        return DownloadResult(
+            success=False,
+            files_downloaded=[],
+            media_id=extract_file_id(url),
+            error_message=str(e),
+            metadata_file=None,
+            row_context=row_context,
+            download_type='drive'
+        )
+
+
+def download_drive_with_context(url: str, row_context: RowContext) -> DownloadResult:
+    """Download Google Drive file or folder with full row context tracking"""
+    logger = setup_component_logging('drive')
+    
+    logger.info(f"Starting Google Drive download for {row_context.name} (Row {row_context.row_id}, Type: {row_context.type})")
+    
+    try:
+        # Check if this is a folder URL
+        if is_folder_url(url):
+            logger.info(f"Detected folder URL, downloading all files in folder")
+            return download_folder_files(url, row_context, logger)
+        else:
+            # Handle individual file download
+            result = _download_individual_file_with_context(url, row_context, logger)
+            logger.info(f"Google Drive download completed for {row_context.name}: {len(result.files_downloaded)} files")
+            return result
         
     except Exception as e:
         logger.error(f"Google Drive download failed for {row_context.name} (Row {row_context.row_id}): {str(e)}")
