@@ -383,10 +383,10 @@ def download_drive_file(file_id, output_filename=None, logger=None):
     
     # Check if we got the download confirmation page
     content_type = response.headers.get('Content-Type', '')
-    if 'text/html' in content_type and 'virus scan warning' in response.text:
+    if 'text/html' in content_type and 'virus scan warning' in response.text.lower():
         # This is a virus scan warning page - we need to parse it
-        confirm_match = re.search(r'confirm=([0-9a-zA-Z_-]+)', response.text)
-        uuid_match = re.search(r'uuid=([0-9a-zA-Z_-]+)', response.text)
+        confirm_match = re.search(r'name="confirm" value="([^"]*)"', response.text)
+        uuid_match = re.search(r'name="uuid" value="([^"]*)"', response.text)
         
         if confirm_match:
             confirm_code = confirm_match.group(1)

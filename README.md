@@ -181,6 +181,9 @@ source venv/bin/activate
 # Run complete workflow with row tracking
 python run_complete_workflow.py
 
+# FASTEST: Use extracted links from CSV (skip Google Doc scraping)
+python run_complete_workflow.py --use-csv-links
+
 # Production batch processing with limits
 python run_complete_workflow.py --max-youtube 10 --max-drive 5
 
@@ -188,6 +191,10 @@ python run_complete_workflow.py --max-youtube 10 --max-drive 5
 python run_complete_workflow.py --skip-sheet    # Skip Google Sheet scraping
 python run_complete_workflow.py --skip-drive    # Skip Google Drive downloads
 python run_complete_workflow.py --skip-youtube  # Skip YouTube downloads
+
+# Combine CSV links with other flags for maximum efficiency
+python run_complete_workflow.py --use-csv-links --skip-youtube  # Only Drive downloads
+python run_complete_workflow.py --use-csv-links --max-drive 20  # Limit downloads
 ```
 
 ### Production Monitoring & Management
