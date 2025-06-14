@@ -28,10 +28,36 @@ A production-ready system for downloading and tracking personality typing videos
 
 ## Directory Structure
 
-- `/` - Main executable scripts and core project files
+### Root Directory (Essential Files Only)
+- `README.md` - Project documentation and setup instructions
+- `CLAUDE.md` - AI assistant instructions and workflows  
+- `requirements.txt` - Python dependencies specification
+- `run_complete_workflow.py` - Main entry point for complete processing pipeline
+- `.gitignore` - Git configuration for ignored files
+
+### Core System Directories
 - `/utils/` - Core utility modules for web scraping and data processing
+  - `download_youtube.py` - YouTube video and transcript downloader with row tracking
+  - `download_drive.py` - Google Drive file downloader with metadata
+  - `csv_tracker.py` - CSV row tracking and status management
+  - `master_scraper.py` - Google Sheets scraping and link extraction
+  - `monitoring.py` - System health monitoring and alerts
+  - `config.py` - Configuration management and validation
+  - `download_youtube_legacy.py` - Legacy YouTube downloader (moved from root)
+- `/config/` - Configuration files
+  - `config.yaml` - Main system configuration
+- `/outputs/` - CSV output files and processed data
+  - `output.csv` - Main data file with tracking columns
+- `/scripts/` - Utility scripts and tools
+  - `submit_all_jobs.sh` - Batch job submission script (moved from root)
+  - `/archive/` - Archived and legacy scripts
+    - `run_complete_workflow_old.py` - Previous workflow version
 - `/docs/` - Project documentation and analysis files
-- `/data/` - CSV output files and cached data
+  - `CLAUDE_INSTRUCTIONS.md` - Detailed AI instructions (moved from root)
+  - `API_REFERENCE.md` - System API documentation
+  - `PRODUCTION_ARCHITECTURE.md` - Architecture overview
+
+### Data and Processing Directories  
 - `/tests/` - Unit tests for validation, rate limiting, and utilities
 - `/utilities/` - Helper scripts organized by purpose:
   - `/utilities/scripts/` - General purpose scripts
@@ -40,7 +66,7 @@ A production-ready system for downloading and tracking personality typing videos
 - `/cache/` - Cached HTML and debug files from web scraping
 - `/html_cache/` - Additional HTML cache storage
 - `/backups/` - Automated backups of output files
-- `/logs/` - Application logs organized by run timestamp
+- `/logs/` - Application logs organized by run timestamp (includes moved workflow logs)
 - `/youtube_downloads/` - Downloaded YouTube videos and transcripts
 - `/drive_downloads/` - Downloaded Google Drive files with metadata
 - `/venv/` - Python virtual environment
