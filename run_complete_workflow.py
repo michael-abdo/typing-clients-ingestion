@@ -65,6 +65,7 @@ def main():
     parser.add_argument("--max-youtube", type=int, default=None, help="Maximum number of YouTube videos to download")
     parser.add_argument("--max-drive", type=int, default=None, help="Maximum number of Google Drive files to download")
     parser.add_argument("--no-logging", action="store_true", help="Disable logging to files")
+    parser.add_argument("--use-cache", action="store_true", help="Use cached Google Sheet data instead of force downloading (default: always force download)")
     
     args = parser.parse_args()
     
@@ -87,7 +88,10 @@ def main_workflow(args, logger=None):
     
     # Step 1: Scrape Google Sheet and extract links
     if not args.skip_sheet:
-        command = [sys.executable, "utils/master_scraper.py", "--force-download"]
+        command = [sys.executable, "utils/master_scraper.py"]
+        # Force download by default, unless --use-cache is specified
+        if not args.use_cache:
+            command.append("--force-download")
         if args.max_rows is not None:
             command.extend(["--max-rows", str(args.max_rows)])
         if args.reset:

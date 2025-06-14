@@ -31,7 +31,7 @@ def process_links_from_csv(max_rows=None, reset_processed=False, force_download=
     
     # Remove the cached HTML file if force_download is True
     if force_download:
-        cache_file = "google_sheet_cache.html"
+        cache_file = "cache/google_sheet_cache.html"
         if os.path.exists(cache_file):
             logger.info(f"Removing cached Google Sheet HTML: {cache_file}")
             os.remove(cache_file)
