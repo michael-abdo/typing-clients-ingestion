@@ -4,12 +4,12 @@ import os
 from bs4 import BeautifulSoup
 import sys
 try:
-    from atomic_csv import write_csv_atomic, append_csv_atomic
+    from atomic_csv import write_csv_atomic, append_csv_atomic, prepend_csv_atomic
     from config import get_config, get_google_sheets_url
     from http_pool import get as http_get
     from logging_config import get_logger
 except ImportError:
-    from .atomic_csv import write_csv_atomic, append_csv_atomic
+    from .atomic_csv import write_csv_atomic, append_csv_atomic, prepend_csv_atomic
     from .config import get_config, get_google_sheets_url
     from .http_pool import get as http_get
     from .logging_config import get_logger
@@ -345,9 +345,9 @@ def update_csv():
             write_csv_atomic(filename, data, fieldnames=["row_id", "name", "email", "type", "link"])
             logger.info(f"Created new CSV with {len(data)} records")
         else:
-            # Append just the new records to the existing file (atomic)
-            append_csv_atomic(filename, new_records, fieldnames=["row_id", "name", "email", "type", "link"])
-            logger.info(f"Added {len(new_records)} new records to CSV")
+            # Prepend new records to the top of the file (highest row_ids first)
+            prepend_csv_atomic(filename, new_records, fieldnames=["row_id", "name", "email", "type", "link"])
+            logger.info(f"Added {len(new_records)} new records to top of CSV")
 
 if __name__ == "__main__":
     logger.info("Fetching data from Google Sheets...")

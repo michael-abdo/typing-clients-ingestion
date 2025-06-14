@@ -253,3 +253,42 @@ def append_csv_atomic(filename, rows, fieldnames=None, encoding='utf-8', use_loc
         writer.writerows(rows)
 
 
+def prepend_csv_atomic(filename, new_rows, fieldnames=None, encoding='utf-8', use_lock=True, timeout=30.0):
+    """
+    Prepend rows to CSV file atomically (add new records at the top)
+    
+    Args:
+        filename: Path to CSV file
+        new_rows: List of new rows to prepend
+        fieldnames: Field names for DictWriter
+        encoding: File encoding
+        use_lock: Whether to use file locking
+        timeout: Lock acquisition timeout
+    """
+    import csv
+    from pathlib import Path
+    
+    filepath = Path(filename)
+    
+    # If file doesn't exist, just write the new rows
+    if not filepath.exists():
+        write_csv_atomic(filename, new_rows, fieldnames=fieldnames, encoding=encoding, use_lock=use_lock, timeout=timeout)
+        return
+    
+    # Read existing data
+    existing_rows = []
+    detected_fieldnames = fieldnames
+    
+    with open(filepath, 'r', newline='', encoding=encoding) as f:
+        reader = csv.DictReader(f)
+        if not detected_fieldnames:
+            detected_fieldnames = reader.fieldnames
+        existing_rows = list(reader)
+    
+    # Combine: new rows first (highest row_ids), then existing rows
+    all_rows = new_rows + existing_rows
+    
+    # Write all data atomically
+    write_csv_atomic(filename, all_rows, fieldnames=detected_fieldnames, encoding=encoding, use_lock=use_lock, timeout=timeout)
+
+
