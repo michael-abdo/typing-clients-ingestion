@@ -13,6 +13,7 @@ try:
     from config import get_config, get_youtube_downloads_dir, get_timeout
     from rate_limiter import rate_limit, wait_for_rate_limit
     from row_context import RowContext, DownloadResult
+    from sanitization import sanitize_error_message, SafeDownloadError
 except ImportError:
     from .logger import setup_component_logging
     from .validation import validate_youtube_url, validate_file_path, ValidationError
@@ -21,6 +22,7 @@ except ImportError:
     from .config import get_config, get_youtube_downloads_dir, get_timeout
     from .rate_limiter import rate_limit, wait_for_rate_limit
     from .row_context import RowContext, DownloadResult
+    from .sanitization import sanitize_error_message, SafeDownloadError
 
 # Get configuration
 config = get_config()
@@ -55,7 +57,8 @@ def download_single_video(url, video_id=None, title=None, transcript_only=False,
         if not video_id:
             video_id = validated_video_id
     except ValidationError as e:
-        logger.error(f"Invalid YouTube URL: {e}")
+        safe_error = sanitize_error_message(str(e))
+        logger.error(f"Invalid YouTube URL: {safe_error}")
         return None, None
     
     downloads_path = create_download_dir(logger)
@@ -87,7 +90,8 @@ def download_single_video(url, video_id=None, title=None, transcript_only=False,
                 
             video_id, title = info
         except Exception as e:
-            logger.error(f"Error getting video info after retries: {e}")
+            safe_error = sanitize_error_message(str(e))
+            logger.error(f"Error getting video info after retries: {safe_error}")
             return None, None
     
     logger.info(f"Video ID: {video_id}")
@@ -207,7 +211,8 @@ def download_single_video(url, video_id=None, title=None, transcript_only=False,
             logger.success(f"Video downloaded to {video_file}")
             return video_file, transcript_file if has_transcript else None
         except Exception as e:
-            logger.error(f"Error downloading video after retries: {e}")
+            safe_error = sanitize_error_message(str(e))
+            logger.error(f"Error downloading video after retries: {safe_error}")
             # Still return transcript if we got it
             return None, transcript_file if has_transcript else None
 
@@ -278,10 +283,12 @@ def download_youtube_with_context(url: str, row_context: RowContext,
         return result
         
     except Exception as e:
-        logger.error(f"YouTube download failed for {row_context.name} (Row {row_context.row_id}): {str(e)}")
+        # Sanitize error message to prevent CSV corruption
+        safe_error = sanitize_error_message(str(e))
+        logger.error(f"YouTube download failed for {row_context.name} (Row {row_context.row_id}): {safe_error}")
         
-        # Check for permanent failure conditions
-        error_msg = str(e).lower()
+        # Check for permanent failure conditions using sanitized error
+        error_msg = safe_error.lower()
         is_permanent = any(phrase in error_msg for phrase in [
             'video unavailable', 'removed by uploader', 'deleted', 
             'private video', 'video not available', 'this video has been removed'
@@ -291,7 +298,7 @@ def download_youtube_with_context(url: str, row_context: RowContext,
             success=False,
             files_downloaded=[],
             media_id=None,
-            error_message=str(e),
+            error_message=safe_error,
             metadata_file=None,
             row_context=row_context,
             download_type='youtube',
@@ -309,7 +316,8 @@ def download_video(url, transcript_only=False, resolution="720", output_format="
         from validation import validate_url
         url = validate_url(url, allowed_domains=['youtube.com', 'youtu.be'])
     except ValidationError as e:
-        logger.error(f"Invalid URL: {e}")
+        safe_error = sanitize_error_message(str(e))
+        logger.error(f"Invalid URL: {safe_error}")
         return None, None
     except ImportError:
         # Fallback if validation module not available

@@ -15,6 +15,7 @@ try:
     from file_lock import file_lock, safe_file_operation
     from rate_limiter import rate_limit, wait_for_rate_limit
     from row_context import RowContext, DownloadResult
+    from sanitization import sanitize_error_message, SafeDownloadError, validate_csv_field_safety
 except ImportError:
     from .logger import setup_component_logging
     from .logging_config import get_logger
@@ -23,6 +24,7 @@ except ImportError:
     from .file_lock import file_lock, safe_file_operation
     from .rate_limiter import rate_limit, wait_for_rate_limit
     from .row_context import RowContext, DownloadResult
+    from .sanitization import sanitize_error_message, SafeDownloadError, validate_csv_field_safety
 
 # Setup module logger
 logger = get_logger(__name__)
@@ -79,6 +81,89 @@ def extract_folder_id(url):
     return None
 
 
+def _validate_folder_response(response, logger=None):
+    """
+    Validate that HTTP response contains folder data, not HTML/JavaScript.
+    
+    Prevents CSV corruption by detecting Google Drive HTML pages that contain
+    massive JavaScript configuration objects instead of folder content.
+    
+    Args:
+        response: HTTP response object
+        logger: Logger instance for error reporting
+        
+    Returns:
+        tuple: (is_valid, error_message)
+               is_valid=True if response contains folder data
+               is_valid=False if response contains HTML/JavaScript
+    """
+    if not logger:
+        logger = setup_component_logging('drive')
+    
+    # Check response size - Google Drive HTML pages can be very large
+    content_length = len(response.text)
+    if content_length > 50000:  # 50KB limit for folder responses
+        error_msg = f"Response too large ({content_length} bytes) - likely HTML page instead of folder data"
+        logger.warning(sanitize_error_message(error_msg))
+        return False, error_msg
+    
+    # Check Content-Type header
+    content_type = response.headers.get('Content-Type', '').lower()
+    if 'text/html' in content_type:
+        error_msg = f"Received HTML response (Content-Type: {content_type}) - folder likely private or requires authentication"
+        logger.warning(sanitize_error_message(error_msg))
+        return False, error_msg
+    
+    html_content = response.text
+    
+    # Check for HTML document patterns
+    html_indicators = [
+        '<!DOCTYPE html',
+        '<html',
+        '<script>',
+        'window.WIZ_global_data',
+        '<head>',
+        '<body>',
+        'text/javascript',
+    ]
+    
+    for indicator in html_indicators:
+        if indicator in html_content:
+            error_msg = f"Response contains HTML content ({indicator}) - folder likely private or inaccessible"
+            logger.warning(sanitize_error_message(error_msg))
+            return False, error_msg
+    
+    # Check for excessive JavaScript/JSON patterns that corrupted row 492
+    js_patterns = [
+        r'window\.[A-Za-z_][A-Za-z0-9_]*\s*=',  # window.WIZ_global_data = 
+        r'\{[^}]{200,}\}',  # Large JSON objects
+        r'\[[^\]]{200,}\]',  # Large JSON arrays
+        r'function\s*\([^)]*\)',  # JavaScript functions
+    ]
+    
+    for pattern in js_patterns:
+        if re.search(pattern, html_content):
+            error_msg = f"Response contains JavaScript patterns - folder likely private or inaccessible"
+            logger.warning(sanitize_error_message(error_msg))
+            return False, error_msg
+    
+    # Additional validation: check if response looks like legitimate folder data
+    # Legitimate folder responses should contain file/folder references
+    folder_indicators = [
+        'drive.google.com/file/d/',
+        '"id":',
+        '"name":',
+    ]
+    
+    has_folder_data = any(indicator in html_content for indicator in folder_indicators)
+    if not has_folder_data and len(html_content) > 1000:
+        error_msg = "Response does not contain recognizable folder data patterns"
+        logger.warning(sanitize_error_message(error_msg))
+        return False, error_msg
+    
+    return True, None
+
+
 def is_folder_url(url):
     """Check if URL is a Google Drive folder"""
     return '/drive/folders/' in url or 'folders/' in url
@@ -112,6 +197,13 @@ def list_folder_files(folder_url, logger=None):
         
         if response.status_code != 200:
             logger.error(f"Failed to access folder page: HTTP {response.status_code}")
+            return []
+        
+        # Validate response to prevent CSV corruption from HTML/JavaScript content
+        is_valid, validation_error = _validate_folder_response(response, logger)
+        if not is_valid:
+            safe_error = sanitize_error_message(validation_error)
+            logger.error(f"Invalid folder response: {safe_error}")
             return []
         
         html_content = response.text
@@ -155,7 +247,8 @@ def list_folder_files(folder_url, logger=None):
         return unique_files
         
     except Exception as e:
-        logger.error(f"Error listing folder contents: {str(e)}")
+        safe_error = sanitize_error_message(str(e))
+        logger.error(f"Error listing folder contents: {safe_error}")
         return []
 
 
@@ -744,16 +837,9 @@ def process_drive_url(url, output_filename=None, save_metadata_flag=False, logge
         
         return downloaded_path, metadata_path
     
-    # Validate URL for regular Drive URLs
-    try:
-        url, file_id = validate_google_drive_url(url)
-    except ValidationError as e:
-        logger.error(f"Invalid Google Drive URL: {e}")
-        return None, None
-    
     create_download_dir(logger)
     
-    # Check if it's a folder
+    # Check if it's a folder BEFORE validating as a file URL
     if is_folder_url(url):
         folder_id = extract_folder_id(url)
         if not folder_id:
@@ -764,6 +850,13 @@ def process_drive_url(url, output_filename=None, save_metadata_flag=False, logge
         logger.warning("Note: Folder downloading requires Google Drive API authentication")
         logger.info("Try accessing the folder directly in your browser")
         get_folder_contents(folder_id, logger)
+        return None, None
+    
+    # Validate URL for regular Drive file URLs
+    try:
+        url, file_id = validate_google_drive_url(url)
+    except ValidationError as e:
+        logger.error(f"Invalid Google Drive URL: {e}")
         return None, None
     
     # Process single file

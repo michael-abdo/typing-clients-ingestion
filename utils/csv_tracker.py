@@ -7,14 +7,179 @@ Maintains perfect data integrity while tracking YouTube and Drive downloads
 import os
 import pandas as pd
 import json
+import shutil
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 from dataclasses import dataclass
 
 try:
     from file_lock import file_lock
+    from sanitization import sanitize_error_message, sanitize_csv_field
 except ImportError:
     from .file_lock import file_lock
+    from .sanitization import sanitize_error_message, sanitize_csv_field
+
+
+def create_csv_backup(csv_path: str, operation_name: str = "write") -> str:
+    """
+    Create timestamped backup of CSV file before modification.
+    
+    Args:
+        csv_path: Path to CSV file to backup
+        operation_name: Description of the operation for backup naming
+        
+    Returns:
+        Path to created backup file
+    """
+    if not os.path.exists(csv_path):
+        raise FileNotFoundError(f"CSV file not found: {csv_path}")
+    
+    # Create backup directory if it doesn't exist
+    backup_dir = os.path.join(os.path.dirname(csv_path), "backups", "output")
+    os.makedirs(backup_dir, exist_ok=True)
+    
+    # Generate timestamped backup filename
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    filename = os.path.basename(csv_path)
+    backup_filename = f"{filename}.backup_{operation_name}_{timestamp}"
+    backup_path = os.path.join(backup_dir, backup_filename)
+    
+    # Create backup
+    shutil.copy2(csv_path, backup_path)
+    
+    return backup_path
+
+
+def validate_csv_integrity(csv_path: str, expected_columns: Optional[List[str]] = None):
+    """
+    Validate CSV file integrity after write operations.
+    
+    Checks for:
+    - File readability
+    - Expected column count and names
+    - No HTML/JavaScript content in fields
+    - Consistent row structure
+    
+    Args:
+        csv_path: Path to CSV file to validate
+        expected_columns: List of expected column names
+        
+    Returns:
+        tuple: (is_valid, error_message)
+    """
+    try:
+        # Test file readability
+        df = pd.read_csv(csv_path)
+        
+        # Check for empty file
+        if df.empty:
+            return False, "CSV file is empty"
+        
+        # Check expected columns if provided
+        if expected_columns:
+            if len(df.columns) != len(expected_columns):
+                return False, f"Column count mismatch: expected {len(expected_columns)}, got {len(df.columns)}"
+            
+            missing_cols = set(expected_columns) - set(df.columns)
+            if missing_cols:
+                return False, f"Missing columns: {missing_cols}"
+        
+        # Check for HTML/JavaScript content that could indicate corruption
+        dangerous_patterns = [
+            '<script>', '<html>', 'window.', r'function\(', r'<!DOCTYPE'
+        ]
+        
+        for col in df.columns:
+            if df[col].dtype == 'object':  # String columns
+                for pattern in dangerous_patterns:
+                    if df[col].astype(str).str.contains(pattern, case=False, na=False, regex=True).any():
+                        return False, f"Dangerous content detected in column '{col}': {pattern}"
+        
+        # Check for extremely long fields that could indicate corruption
+        for col in df.columns:
+            if df[col].dtype == 'object':
+                max_length = df[col].astype(str).str.len().max()
+                if max_length > 1000:  # No field should be longer than 1000 chars
+                    return False, f"Suspiciously long field detected in column '{col}': {max_length} characters"
+        
+        # Check for consistent row structure
+        expected_row_count = len(df)
+        actual_fields_per_row = df.apply(lambda row: len([x for x in row if pd.notna(x)]), axis=1)
+        if actual_fields_per_row.var() > 10:  # High variance indicates inconsistent structure
+            return False, f"Inconsistent row structure detected - field count variance: {actual_fields_per_row.var()}"
+        
+        return True, "CSV validation passed"
+        
+    except pd.errors.EmptyDataError:
+        return False, "CSV file is empty or corrupted"
+    except pd.errors.ParserError as e:
+        return False, f"CSV parsing error: {str(e)}"
+    except Exception as e:
+        return False, f"Validation error: {sanitize_error_message(str(e))}"
+
+
+def safe_csv_write(df: pd.DataFrame, csv_path: str, operation_name: str = "write", 
+                   expected_columns: Optional[List[str]] = None) -> bool:
+    """
+    Safely write DataFrame to CSV with backup and validation.
+    
+    Process:
+    1. Create backup of existing file
+    2. Write new CSV
+    3. Validate written CSV
+    4. Rollback to backup if validation fails
+    
+    Args:
+        df: DataFrame to write
+        csv_path: Path to write CSV file
+        operation_name: Description for backup naming
+        expected_columns: Expected column names for validation
+        
+    Returns:
+        True if write successful, False if failed and rolled back
+    """
+    backup_path = None
+    
+    try:
+        # Create backup if file exists
+        if os.path.exists(csv_path):
+            backup_path = create_csv_backup(csv_path, operation_name)
+            print(f"  Created backup: {os.path.basename(backup_path)}")
+        
+        # Write new CSV
+        df.to_csv(csv_path, index=False)
+        
+        # Validate written file
+        is_valid, error_msg = validate_csv_integrity(csv_path, expected_columns)
+        
+        if not is_valid:
+            print(f"  ❌ CSV validation failed: {error_msg}")
+            
+            # Rollback to backup if available
+            if backup_path and os.path.exists(backup_path):
+                shutil.copy2(backup_path, csv_path)
+                print(f"  🔄 Rolled back to backup: {os.path.basename(backup_path)}")
+                return False
+            else:
+                print(f"  ⚠️ No backup available for rollback")
+                return False
+        
+        print(f"  ✅ CSV write successful and validated")
+        return True
+        
+    except Exception as e:
+        safe_error = sanitize_error_message(str(e))
+        print(f"  ❌ CSV write failed: {safe_error}")
+        
+        # Rollback to backup if available
+        if backup_path and os.path.exists(backup_path) and os.path.exists(csv_path):
+            try:
+                shutil.copy2(backup_path, csv_path)
+                print(f"  🔄 Rolled back to backup: {os.path.basename(backup_path)}")
+            except Exception as rollback_error:
+                print(f"  ⚠️ Rollback failed: {sanitize_error_message(str(rollback_error))}")
+        
+        return False
 
 
 @dataclass
@@ -237,9 +402,16 @@ def reset_download_status(row_id: str, download_type: str, csv_path: str = 'outp
         df.loc[row_index, 'last_download_attempt'] = ''
         df.loc[row_index, 'permanent_failure'] = ''
         
-        df.to_csv(csv_path, index=False)
-        print(f"Reset {download_type} status for row {row_id}")
-        return True
+        # Safe CSV write with backup and validation
+        expected_cols = df.columns.tolist()
+        success = safe_csv_write(df, csv_path, f"reset_{download_type}_row_{row_id}", expected_cols)
+        
+        if success:
+            print(f"Reset {download_type} status for row {row_id}")
+            return True
+        else:
+            print(f"Failed to reset {download_type} status for row {row_id} - CSV write failed")
+            return False
 
 
 def update_csv_download_status(row_index: int, download_type: str, 
@@ -275,23 +447,33 @@ def update_csv_download_status(row_index: int, download_type: str,
         
         if download_type == 'youtube':
             df.loc[row_index, 'youtube_status'] = str(summary['status'])
-            df.loc[row_index, 'youtube_files'] = str(summary['files'])
-            df.loc[row_index, 'youtube_media_id'] = str(summary['media_id'])
+            # Sanitize files list to prevent malicious filenames from corrupting CSV
+            df.loc[row_index, 'youtube_files'] = sanitize_csv_field(str(summary['files']), max_length=150)
+            # Sanitize media ID to prevent malicious content in extracted IDs
+            df.loc[row_index, 'youtube_media_id'] = sanitize_csv_field(str(summary['media_id']), max_length=50)
         elif download_type == 'drive':
             df.loc[row_index, 'drive_status'] = str(summary['status'])
-            df.loc[row_index, 'drive_files'] = str(summary['files'])
-            df.loc[row_index, 'drive_media_id'] = str(summary['media_id'])
+            # Sanitize files list to prevent malicious filenames from corrupting CSV
+            df.loc[row_index, 'drive_files'] = sanitize_csv_field(str(summary['files']), max_length=150)
+            # Sanitize media ID to prevent malicious content in extracted IDs
+            df.loc[row_index, 'drive_media_id'] = sanitize_csv_field(str(summary['media_id']), max_length=50)
         else:
             raise ValueError(f"Invalid download_type: {download_type}")
             
         # Update common columns with string conversion
         df.loc[row_index, 'last_download_attempt'] = str(summary['last_attempt'])
         if summary['error']:
+            # Sanitize error message to prevent CSV corruption from HTML/JavaScript content
+            sanitized_error = sanitize_error_message(summary['error'], max_length=200)
             current_errors = str(df.loc[row_index, 'download_errors'])
             if current_errors and current_errors not in ['nan', '<NA>', '']:
-                df.loc[row_index, 'download_errors'] = f"{current_errors}; {summary['error']}"
+                # Sanitize existing errors as well and combine safely
+                sanitized_current = sanitize_csv_field(current_errors, max_length=100)
+                combined_error = f"{sanitized_current}; {sanitized_error}"
+                # Final sanitization of combined message
+                df.loc[row_index, 'download_errors'] = sanitize_csv_field(combined_error, max_length=200)
             else:
-                df.loc[row_index, 'download_errors'] = str(summary['error'])
+                df.loc[row_index, 'download_errors'] = sanitized_error
                 
         # Mark permanent failures to skip future retries
         if result.permanent_failure:
@@ -306,9 +488,14 @@ def update_csv_download_status(row_index: int, download_type: str,
         if str(df.loc[row_index, 'type']) != str(original_type):
             raise RuntimeError(f"Type column corruption detected for row {row_index}: {original_type} -> {df.loc[row_index, 'type']}")
             
-        # Atomic write
-        df.to_csv(csv_path, index=False)
-        print(f"  Updated CSV: {summary['status']} - {len(summary['files'].split(',') if summary['files'] else [])} files")
+        # Safe CSV write with backup and validation
+        expected_cols = df.columns.tolist()
+        success = safe_csv_write(df, csv_path, f"update_{download_type}_row_{row_index}", expected_cols)
+        
+        if success:
+            print(f"  Updated CSV: {summary['status']} - {len(summary['files'].split(',') if summary['files'] else [])} files")
+        else:
+            raise RuntimeError(f"Failed to update CSV for row {row_index} - write operation failed validation")
 
 
 def get_download_status_summary(csv_path: str = 'outputs/output.csv') -> Dict[str, Any]:
