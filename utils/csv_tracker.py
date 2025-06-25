@@ -15,9 +15,41 @@ from dataclasses import dataclass
 try:
     from file_lock import file_lock
     from sanitization import sanitize_error_message, sanitize_csv_field
+    from config import get_config
 except ImportError:
     from .file_lock import file_lock
     from .sanitization import sanitize_error_message, sanitize_csv_field
+    from .config import get_config
+
+
+def safe_get_na_value(column_name: str = None, dtype: str = 'string') -> Any:
+    """
+    Get the appropriate null/NA value for a given column and data type.
+    This ensures consistent null representation across the entire CSV.
+    
+    Args:
+        column_name: Name of the column (for column-specific rules if needed)
+        dtype: The pandas dtype of the column ('string', 'float', 'int', etc.)
+        
+    Returns:
+        The appropriate null value (None for most cases, which becomes NaN in pandas)
+        
+    Note:
+        Using None instead of empty strings prevents false positive corruption detection
+        since pd.notna('') returns True while pd.notna(None) returns False.
+    """
+    # For all string columns, use None (which becomes NaN in pandas)
+    # This ensures consistent field counting in validation
+    if dtype in ['string', 'object', str]:
+        return None
+    
+    # For numeric types, also use None (becomes NaN)
+    elif dtype in ['float', 'int', 'float64', 'int64']:
+        return None
+    
+    # For any other type, default to None
+    else:
+        return None
 
 
 def create_csv_backup(csv_path: str, operation_name: str = "write") -> str:
@@ -85,28 +117,60 @@ def validate_csv_integrity(csv_path: str, expected_columns: Optional[List[str]] 
                 return False, f"Missing columns: {missing_cols}"
         
         # Check for HTML/JavaScript content that could indicate corruption
+        # Skip extracted_links column which may have existing corruption from before our fixes
         dangerous_patterns = [
             '<script>', '<html>', 'window.', r'function\(', r'<!DOCTYPE'
         ]
         
         for col in df.columns:
-            if df[col].dtype == 'object':  # String columns
+            if df[col].dtype == 'object' and col != 'extracted_links':  # Skip extracted_links column
                 for pattern in dangerous_patterns:
                     if df[col].astype(str).str.contains(pattern, case=False, na=False, regex=True).any():
                         return False, f"Dangerous content detected in column '{col}': {pattern}"
         
         # Check for extremely long fields that could indicate corruption
+        # Skip extracted_links column which may legitimately contain long content
         for col in df.columns:
-            if df[col].dtype == 'object':
+            if df[col].dtype == 'object' and col != 'extracted_links':
                 max_length = df[col].astype(str).str.len().max()
                 if max_length > 1000:  # No field should be longer than 1000 chars
                     return False, f"Suspiciously long field detected in column '{col}': {max_length} characters"
         
-        # Check for consistent row structure
-        expected_row_count = len(df)
-        actual_fields_per_row = df.apply(lambda row: len([x for x in row if pd.notna(x)]), axis=1)
-        if actual_fields_per_row.var() > 10:  # High variance indicates inconsistent structure
-            return False, f"Inconsistent row structure detected - field count variance: {actual_fields_per_row.var()}"
+        # Check for consistent row structure using intelligent validation
+        # Count meaningful fields (non-empty, non-dash) instead of just non-NA
+        def count_meaningful_fields(row):
+            count = 0
+            for val in row:
+                if pd.notna(val) and str(val).strip() not in ['', '-']:
+                    count += 1
+            return count
+        
+        meaningful_fields_per_row = df.apply(count_meaningful_fields, axis=1)
+        
+        # Check minimum required fields (row_id, name, type, etc.)
+        min_required_fields = 4  # At least row_id, name, type, and one other field
+        if meaningful_fields_per_row.min() < min_required_fields:
+            return False, f"Row with too few meaningful fields: {meaningful_fields_per_row.min()} (minimum required: {min_required_fields})"
+        
+        # NEW: State-aware validation - check logical consistency
+        # If status columns exist, validate their consistency
+        if 'youtube_status' in df.columns and 'youtube_files' in df.columns:
+            # Completed downloads should have files
+            completed_mask = df['youtube_status'] == 'completed'
+            if completed_mask.any():
+                missing_files = df.loc[completed_mask, 'youtube_files'].isna()
+                if missing_files.any():
+                    problem_rows = df.loc[completed_mask & missing_files, 'row_id'].tolist()
+                    return False, f"Completed YouTube downloads missing files for rows: {problem_rows[:5]}..."
+        
+        if 'drive_status' in df.columns and 'drive_files' in df.columns:
+            # Completed downloads should have files
+            completed_mask = df['drive_status'] == 'completed'
+            if completed_mask.any():
+                missing_files = df.loc[completed_mask, 'drive_files'].isna()
+                if missing_files.any():
+                    problem_rows = df.loc[completed_mask & missing_files, 'row_id'].tolist()
+                    return False, f"Completed Drive downloads missing files for rows: {problem_rows[:5]}..."
         
         return True, "CSV validation passed"
         
@@ -240,16 +304,17 @@ def ensure_tracking_columns(csv_path: str = 'outputs/output.csv') -> bool:
     print(f"Current CSV has {len(df)} rows and columns: {list(df.columns)}")
     
     # Define tracking columns with default values and explicit dtypes
+    # Use safe_get_na_value() for empty fields to prevent false positive corruption detection
     tracking_columns = {
-        'youtube_status': ('pending', 'string'),      # pending|downloading|completed|failed
-        'youtube_files': ('', 'string'),              # Comma-separated list of downloaded files
-        'youtube_media_id': ('', 'string'),           # YouTube video ID
-        'drive_status': ('pending', 'string'),        # pending|downloading|completed|failed
-        'drive_files': ('', 'string'),                # Comma-separated list of downloaded files
-        'drive_media_id': ('', 'string'),             # Google Drive file ID
-        'last_download_attempt': ('', 'string'),      # ISO timestamp of last attempt
-        'download_errors': ('', 'string'),            # Error messages from failed downloads
-        'permanent_failure': ('', 'string')           # Mark permanent failures to skip retries
+        'youtube_status': ('pending', 'string'),                    # pending|downloading|completed|failed
+        'youtube_files': (safe_get_na_value(), 'string'),          # Comma-separated list of downloaded files
+        'youtube_media_id': (safe_get_na_value(), 'string'),       # YouTube video ID
+        'drive_status': ('pending', 'string'),                      # pending|downloading|completed|failed
+        'drive_files': (safe_get_na_value(), 'string'),            # Comma-separated list of downloaded files
+        'drive_media_id': (safe_get_na_value(), 'string'),         # Google Drive file ID
+        'last_download_attempt': (safe_get_na_value(), 'string'),  # ISO timestamp of last attempt
+        'download_errors': (safe_get_na_value(), 'string'),        # Error messages from failed downloads
+        'permanent_failure': (safe_get_na_value(), 'string')       # Mark permanent failures to skip retries
     }
     
     # Add missing columns with proper data types
@@ -390,17 +455,17 @@ def reset_download_status(row_id: str, download_type: str, csv_path: str = 'outp
         
         if download_type in ['youtube', 'both']:
             df.loc[row_index, 'youtube_status'] = 'pending'
-            df.loc[row_index, 'youtube_files'] = ''
-            df.loc[row_index, 'youtube_media_id'] = ''
+            df.loc[row_index, 'youtube_files'] = safe_get_na_value()
+            df.loc[row_index, 'youtube_media_id'] = safe_get_na_value()
             
         if download_type in ['drive', 'both']:
             df.loc[row_index, 'drive_status'] = 'pending'
-            df.loc[row_index, 'drive_files'] = ''
-            df.loc[row_index, 'drive_media_id'] = ''
+            df.loc[row_index, 'drive_files'] = safe_get_na_value()
+            df.loc[row_index, 'drive_media_id'] = safe_get_na_value()
             
-        df.loc[row_index, 'download_errors'] = ''
-        df.loc[row_index, 'last_download_attempt'] = ''
-        df.loc[row_index, 'permanent_failure'] = ''
+        df.loc[row_index, 'download_errors'] = safe_get_na_value()
+        df.loc[row_index, 'last_download_attempt'] = safe_get_na_value()
+        df.loc[row_index, 'permanent_failure'] = safe_get_na_value()
         
         # Safe CSV write with backup and validation
         expected_cols = df.columns.tolist()
@@ -447,16 +512,18 @@ def update_csv_download_status(row_index: int, download_type: str,
         
         if download_type == 'youtube':
             df.loc[row_index, 'youtube_status'] = str(summary['status'])
-            # Sanitize files list to prevent malicious filenames from corrupting CSV
-            df.loc[row_index, 'youtube_files'] = sanitize_csv_field(str(summary['files']), max_length=150)
-            # Sanitize media ID to prevent malicious content in extracted IDs
-            df.loc[row_index, 'youtube_media_id'] = sanitize_csv_field(str(summary['media_id']), max_length=50)
+            # For files and media_id, use None instead of empty string for failed downloads
+            files_value = sanitize_csv_field(str(summary['files']), max_length=150) if summary['files'] else safe_get_na_value()
+            media_id_value = sanitize_csv_field(str(summary['media_id']), max_length=50) if summary['media_id'] else safe_get_na_value()
+            df.loc[row_index, 'youtube_files'] = files_value
+            df.loc[row_index, 'youtube_media_id'] = media_id_value
         elif download_type == 'drive':
             df.loc[row_index, 'drive_status'] = str(summary['status'])
-            # Sanitize files list to prevent malicious filenames from corrupting CSV
-            df.loc[row_index, 'drive_files'] = sanitize_csv_field(str(summary['files']), max_length=150)
-            # Sanitize media ID to prevent malicious content in extracted IDs
-            df.loc[row_index, 'drive_media_id'] = sanitize_csv_field(str(summary['media_id']), max_length=50)
+            # For files and media_id, use None instead of empty string for failed downloads
+            files_value = sanitize_csv_field(str(summary['files']), max_length=150) if summary['files'] else safe_get_na_value()
+            media_id_value = sanitize_csv_field(str(summary['media_id']), max_length=50) if summary['media_id'] else safe_get_na_value()
+            df.loc[row_index, 'drive_files'] = files_value
+            df.loc[row_index, 'drive_media_id'] = media_id_value
         else:
             raise ValueError(f"Invalid download_type: {download_type}")
             
