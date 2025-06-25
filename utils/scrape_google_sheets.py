@@ -346,7 +346,7 @@ def update_csv():
             logger.info(f"Created new CSV with {len(data)} records")
         else:
             # Prepend new records to the top of the file (highest row_ids first)
-            prepend_csv_atomic(filename, new_records, fieldnames=["row_id", "name", "email", "type", "link"])
+            prepend_csv_atomic(filename, new_records)
             logger.info(f"Added {len(new_records)} new records to top of CSV")
 
 if __name__ == "__main__":

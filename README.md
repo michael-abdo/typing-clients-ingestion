@@ -198,7 +198,8 @@ The `run_complete_workflow.py` script provides production-ready automation with 
 4. **Atomic Updates** - Updates CSV after each download with full error tracking
 5. **Permanent Failure Tracking** - Marks deleted/private content to prevent retry loops
 6. **Google Drive Folder Support** - Downloads all files from public Drive folders (1:many relationship)
-7. **Production Logging** - Comprehensive logs with duration, success rates, and error counts
+7. **YouTube Playlist Support** - Downloads all videos from real YouTube playlists (not just synthetic ones)
+8. **Production Logging** - Comprehensive logs with duration, success rates, and error counts
 
 ```bash
 # Activate virtual environment

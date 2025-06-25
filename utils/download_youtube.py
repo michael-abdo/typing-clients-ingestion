@@ -230,45 +230,81 @@ def download_youtube_with_context(url: str, row_context: RowContext,
     
     logger.info(f"Starting YouTube download for {row_context.name} (Row {row_context.row_id}, Type: {row_context.type})")
     
-    try:
-        # Download using existing functionality
-        video_file, transcript_file = download_video(
-            url, transcript_only, resolution, output_format, logger
-        )
-        
-        # Extract video ID from URL for tracking
-        video_id = None
+    # Handle pipe-separated URLs (multiple playlists)
+    # The CSV may contain multiple playlists separated by |
+    urls = url.split('|') if '|' in url else [url]
+    all_downloaded_files = []
+    all_video_ids = []
+    has_any_success = False
+    error_messages = []
+    
+    for playlist_url in urls:
+        playlist_url = playlist_url.strip()
+        if not playlist_url:
+            continue
+            
         try:
-            if "watch_videos?video_ids=" in url:
-                import re
-                video_ids = re.findall(r'[a-zA-Z0-9_-]{11}', url)
-                video_id = video_ids[0] if video_ids else None
-            else:
-                _, video_id = validate_youtube_url(url)
-        except:
-            pass
-        
-        # Collect downloaded files
-        downloaded_files = []
-        if video_file and os.path.exists(video_file):
-            downloaded_files.append(os.path.basename(video_file))
-        if transcript_file and os.path.exists(transcript_file):
-            downloaded_files.append(os.path.basename(transcript_file))
-        
+            # Download using existing functionality
+            video_files, transcript_files = download_video(
+                playlist_url, transcript_only, resolution, output_format, logger
+            )
+            
+            # Handle both single files and lists (from playlists)
+            if isinstance(video_files, str):
+                video_files = [video_files] if video_files else []
+            elif video_files is None:
+                video_files = []
+                
+            if isinstance(transcript_files, str):
+                transcript_files = [transcript_files] if transcript_files else []
+            elif transcript_files is None:
+                transcript_files = []
+            
+            # Extract video ID from URL for tracking
+            video_id = None
+            try:
+                if "watch_videos?video_ids=" in playlist_url:
+                    import re
+                    video_ids = re.findall(r'[a-zA-Z0-9_-]{11}', playlist_url)
+                    video_id = ','.join(video_ids) if video_ids else None
+                elif "playlist?list=" in playlist_url:
+                    # Extract playlist ID
+                    match = re.search(r'list=([a-zA-Z0-9_-]+)', playlist_url)
+                    video_id = match.group(1) if match else None
+                else:
+                    _, video_id = validate_youtube_url(playlist_url)
+            except:
+                pass
+            
+            # Collect downloaded files
+            for f in video_files + transcript_files:
+                if f and os.path.exists(f):
+                    all_downloaded_files.append(os.path.basename(f))
+                    has_any_success = True
+                    
+            if video_id:
+                all_video_ids.append(video_id)
+                
+        except Exception as e:
+            safe_error = sanitize_error_message(str(e))
+            error_messages.append(safe_error)
+            logger.warning(f"Failed to download playlist {playlist_url}: {safe_error}")
+            continue
+    
+    # Create combined result
+    if has_any_success:
         # Create context-aware metadata file
         metadata_filename = None
-        if video_id:
+        if all_video_ids:
             suffix = row_context.to_filename_suffix()
-            metadata_filename = f"{video_id}{suffix}_metadata.json"
-        
-        success = len(downloaded_files) > 0
-        error_msg = None if success else "No files were downloaded"
+            # Use first video ID or playlist ID for metadata filename
+            metadata_filename = f"{all_video_ids[0]}{suffix}_metadata.json"
         
         result = DownloadResult(
-            success=success,
-            files_downloaded=downloaded_files,
-            media_id=video_id,
-            error_message=error_msg,
+            success=True,
+            files_downloaded=all_downloaded_files,
+            media_id=','.join(all_video_ids) if all_video_ids else None,
+            error_message=None,
             metadata_file=metadata_filename,
             row_context=row_context,
             download_type='youtube',
@@ -279,26 +315,26 @@ def download_youtube_with_context(url: str, row_context: RowContext,
         if metadata_filename:
             result.save_metadata(DOWNLOADS_DIR)
             
-        logger.info(f"YouTube download completed for {row_context.name}: {len(downloaded_files)} files")
+        logger.info(f"YouTube download completed for {row_context.name}: {len(all_downloaded_files)} files")
         return result
+    else:
+        # All downloads failed
+        error_msg = '; '.join(error_messages) if error_messages else "No files were downloaded"
         
-    except Exception as e:
-        # Sanitize error message to prevent CSV corruption
-        safe_error = sanitize_error_message(str(e))
-        logger.error(f"YouTube download failed for {row_context.name} (Row {row_context.row_id}): {safe_error}")
-        
-        # Check for permanent failure conditions using sanitized error
-        error_msg = safe_error.lower()
-        is_permanent = any(phrase in error_msg for phrase in [
+        # Check for permanent failure conditions
+        error_msg_lower = error_msg.lower()
+        is_permanent = any(phrase in error_msg_lower for phrase in [
             'video unavailable', 'removed by uploader', 'deleted', 
             'private video', 'video not available', 'this video has been removed'
         ])
+        
+        logger.error(f"YouTube download failed for {row_context.name}: {error_msg}")
         
         return DownloadResult(
             success=False,
             files_downloaded=[],
             media_id=None,
-            error_message=safe_error,
+            error_message=error_msg,
             metadata_file=None,
             row_context=row_context,
             download_type='youtube',
@@ -336,16 +372,55 @@ def download_video(url, transcript_only=False, resolution="720", output_format="
         # Not in a virtual environment, use command as-is
         yt_dlp_path = "yt-dlp"
     
-    # Check if this is a playlist
-    if "watch_videos?video_ids=" in url:
-        # Extract video IDs from the playlist URL
+    # Check if this is a playlist (either synthetic or real YouTube playlist)
+    if "watch_videos?video_ids=" in url or "playlist?list=" in url:
         import re
-        video_ids_part = url.split("watch_videos?video_ids=")[1]
-        video_ids = re.findall(r'[a-zA-Z0-9_-]{11}', video_ids_part)
         
-        if not video_ids:
-            logger.error("No valid video IDs found in playlist URL")
-            return None, None
+        # Handle synthetic playlists
+        if "watch_videos?video_ids=" in url:
+            # Extract video IDs from the playlist URL
+            video_ids_part = url.split("watch_videos?video_ids=")[1]
+            video_ids = re.findall(r'[a-zA-Z0-9_-]{11}', video_ids_part)
+            
+            if not video_ids:
+                logger.error("No valid video IDs found in playlist URL")
+                return None, None
+        else:
+            # Handle real YouTube playlists (e.g., playlist?list=PLpOu93QMy5fV...)
+            # Use yt-dlp's --flat-playlist to get video IDs without downloading
+            info_cmd = [
+                yt_dlp_path,
+                "--flat-playlist",  # Get playlist info without downloading videos
+                "-j",               # Output JSON format
+                url
+            ]
+            
+            try:
+                import subprocess
+                result = subprocess.run(info_cmd, capture_output=True, text=True, check=True)
+                # Each line is a JSON object with video info
+                video_ids = []
+                for line in result.stdout.strip().split('\n'):
+                    if line:
+                        import json
+                        try:
+                            video_info = json.loads(line)
+                            if 'id' in video_info:
+                                video_ids.append(video_info['id'])
+                        except json.JSONDecodeError:
+                            continue
+                
+                if not video_ids:
+                    logger.error("No videos found in YouTube playlist")
+                    return None, None
+                    
+                logger.info(f"Found {len(video_ids)} videos in YouTube playlist")
+            except subprocess.CalledProcessError as e:
+                logger.error(f"Failed to get playlist info: {e.stderr}")
+                return None, None
+            except Exception as e:
+                logger.error(f"Error processing playlist: {str(e)}")
+                return None, None
         
         # Remove duplicates while preserving order
         seen = set()
@@ -384,11 +459,8 @@ def download_video(url, transcript_only=False, resolution="720", output_format="
             if transcript_file:
                 successful_transcript_files.append(transcript_file)
         
-        # Return the first successful files or None if none were successful
-        return (
-            successful_video_files[0] if successful_video_files else None,
-            successful_transcript_files[0] if successful_transcript_files else None
-        )
+        # Return all successful files for playlists
+        return successful_video_files, successful_transcript_files
     else:
         # Regular single video
         return download_single_video(

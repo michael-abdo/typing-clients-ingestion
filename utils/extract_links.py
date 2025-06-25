@@ -70,6 +70,19 @@ def clean_url(url):
         # If decoding fails, continue with original
         pass
     
+    # Special handling for YouTube playlist URLs that might have control chars in the middle
+    if 'youtube.com/playlist?list' in url:
+        # Try to extract the playlist ID even if there are control characters
+        # Look for pattern: list[any char]=PLAYLIST_ID
+        match = re.search(r'youtube\.com/playlist\?list.{0,5}=([a-zA-Z0-9_-]+)', url)
+        if match:
+            playlist_id = match.group(1)
+            # Check if there's also an si parameter
+            si_match = re.search(r'[&?]si.{0,5}=([a-zA-Z0-9_-]+)', url)
+            if si_match:
+                return f'https://www.youtube.com/playlist?list={playlist_id}&si={si_match.group(1)}'
+            return f'https://www.youtube.com/playlist?list={playlist_id}'
+    
     # Find where the URL should end by looking for control characters or certain text patterns
     # This is crucial - we want to cut off anything after control characters
     control_char_pos = float('inf')
@@ -297,12 +310,34 @@ def extract_links(url, limit=1, debug=False):
         soup = BeautifulSoup(html, 'html.parser')
         
         # Extract links from anchor tags
-        doc_links = {clean_url(a.get('href')) for a in soup.find_all('a', href=True) if a.get('href')}
+        doc_links = set()
+        for a in soup.find_all('a', href=True):
+            href = a.get('href')
+            if href:
+                # Decode unicode escapes in href
+                try:
+                    if '\\u' in href:
+                        href = href.encode('utf-8').decode('unicode_escape')
+                except:
+                    pass
+                doc_links.add(clean_url(href))
         
         # Get links appearing in plain text (emails, URLs)
+        # First decode unicode escapes in the HTML before extracting
+        # Google Docs often encodes URL characters as unicode escapes
+        decoded_html = html
+        try:
+            # Replace common unicode escapes for URL characters
+            # \u003d is =, \u0026 is &, \u003f is ?
+            decoded_html = decoded_html.replace('\\u003d', '=')
+            decoded_html = decoded_html.replace('\\u0026', '&')
+            decoded_html = decoded_html.replace('\\u003f', '?')
+        except:
+            pass
+        
         # Updated regex to properly terminate URLs at common boundaries
         # Explicitly exclude all control characters (ASCII 0-31 and 127-159)
-        raw_text_links = re.findall(r'https?://[^\s<>"{}\\|\^\[\]`\x00-\x1f\x7f-\x9f]+(?:[.,;:!?\)\]]*(?=[\s<>"{}\\|\^\[\]`\x00-\x1f\x7f-\x9f]|$))', html)
+        raw_text_links = re.findall(r'https?://[^\s<>"{}\\|\^\[\]`\x00-\x1f\x7f-\x9f]+(?:[.,;:!?\)\]]*(?=[\s<>"{}\\|\^\[\]`\x00-\x1f\x7f-\x9f]|$))', decoded_html)
         text_links = {clean_url(link) for link in raw_text_links if link}
         email_links = set(re.findall(r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', html))
         
@@ -311,6 +346,11 @@ def extract_links(url, limit=1, debug=False):
         for meta in soup.find_all('meta', property=lambda x: x and ('og:description' in x or 'description' in x)):
             content = meta.get('content', '')
             if content:
+                # Decode unicode escapes in meta content
+                try:
+                    content = content.replace('\\u003d', '=').replace('\\u0026', '&').replace('\\u003f', '?')
+                except:
+                    pass
                 # Find URLs in content
                 raw_meta_links = re.findall(r'https?://[^\s<>"{}\\|\^\[\]`\x00-\x1f\x7f-\x9f]+(?:[.,;:!?\)\]]*(?=[\s<>"{}\\|\^\[\]`\x00-\x1f\x7f-\x9f]|$))', content)
                 meta_links.update(clean_url(link) for link in raw_meta_links if link)
@@ -539,6 +579,39 @@ def extract_youtube_ids(links):
             continue
     return list(yt_ids)
 
+def extract_youtube_playlists(links):
+    """Extract YouTube playlist URLs from a list of links.
+    
+    This function specifically looks for actual YouTube playlists (not synthetic ones)
+    and returns clean playlist URLs with just the list parameter.
+    
+    Args:
+        links: List of URLs to search for playlists
+        
+    Returns:
+        List of clean YouTube playlist URLs
+    """
+    playlists = []
+    for link in links:
+        try:
+            # Skip non-URL links
+            if not link.startswith('http'):
+                continue
+                
+            parsed = urlparse(link)
+            if "youtube.com" in parsed.netloc and "/playlist" in parsed.path:
+                qs = parse_qs(parsed.query)
+                if "list" in qs and qs["list"]:
+                    # Reconstruct clean playlist URL with only the list parameter
+                    playlist_id = qs["list"][0]
+                    playlist_url = f"https://www.youtube.com/playlist?list={playlist_id}"
+                    if playlist_url not in playlists:
+                        playlists.append(playlist_url)
+        except Exception as e:
+            logger.error(f"Error parsing playlist link {link}: {str(e)}")
+            continue
+    return playlists
+
 def build_youtube_playlist_url(yt_ids):
     if yt_ids:
         return "https://www.youtube.com/watch_videos?video_ids=" + ",".join(yt_ids)
@@ -576,10 +649,18 @@ def process_url(url, limit=1, debug=False, use_dash_for_empty=True):
     # Extract regular links
     links = extract_links(url, limit, debug=debug)
     
-    # Process links to extract YouTube IDs and Drive links
+    # Process links to extract YouTube content and Drive links
     if links:
-        yt_ids = extract_youtube_ids(links)
-        yt_playlist_url = build_youtube_playlist_url(yt_ids)
+        # First check for actual YouTube playlists
+        youtube_playlists = extract_youtube_playlists(links)
+        
+        if youtube_playlists:
+            # If we found actual playlists, use them (join with | for multiple)
+            yt_playlist_url = "|".join(youtube_playlists)
+        else:
+            # Fall back to synthetic playlist from individual videos
+            yt_ids = extract_youtube_ids(links)
+            yt_playlist_url = build_youtube_playlist_url(yt_ids)
         
         # Extract Drive links from both regular links and HTML content
         drive_links = extract_drive_links(links, html=html)
