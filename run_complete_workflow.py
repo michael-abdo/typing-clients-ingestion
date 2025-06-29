@@ -140,7 +140,7 @@ def main_workflow(args, logger=None):
                 row = df.iloc[row_context.row_index]
                 drive_url = row.get('google_drive')
                 
-                if drive_url and str(drive_url).strip() not in ['', '-', 'nan']:
+                if pd.notna(drive_url) and str(drive_url).strip() not in ['', "'-"]:
                     # Handle multiple drive links separated by |
                     drive_urls = str(drive_url).split('|') if '|' in str(drive_url) else [str(drive_url)]
                     
@@ -206,7 +206,7 @@ def main_workflow(args, logger=None):
                 row = df.iloc[row_context.row_index]
                 youtube_url = row.get('youtube_playlist')
                 
-                if youtube_url and str(youtube_url).strip() not in ['', '-', 'nan']:
+                if pd.notna(youtube_url) and str(youtube_url).strip() not in ['', "'-"]:
                     youtube_link = str(youtube_url).strip()
                     
                     if logger:

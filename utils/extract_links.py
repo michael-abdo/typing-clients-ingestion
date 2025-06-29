@@ -617,7 +617,7 @@ def build_youtube_playlist_url(yt_ids):
         return "https://www.youtube.com/watch_videos?video_ids=" + ",".join(yt_ids)
     return None
 
-def process_url(url, limit=1, debug=False, use_dash_for_empty=True):
+def process_url(url, limit=1, debug=False):
     """
     Process a URL to extract links, YouTube playlists, and Google Drive links.
     
@@ -625,19 +625,15 @@ def process_url(url, limit=1, debug=False, use_dash_for_empty=True):
         url (str): The URL to process
         limit (int): Maximum number of links to return. Default is 1 to only return the primary link.
         debug (bool): Whether to save HTML content for debugging purposes
-        use_dash_for_empty (bool): If True, return "-" for empty YouTube playlist and Google Drive links
     
     Returns:
-        tuple: (list of links, YouTube playlist URL or "-", list of Google Drive links or "-")
+        tuple: (list of links, YouTube playlist URL or None, list of Google Drive links or None)
     """
     # Check if this is a YouTube video URL (not a playlist)
     if url and ('youtube.com/watch' in url or 'youtu.be/' in url):
         # Skip processing individual YouTube videos to avoid large data extraction
         logger.info(f"Skipping link extraction for YouTube video: {url}")
-        if use_dash_for_empty:
-            return [], "-", ["-"]
-        else:
-            return [], None, []
+        return [], None, None
     
     # First get the HTML content
     html = ""
@@ -665,12 +661,11 @@ def process_url(url, limit=1, debug=False, use_dash_for_empty=True):
         # Extract Drive links from both regular links and HTML content
         drive_links = extract_drive_links(links, html=html)
         
-        # If using dash for empty values, replace None or empty lists with "-"
-        if use_dash_for_empty:
-            if not yt_playlist_url:
-                yt_playlist_url = "-"
-            if not drive_links:
-                drive_links = ["-"]
+        # Return None for empty values
+        if not yt_playlist_url:
+            yt_playlist_url = None
+        if not drive_links:
+            drive_links = None
         
         return links, yt_playlist_url, drive_links
     
@@ -678,18 +673,14 @@ def process_url(url, limit=1, debug=False, use_dash_for_empty=True):
     elif html:
         drive_links = extract_drive_links([], html=html)
         
-        # If using dash for empty values, replace None or empty lists with "-"
-        if use_dash_for_empty:
-            if not drive_links:
-                drive_links = ["-"]
+        # Return None for empty values
+        if not drive_links:
+            drive_links = None
                 
-        return [], "-" if use_dash_for_empty else None, drive_links
+        return [], None, drive_links
     
-    # Return empty values with "-" if specified
-    if use_dash_for_empty:
-        return [], "-", ["-"]
-    else:
-        return [], None, []
+    # Return None for empty values
+    return [], None, None
     
 # If the script is run directly, test with a sample URL
 if __name__ == "__main__":

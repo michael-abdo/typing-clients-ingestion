@@ -68,8 +68,8 @@ def update_empty_links_in_csv(max_rows=None):
                     else:
                         row["google_drive"] = "|".join(drive_links)
                     
-                    print(f"  Found {len(links)} links, {'a' if youtube_playlist != '-' else 'no'} YouTube playlist, " +
-                          f"and {len(drive_links) if drive_links != ['-'] else 0} Google Drive links")
+                    print(f"  Found {len(links)} links, {'a' if youtube_playlist else 'no'} YouTube playlist, " +
+                          f"and {len(drive_links) if drive_links else 0} Google Drive links")
                     
                     processed_count += 1
                 except Exception as e:

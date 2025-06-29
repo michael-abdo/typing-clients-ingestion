@@ -97,18 +97,18 @@ def process_links_from_csv(max_rows=None, reset_processed=False, force_download=
                     logger.info(f"Processing {link} for {row.get('name', 'unknown')}...")
                     try:
                         # Process the URL and get links, YouTube playlist, and Google Drive links
-                        links, youtube_playlist, drive_links = process_url(link, limit=10, use_dash_for_empty=True)
+                        links, youtube_playlist, drive_links = process_url(link, limit=10)
                         row["extracted_links"] = "|".join(links) if links else ""
-                        row["youtube_playlist"] = youtube_playlist  # Already "-" if empty
+                        row["youtube_playlist"] = youtube_playlist if youtube_playlist else None
                         
-                        # Check if drive_links contains only a dash
-                        if drive_links == ["-"]:
-                            row["google_drive"] = "-"
-                        else:
+                        # Handle drive_links properly
+                        if drive_links:
                             row["google_drive"] = "|".join(drive_links)
+                        else:
+                            row["google_drive"] = None
                         
                         logger.info(f"  Found {len(links)} links, {'a' if youtube_playlist else 'no'} YouTube playlist, " +
-                              f"and {len(drive_links)} Google Drive links")
+                              f"and {len(drive_links) if drive_links else 0} Google Drive links")
                         
                         # Mark as successfully processed
                         row["processed"] = "yes"
@@ -221,19 +221,19 @@ def process_links_from_csv(max_rows=None, reset_processed=False, force_download=
                     logger.info(f"Processing {link} for {row.get('name', 'unknown')}...")
                     try:
                         # Process the URL and get links, YouTube playlist, and Google Drive links
-                        # With use_dash_for_empty=True, empty playlist or drive links will be "-"
-                        links, youtube_playlist, drive_links = process_url(link, limit=10, use_dash_for_empty=True)
+                        # Empty playlist or drive links will be None
+                        links, youtube_playlist, drive_links = process_url(link, limit=10)
                         row["extracted_links"] = "|".join(links) if links else ""
-                        row["youtube_playlist"] = youtube_playlist  # Already "-" if empty
+                        row["youtube_playlist"] = youtube_playlist if youtube_playlist else None
                         
-                        # Check if drive_links contains only a dash
-                        if drive_links == ["-"]:
-                            row["google_drive"] = "-"
-                        else:
+                        # Handle drive_links properly
+                        if drive_links:
                             row["google_drive"] = "|".join(drive_links)
+                        else:
+                            row["google_drive"] = None
                         
                         logger.info(f"  Found {len(links)} links, {'a' if youtube_playlist else 'no'} YouTube playlist, " +
-                              f"and {len(drive_links)} Google Drive links")
+                              f"and {len(drive_links) if drive_links else 0} Google Drive links")
                         
                         # Mark as successfully processed
                         row["processed"] = "yes"

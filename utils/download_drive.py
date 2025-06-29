@@ -100,66 +100,56 @@ def _validate_folder_response(response, logger=None):
     if not logger:
         logger = setup_component_logging('drive')
     
-    # Check response size - Google Drive HTML pages can be very large
+    # Check response size - allow larger responses for legitimate folders
     content_length = len(response.text)
-    if content_length > 50000:  # 50KB limit for folder responses
-        error_msg = f"Response too large ({content_length} bytes) - likely HTML page instead of folder data"
+    if content_length > 1000000:  # 1MB limit - only reject extremely large responses
+        error_msg = f"Response too large ({content_length} bytes) - likely corrupted or malicious"
         logger.warning(sanitize_error_message(error_msg))
         return False, error_msg
     
-    # Check Content-Type header
+    # Check Content-Type header - HTML is expected for Google Drive folders
     content_type = response.headers.get('Content-Type', '').lower()
-    if 'text/html' in content_type:
-        error_msg = f"Received HTML response (Content-Type: {content_type}) - folder likely private or requires authentication"
+    if 'text/html' not in content_type:
+        error_msg = f"Unexpected Content-Type: {content_type} - expected HTML for folder page"
         logger.warning(sanitize_error_message(error_msg))
         return False, error_msg
     
     html_content = response.text
     
-    # Check for HTML document patterns
-    html_indicators = [
-        '<!DOCTYPE html',
-        '<html',
-        '<script>',
-        'window.WIZ_global_data',
-        '<head>',
-        '<body>',
-        'text/javascript',
-    ]
-    
-    for indicator in html_indicators:
-        if indicator in html_content:
-            error_msg = f"Response contains HTML content ({indicator}) - folder likely private or inaccessible"
-            logger.warning(sanitize_error_message(error_msg))
-            return False, error_msg
-    
-    # Check for excessive JavaScript/JSON patterns that corrupted row 492
-    js_patterns = [
-        r'window\.[A-Za-z_][A-Za-z0-9_]*\s*=',  # window.WIZ_global_data = 
-        r'\{[^}]{200,}\}',  # Large JSON objects
-        r'\[[^\]]{200,}\]',  # Large JSON arrays
-        r'function\s*\([^)]*\)',  # JavaScript functions
-    ]
-    
-    for pattern in js_patterns:
-        if re.search(pattern, html_content):
-            error_msg = f"Response contains JavaScript patterns - folder likely private or inaccessible"
-            logger.warning(sanitize_error_message(error_msg))
-            return False, error_msg
-    
-    # Additional validation: check if response looks like legitimate folder data
-    # Legitimate folder responses should contain file/folder references
-    folder_indicators = [
+    # Check for legitimate folder content vs error pages
+    # Look for signs this is actually a folder page with files
+    folder_content_indicators = [
         'drive.google.com/file/d/',
-        '"id":',
-        '"name":',
+        'data-id=',
+        '/file/d/',
     ]
     
-    has_folder_data = any(indicator in html_content for indicator in folder_indicators)
-    if not has_folder_data and len(html_content) > 1000:
-        error_msg = "Response does not contain recognizable folder data patterns"
+    has_file_content = any(indicator in html_content for indicator in folder_content_indicators)
+    
+    # Check for error/login page indicators
+    error_indicators = [
+        'Sign in - Google Accounts',
+        'access denied',
+        'permission denied',
+        'folder is empty',
+        'no files',
+        'Error 404',
+        'Error 403',
+    ]
+    
+    has_error_content = any(indicator.lower() in html_content.lower() for indicator in error_indicators)
+    
+    if has_error_content and not has_file_content:
+        error_msg = "Response appears to be an error or login page - folder likely private or inaccessible"
         logger.warning(sanitize_error_message(error_msg))
         return False, error_msg
+    
+    # If we reach here, the response looks legitimate
+    # It has file content indicators and no error indicators
+    if not has_file_content:
+        error_msg = "Response does not contain recognizable file patterns - folder may be empty"
+        logger.info(sanitize_error_message(error_msg))
+        # Don't return False - empty folders are valid
     
     return True, None
 
@@ -196,7 +186,12 @@ def list_folder_files(folder_url, logger=None):
         response = http_get(folder_page_url, timeout=30)
         
         if response.status_code != 200:
-            logger.error(f"Failed to access folder page: HTTP {response.status_code}")
+            if response.status_code == 404:
+                logger.error(f"Folder not found or not publicly accessible (HTTP 404)")
+            elif response.status_code == 403:
+                logger.error(f"Permission denied - folder is private (HTTP 403)")
+            else:
+                logger.error(f"Failed to access folder page: HTTP {response.status_code}")
             return []
         
         # Validate response to prevent CSV corruption from HTML/JavaScript content
@@ -215,25 +210,45 @@ def list_folder_files(folder_url, logger=None):
         # Google Drive embeds file information in JSON-like structures
         import re
         
-        # Pattern to match file entries with IDs and names
-        # This is a simplified approach - in production, you'd want Google Drive API
-        file_patterns = [
-            # Match file/d/ links with names
-            r'"https://drive\.google\.com/file/d/([a-zA-Z0-9_-]+)[^"]*"[^>]*>([^<]+)',
-            # Match data-id attributes with nearby text
-            r'data-id="([a-zA-Z0-9_-]+)"[^>]*>[^<]*([^<]+)',
+        # Extract file IDs using simpler, more reliable patterns
+        file_id_patterns = [
+            r'/file/d/([a-zA-Z0-9_-]+)',  # /file/d/{fileId}
+            r'data-id="([a-zA-Z0-9_-]+)"',  # data-id="{fileId}"
         ]
         
-        for pattern in file_patterns:
+        found_file_ids = set()
+        for pattern in file_id_patterns:
             matches = re.findall(pattern, html_content)
-            for match in matches:
-                file_id, name = match[0], match[1].strip()
-                if file_id and name and len(file_id) > 10:  # Valid Drive file ID
-                    files.append({
-                        'id': file_id,
-                        'name': name,
-                        'url': f"https://drive.google.com/file/d/{file_id}/view"
-                    })
+            for file_id in matches:
+                # Filter out invalid IDs (too short, system IDs, etc.)
+                if len(file_id) > 10 and file_id not in ['_gd', '_folder']:
+                    found_file_ids.add(file_id)
+        
+        # For each file ID, try to extract a name from surrounding context
+        for file_id in found_file_ids:
+            # Try to find the file name near the file ID
+            name = f"file_{file_id[:8]}"  # Default name
+            
+            # Look for aria-label or title attributes near this file ID
+            context_patterns = [
+                rf'data-id="{re.escape(file_id)}"[^>]*aria-label="([^"]+)"',
+                rf'/file/d/{re.escape(file_id)}[^"]*"[^>]*title="([^"]+)"',
+                rf'/file/d/{re.escape(file_id)}[^"]*"[^>]*>([^<]+)<',
+            ]
+            
+            for context_pattern in context_patterns:
+                context_match = re.search(context_pattern, html_content)
+                if context_match:
+                    potential_name = context_match.group(1).strip()
+                    if potential_name and len(potential_name) > 1:
+                        name = potential_name
+                        break
+            
+            files.append({
+                'id': file_id,
+                'name': name,
+                'url': f"https://drive.google.com/file/d/{file_id}/view"
+            })
         
         # Remove duplicates based on file ID
         seen_ids = set()
@@ -782,6 +797,19 @@ def _download_individual_file_with_context(url: str, row_context: RowContext, lo
 def download_drive_with_context(url: str, row_context: RowContext) -> DownloadResult:
     """Download Google Drive file or folder with full row context tracking"""
     logger = setup_component_logging('drive')
+    
+    # Check for null/empty URL first
+    if not url or url == 'None' or url == 'nan' or url.strip() == '':
+        logger.info(f"No Google Drive URL provided for {row_context.name} (Row {row_context.row_id}) - skipping")
+        return DownloadResult(
+            success=True,  # Not an error, just no URL
+            files_downloaded=[],
+            media_id=None,
+            error_message='No Google Drive URL provided',
+            metadata_file=None,
+            row_context=row_context,
+            download_type='drive'
+        )
     
     logger.info(f"Starting Google Drive download for {row_context.name} (Row {row_context.row_id}, Type: {row_context.type})")
     

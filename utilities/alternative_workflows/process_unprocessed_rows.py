@@ -46,8 +46,8 @@ def process_unprocessed_rows(csv_path, start_row=0, max_rows=None, delay_seconds
                 continue
             
             # Only process rows where both YouTube and Google Drive columns are empty
-            youtube_empty = not row.get('youtube_playlist') or row.get('youtube_playlist') == '-'
-            drive_empty = not row.get('google_drive') or row.get('google_drive') == '-'
+            youtube_empty = not row.get('youtube_playlist') or row.get('youtube_playlist') in ['-', "'-", '', 'None', 'nan']
+            drive_empty = not row.get('google_drive') or row.get('google_drive') in ['-', "'-", '', 'None', 'nan']
             
             # Skip if row has been processed
             if not youtube_empty or not drive_empty:
@@ -69,7 +69,7 @@ def process_unprocessed_rows(csv_path, start_row=0, max_rows=None, delay_seconds
                         row['youtube_playlist'] = yt_playlist
                         print(f"  Found YouTube playlist: {yt_playlist}")
                     else:
-                        row['youtube_playlist'] = '-'
+                        row['youtube_playlist'] = ''
                         print("  No YouTube content found")
                     
                     # Update Google Drive column
@@ -77,7 +77,7 @@ def process_unprocessed_rows(csv_path, start_row=0, max_rows=None, delay_seconds
                         row['google_drive'] = '|'.join(drive_links)
                         print(f"  Found {len(drive_links)} Google Drive links")
                     else:
-                        row['google_drive'] = '-'
+                        row['google_drive'] = ''
                         print("  No Google Drive links found")
                     
                     # Update the all links column if it doesn't already have content
@@ -89,8 +89,8 @@ def process_unprocessed_rows(csv_path, start_row=0, max_rows=None, delay_seconds
                 except Exception as e:
                     print(f"  Error processing {link}: {str(e)}")
                     # Mark as processed with error
-                    row['youtube_playlist'] = '-'
-                    row['google_drive'] = '-'
+                    row['youtube_playlist'] = ''
+                    row['google_drive'] = ''
                 
                 processed_count += 1
                 
@@ -99,8 +99,8 @@ def process_unprocessed_rows(csv_path, start_row=0, max_rows=None, delay_seconds
                     time.sleep(delay_seconds)
             else:
                 # No link to process
-                row['youtube_playlist'] = '-'
-                row['google_drive'] = '-'
+                row['youtube_playlist'] = ''
+                row['google_drive'] = ''
                 processed_count += 1
             
             writer.writerow(row)

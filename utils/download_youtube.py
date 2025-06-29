@@ -222,6 +222,17 @@ def download_youtube_with_context(url: str, row_context: RowContext,
     """Download YouTube video with full row context tracking"""
     logger = setup_component_logging('youtube')
     
+    # Check for null/empty URL first
+    if not url or url == 'None' or url == 'nan' or url.strip() == '':
+        logger.info(f"No YouTube URL provided for {row_context.name} (Row {row_context.row_id}) - skipping")
+        return DownloadResult(
+            status='skipped',
+            files=[],
+            media_id=None,
+            error='No YouTube URL provided',
+            row_context=row_context
+        )
+    
     # Use config defaults if not provided
     if resolution is None:
         resolution = config.get('downloads.youtube.default_resolution', '720')

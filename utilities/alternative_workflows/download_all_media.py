@@ -53,7 +53,7 @@ def download_all_media(csv_path, start_row=0, max_rows=None, delay=2,
             
             # Download Google Drive files
             drive_links = row.get('google_drive', '').split('|') if row.get('google_drive') else []
-            drive_links = [link for link in drive_links if link and link != '-']
+            drive_links = [link for link in drive_links if link and link not in ['-', "'-", 'None', 'nan', '']]
             
             if drive_links:
                 print(f"Found {len(drive_links)} Google Drive links")
@@ -79,7 +79,7 @@ def download_all_media(csv_path, start_row=0, max_rows=None, delay=2,
                 
             # Download YouTube videos
             youtube_links = row.get('youtube_playlist', '').split('|') if row.get('youtube_playlist') else []
-            youtube_links = [link for link in youtube_links if link and link != '-']
+            youtube_links = [link for link in youtube_links if link and link not in ['-', "'-", 'None', 'nan', '']]
             
             if youtube_links:
                 print(f"\nFound {len(youtube_links)} YouTube links")
