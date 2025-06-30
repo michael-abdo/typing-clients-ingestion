@@ -2,6 +2,8 @@
 """
 Create Definitive CSV-to-File Mapping
 Creates the authoritative mapping of files to CSV rows based on CSV file listings.
+
+UPDATED: Now uses CleanFileMapper for robust, contamination-free mapping.
 """
 
 import os
@@ -11,14 +13,22 @@ import pandas as pd
 from collections import defaultdict
 from typing import Dict, List, Set, Tuple
 import shutil
+try:
+    from utils.clean_file_mapper import CleanFileMapper
+except ImportError:
+    from clean_file_mapper import CleanFileMapper
 
 
 class DefinitiveMapper:
-    """Creates definitive CSV row to file mappings"""
+    """Creates definitive CSV row to file mappings (contamination-free)"""
     
     def __init__(self, csv_path: str = 'outputs/output.csv'):
         self.csv_path = csv_path
         self.df = pd.read_csv(csv_path)
+        
+        # Use CleanFileMapper for robust mapping
+        self.clean_mapper = CleanFileMapper(csv_path)
+        self.clean_mapper.map_all_files()
         
         # The definitive mapping we'll build
         self.definitive_mapping = {}  # row_id -> {files: [], metadata: {}}
@@ -32,12 +42,12 @@ class DefinitiveMapper:
         self.unmapped_files = []
         
     def build_definitive_mapping(self) -> None:
-        """Build the definitive mapping based on CSV listings"""
+        """Build the definitive mapping using CleanFileMapper results"""
         print("=== BUILDING DEFINITIVE CSV-TO-FILE MAPPING ===")
         
+        # Initialize mapping structure for all rows
         for idx, row in self.df.iterrows():
             row_id = str(row['row_id'])
-            
             self.definitive_mapping[row_id] = {
                 'name': row['name'],
                 'type': row['type'],
@@ -47,109 +57,70 @@ class DefinitiveMapper:
                 'all_files': [],
                 'missing_files': []
             }
+        
+        # Import CleanFileMapper results (contamination-free)
+        print(f"Importing {len(self.clean_mapper.file_to_row)} files from CleanFileMapper...")
+        
+        for file_path, mapping_info in self.clean_mapper.file_to_row.items():
+            row_id = mapping_info['row_id']
             
-            # Process YouTube files
+            if row_id in self.definitive_mapping:
+                # Categorize file by type
+                if 'youtube_downloads' in file_path:
+                    self.definitive_mapping[row_id]['youtube_files'].append(file_path)
+                elif 'drive_downloads' in file_path:
+                    self.definitive_mapping[row_id]['drive_files'].append(file_path)
+                
+                self.definitive_mapping[row_id]['all_files'].append(file_path)
+                self.mapped_files.add(file_path)
+        
+        # Use CleanFileMapper's unmapped files
+        self.unmapped_files = self.clean_mapper.unmapped_files.copy()
+        
+        # Identify missing files (CSV lists files but CleanFileMapper didn't find them)
+        for idx, row in self.df.iterrows():
+            row_id = str(row['row_id'])
+            
+            # Check for missing YouTube files
             if pd.notna(row.get('youtube_files')) and row.get('youtube_status') == 'completed':
-                files = str(row['youtube_files']).split(';')
-                for file in files:
-                    file = file.strip()
-                    if not file:
-                        continue
-                    
-                    # Find this file
-                    found_paths = glob.glob(f'*_downloads/**/{file}', recursive=True)
-                    
-                    if found_paths:
-                        # Use the first match (prefer youtube_downloads)
-                        best_path = None
-                        for path in found_paths:
-                            if 'youtube_downloads' in path and not '/organized_by_type/' in path:
-                                best_path = path
-                                break
-                        if not best_path:
-                            best_path = found_paths[0]
-                        
-                        self.definitive_mapping[row_id]['youtube_files'].append(best_path)
-                        self.definitive_mapping[row_id]['all_files'].append(best_path)
-                        self.mapped_files.add(best_path)
-                        
-                        # Check if file is currently mapped to wrong row
-                        current_mapping = self._check_current_mapping(best_path)
-                        if current_mapping and current_mapping != row_id:
-                            self.conflicts.append({
-                                'file': best_path,
-                                'correct_row': row_id,
-                                'current_row': current_mapping,
-                                'correct_name': row['name']
-                            })
-                    else:
-                        self.definitive_mapping[row_id]['missing_files'].append(('youtube', file))
+                expected_files = str(row['youtube_files']).replace(';', ',').split(',')
+                found_files = self.definitive_mapping[row_id]['youtube_files']
+                
+                for expected_file in expected_files:
+                    expected_file = expected_file.strip()
+                    if expected_file and not any(expected_file in found for found in found_files):
+                        self.definitive_mapping[row_id]['missing_files'].append(('youtube', expected_file))
                         self.missing_files.append({
                             'row_id': row_id,
                             'name': row['name'],
-                            'file': file,
+                            'file': expected_file,
                             'type': 'youtube'
                         })
             
-            # Process Drive files
+            # Check for missing Drive files
             if pd.notna(row.get('drive_files')) and row.get('drive_status') == 'completed':
-                # Handle both comma and semicolon separators
-                files = str(row['drive_files']).replace(';', ',').split(',')
-                for file in files:
-                    file = file.strip()
-                    if not file:
-                        continue
-                    
-                    found_paths = glob.glob(f'*_downloads/**/{file}', recursive=True)
-                    
-                    if found_paths:
-                        best_path = None
-                        for path in found_paths:
-                            if 'drive_downloads' in path and not '/organized_by_type/' in path:
-                                best_path = path
-                                break
-                        if not best_path:
-                            best_path = found_paths[0]
-                        
-                        self.definitive_mapping[row_id]['drive_files'].append(best_path)
-                        self.definitive_mapping[row_id]['all_files'].append(best_path)
-                        self.mapped_files.add(best_path)
-                        
-                        current_mapping = self._check_current_mapping(best_path)
-                        if current_mapping and current_mapping != row_id:
-                            self.conflicts.append({
-                                'file': best_path,
-                                'correct_row': row_id,
-                                'current_row': current_mapping,
-                                'correct_name': row['name']
-                            })
-                    else:
-                        self.definitive_mapping[row_id]['missing_files'].append(('drive', file))
+                expected_files = str(row['drive_files']).replace(';', ',').split(',')
+                found_files = self.definitive_mapping[row_id]['drive_files']
+                
+                for expected_file in expected_files:
+                    expected_file = expected_file.strip()
+                    if expected_file and not any(expected_file in found for found in found_files):
+                        self.definitive_mapping[row_id]['missing_files'].append(('drive', expected_file))
                         self.missing_files.append({
                             'row_id': row_id,
                             'name': row['name'],
-                            'file': file,
+                            'file': expected_file,
                             'type': 'drive'
                         })
         
-        # Find unmapped files
-        all_content_files = glob.glob('*_downloads/**/*', recursive=True)
-        for file_path in all_content_files:
-            if (os.path.isfile(file_path) and 
-                file_path not in self.mapped_files and
-                not any(file_path.endswith(ext) for ext in ['.json', '.part', '.ytdl', '.tmp']) and
-                '/organized_by_type/' not in file_path):
-                
-                self.unmapped_files.append(file_path)
-        
         # Print summary
         total_mapped = sum(len(m['all_files']) for m in self.definitive_mapping.values())
-        print(f"\nMapping Summary:")
+        print(f"\nMapping Summary (Clean, No Contamination):")
         print(f"  Total rows with files: {sum(1 for m in self.definitive_mapping.values() if m['all_files'])}")
         print(f"  Total files mapped: {total_mapped}")
-        print(f"  Conflicts found: {len(self.conflicts)}")
         print(f"  Missing files: {len(self.missing_files)}")
         print(f"  Unmapped files: {len(self.unmapped_files)}")
+        print(f"  Using CleanFileMapper (no directory contamination)")
     
     def _check_current_mapping(self, file_path: str) -> str:
         """Check what row a file is currently mapped to via metadata"""

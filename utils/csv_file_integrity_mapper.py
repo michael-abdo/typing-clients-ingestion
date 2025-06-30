@@ -2,6 +2,8 @@
 """
 CSV File Integrity Mapper
 Maps each downloaded file to its correct CSV row and ensures each row with links has files.
+
+UPDATED: Now uses CleanFileMapper for robust, contamination-free mapping.
 """
 
 import os
@@ -12,16 +14,24 @@ import re
 from collections import defaultdict
 from typing import Dict, List, Set, Tuple
 import argparse
+try:
+    from utils.clean_file_mapper import CleanFileMapper
+except ImportError:
+    from clean_file_mapper import CleanFileMapper
 
 
 class CSVFileIntegrityMapper:
-    """Ensures complete integrity between CSV rows and downloaded files"""
+    """Ensures complete integrity between CSV rows and downloaded files (contamination-free)"""
     
     def __init__(self, csv_path: str = 'outputs/output.csv'):
         self.csv_path = csv_path
         self.df = pd.read_csv(csv_path)
         
-        # Core mappings
+        # Use CleanFileMapper for robust mapping
+        self.clean_mapper = CleanFileMapper(csv_path)
+        self.clean_mapper.map_all_files()
+        
+        # Core mappings (will be populated from CleanFileMapper)
         self.row_to_files = defaultdict(list)  # row_id -> [file_paths]
         self.file_to_row = {}                  # file_path -> row_id
         self.unmapped_files = []               # files with no CSV row
@@ -87,100 +97,29 @@ class CSVFileIntegrityMapper:
         return expectations
     
     def map_files_from_metadata(self) -> None:
-        """Map files using metadata JSON files (most accurate)"""
-        print("\n=== MAPPING FILES FROM METADATA ===")
+        """Import mappings from CleanFileMapper (contamination-free)"""
+        print("\n=== MAPPING FILES FROM CLEANFILEMAPPER ===")
         
-        metadata_files = glob.glob('*_downloads/**/*metadata.json', recursive=True)
         mapped_count = 0
         
-        for metadata_path in metadata_files:
-            try:
-                with open(metadata_path, 'r') as f:
-                    metadata = json.load(f)
-                
-                row_id = str(metadata.get('source_csv_row_id', ''))
-                if not row_id or row_id == 'unknown':
-                    continue
-                
-                # Get the directory containing metadata
-                metadata_dir = os.path.dirname(metadata_path)
-                
-                # Map files from download result
-                if 'download_result' in metadata:
-                    files = metadata['download_result'].get('files_downloaded', [])
-                    for file in files:
-                        file_path = os.path.join(metadata_dir, file)
-                        if os.path.exists(file_path):
-                            self.row_to_files[row_id].append(file_path)
-                            self.file_to_row[file_path] = row_id
-                            mapped_count += 1
-                
-                # Also map the metadata file itself
-                self.row_to_files[row_id].append(metadata_path)
-                self.file_to_row[metadata_path] = row_id
-                
-            except Exception as e:
-                print(f"  Error reading {metadata_path}: {e}")
+        # Import CleanFileMapper results
+        for file_path, mapping_info in self.clean_mapper.file_to_row.items():
+            row_id = mapping_info['row_id']
+            self.row_to_files[row_id].append(file_path)
+            self.file_to_row[file_path] = row_id
+            mapped_count += 1
         
-        print(f"  Mapped {mapped_count} content files from metadata")
+        # Also include unmapped files from CleanFileMapper
+        self.unmapped_files = self.clean_mapper.unmapped_files.copy()
+        
+        print(f"  Imported {mapped_count} files from CleanFileMapper")
+        print(f"  Found {len(self.unmapped_files)} unmapped files")
     
     def map_files_from_csv_listings(self) -> None:
-        """Map files using CSV file listings"""
-        print("\n=== MAPPING FILES FROM CSV LISTINGS ===")
-        
-        mapped_count = 0
-        
-        for idx, row in self.df.iterrows():
-            row_id = str(row['row_id'])
-            
-            # Map YouTube files
-            if pd.notna(row.get('youtube_files')):
-                files = str(row['youtube_files']).split(';')
-                for file in files:
-                    file = file.strip()
-                    if file:
-                        # Search for file
-                        search_patterns = [
-                            f"youtube_downloads/{file}",
-                            f"youtube_downloads/**/{file}",
-                            f"youtube_downloads/**/*{file}"
-                        ]
-                        
-                        for pattern in search_patterns:
-                            matches = glob.glob(pattern, recursive=True)
-                            for match in matches:
-                                if match not in self.file_to_row:
-                                    self.row_to_files[row_id].append(match)
-                                    self.file_to_row[match] = row_id
-                                    mapped_count += 1
-                                    break
-                            if matches:
-                                break
-            
-            # Map Drive files
-            if pd.notna(row.get('drive_files')):
-                files = str(row['drive_files']).split(',')
-                for file in files:
-                    file = file.strip()
-                    if file:
-                        search_patterns = [
-                            f"drive_downloads/{file}",
-                            f"drive_downloads/**/{file}",
-                            f"drive_downloads/**/*{file}"
-                        ]
-                        
-                        for pattern in search_patterns:
-                            matches = glob.glob(pattern, recursive=True)
-                            for match in matches:
-                                if match not in self.file_to_row:
-                                    self.row_to_files[row_id].append(match)
-                                    self.file_to_row[match] = row_id
-                                    mapped_count += 1
-                                    break
-                            if matches:
-                                break
-        
-        print(f"  Mapped {mapped_count} additional files from CSV listings")
+        """CSV file listings already handled by CleanFileMapper"""
+        print("\n=== CSV LISTINGS MAPPING ===")
+        print("  CSV file listings already handled by CleanFileMapper")
+        print("  (Includes robust comma/semicolon separator handling)")
     
     def map_files_by_row_id_in_name(self) -> None:
         """Map files that have row ID in their filename"""

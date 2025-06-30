@@ -2,6 +2,8 @@
 """
 Comprehensive File Mapper - Maps ALL files to personality types and identifies issues.
 Uses multiple strategies to achieve 100% file identification.
+
+UPDATED: Now uses CleanFileMapper to eliminate directory-based contamination.
 """
 
 import json
@@ -15,14 +17,22 @@ from collections import defaultdict
 from datetime import datetime
 from typing import Dict, List, Set, Tuple, Optional
 import argparse
+try:
+    from utils.clean_file_mapper import CleanFileMapper
+except ImportError:
+    from clean_file_mapper import CleanFileMapper
 
 
 class ComprehensiveFileMapper:
-    """Complete file analysis and mapping system"""
+    """Complete file analysis and mapping system (contamination-free)"""
     
     def __init__(self, csv_path: str = 'outputs/output.csv'):
         self.csv_path = csv_path
         self.df = pd.read_csv(csv_path)
+        
+        # Use CleanFileMapper to eliminate contamination
+        self.clean_mapper = CleanFileMapper(csv_path)
+        self.clean_mapper.map_all_files()
         
         # File categories
         self.mapped_files = {}          # file_path -> mapping_info
@@ -72,128 +82,39 @@ class ComprehensiveFileMapper:
                 self.duplicate_files[file_hash].append(file_path)
     
     def map_from_metadata(self) -> None:
-        """Strategy 1: Map files using metadata JSON files (most reliable)"""
-        print("\n=== STRATEGY 1: METADATA MAPPING ===")
+        """Strategy 1: Use CleanFileMapper results (contamination-free)"""
+        print("\n=== STRATEGY 1: CLEAN MAPPING (NO CONTAMINATION) ===")
         
-        metadata_files = glob.glob('*_downloads/**/*metadata.json', recursive=True)
-        print(f"Processing {len(metadata_files)} metadata files...")
+        print(f"Using CleanFileMapper results: {len(self.clean_mapper.file_to_row)} files")
         
+        # Convert CleanFileMapper results to our format
         mapped_count = 0
-        for metadata_path in metadata_files:
-            try:
-                with open(metadata_path, 'r') as f:
-                    metadata = json.load(f)
-                
-                # Extract mapping info
-                row_id = metadata.get('source_csv_row_id', 'unknown')
-                personality_type = metadata.get('personality_type', 'unknown')
-                person_name = metadata.get('person_name', 'unknown')
-                person_email = metadata.get('person_email', 'unknown')
-                
-                # Find associated content files
-                metadata_dir = os.path.dirname(metadata_path)
-                
-                # Map files from download result
-                if 'download_result' in metadata:
-                    files = metadata['download_result'].get('files_downloaded', [])
-                    for file in files:
-                        file_path = os.path.join(metadata_dir, file)
-                        if os.path.exists(file_path):
-                            self._add_mapping(file_path, {
-                                'row_id': row_id,
-                                'type': personality_type,
-                                'name': person_name,
-                                'email': person_email,
-                                'source': 'metadata',
-                                'metadata_path': metadata_path
-                            })
-                            mapped_count += 1
-                
-                # Also check for files in same directory as metadata
-                dir_files = glob.glob(os.path.join(metadata_dir, '*'))
-                for file_path in dir_files:
-                    if os.path.isfile(file_path) and not file_path.endswith('.json'):
-                        if file_path not in self.mapped_files:
-                            # Infer association by proximity
-                            self._add_mapping(file_path, {
-                                'row_id': row_id,
-                                'type': personality_type,
-                                'name': person_name,
-                                'email': person_email,
-                                'source': 'metadata_proximity',
-                                'metadata_path': metadata_path
-                            })
-                            mapped_count += 1
-                            
-            except Exception as e:
-                print(f"  Error processing {metadata_path}: {e}")
-                
-        print(f"  Mapped {mapped_count} files from metadata")
+        for file_path, mapping_info in self.clean_mapper.file_to_row.items():
+            row_id = mapping_info['row_id']
+            source = mapping_info['source']
+            
+            # Get row data from CSV
+            row_data = self.df[self.df['row_id'] == row_id]
+            if not row_data.empty:
+                row = row_data.iloc[0]
+                self._add_mapping(file_path, {
+                    'row_id': row_id,
+                    'type': row['type'],
+                    'name': row['name'],
+                    'email': row.get('email', 'unknown'),
+                    'source': f'clean_{source}',  # Mark as clean mapping
+                    'metadata_path': None
+                })
+                mapped_count += 1
+        
+        print(f"  Mapped {mapped_count} files using clean logic")
+        self.mapping_sources['clean_mapping'] = mapped_count
     
     def map_from_csv(self) -> None:
-        """Strategy 2: Map files using CSV file listings"""
+        """Strategy 2: CSV mapping already handled by CleanFileMapper"""
         print("\n=== STRATEGY 2: CSV MAPPING ===")
-        
-        mapped_count = 0
-        
-        for idx, row in self.df.iterrows():
-            row_id = row['row_id']
-            personality_type = row['type']
-            person_name = row['name']
-            person_email = row['email']
-            
-            # Check YouTube files
-            if pd.notna(row.get('youtube_files')):
-                files = str(row['youtube_files']).split(';')
-                for file in files:
-                    file = file.strip()
-                    if file:
-                        # Try multiple possible locations
-                        possible_paths = [
-                            os.path.join('youtube_downloads', file),
-                            os.path.join('youtube_downloads', f"*{file}*")
-                        ]
-                        
-                        for path_pattern in possible_paths:
-                            matches = glob.glob(path_pattern)
-                            for file_path in matches:
-                                if os.path.isfile(file_path) and file_path not in self.mapped_files:
-                                    self._add_mapping(file_path, {
-                                        'row_id': row_id,
-                                        'type': personality_type,
-                                        'name': person_name,
-                                        'email': person_email,
-                                        'source': 'csv_youtube',
-                                        'csv_field': 'youtube_files'
-                                    })
-                                    mapped_count += 1
-            
-            # Check Drive files
-            if pd.notna(row.get('drive_files')):
-                files = str(row['drive_files']).split(',')
-                for file in files:
-                    file = file.strip()
-                    if file:
-                        possible_paths = [
-                            os.path.join('drive_downloads', file),
-                            os.path.join('drive_downloads', f"*{file}*")
-                        ]
-                        
-                        for path_pattern in possible_paths:
-                            matches = glob.glob(path_pattern)
-                            for file_path in matches:
-                                if os.path.isfile(file_path) and file_path not in self.mapped_files:
-                                    self._add_mapping(file_path, {
-                                        'row_id': row_id,
-                                        'type': personality_type,
-                                        'name': person_name,
-                                        'email': person_email,
-                                        'source': 'csv_drive',
-                                        'csv_field': 'drive_files'
-                                    })
-                                    mapped_count += 1
-                                    
-        print(f"  Mapped {mapped_count} files from CSV")
+        print("  CSV mapping already handled by CleanFileMapper in Strategy 1")
+        print("  (Includes robust comma/semicolon separator handling)")
     
     def map_from_filename_patterns(self) -> None:
         """Strategy 3: Map files using filename patterns"""
