@@ -36,10 +36,12 @@ DOWNLOADS_DIR = get_drive_downloads_dir()
 
 def create_download_dir(logger=None):
     """Create download directory if it doesn't exist"""
-    if not os.path.exists(DOWNLOADS_DIR):
-        os.makedirs(DOWNLOADS_DIR)
+    downloads_path = Path(DOWNLOADS_DIR)
+    if not downloads_path.exists():
+        downloads_path.mkdir(parents=True)
         if logger:
             logger.info(f"Created downloads directory: {DOWNLOADS_DIR}")
+    return downloads_path
 
 def extract_file_id(url):
     """Extract Google Drive file ID from URL"""

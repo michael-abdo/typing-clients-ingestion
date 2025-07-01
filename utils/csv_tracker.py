@@ -16,10 +16,12 @@ try:
     from file_lock import file_lock
     from sanitization import sanitize_error_message, sanitize_csv_field
     from config import get_config
+    from row_context import RowContext
 except ImportError:
     from .file_lock import file_lock
     from .sanitization import sanitize_error_message, sanitize_csv_field
     from .config import get_config
+    from .row_context import RowContext
 
 
 def safe_get_na_value(column_name: str = None, dtype: str = 'string') -> Any:
@@ -121,31 +123,7 @@ def safe_csv_write(df: pd.DataFrame, csv_path: str, operation_name: str = "write
         return False
 
 
-@dataclass
-class RowContext:
-    """Context object that travels with every download to maintain CSV row relationship"""
-    row_id: str          # Primary key from CSV
-    row_index: int       # Position in CSV for atomic updates  
-    type: str           # Personality type - CRITICAL to preserve
-    name: str           # Person name for human-readable tracking
-    email: str          # Additional identifier
-    
-    def to_metadata_dict(self) -> Dict[str, Any]:
-        """Embed row context in download metadata files"""
-        return {
-            'source_csv_row_id': self.row_id,
-            'source_csv_index': self.row_index, 
-            'personality_type': self.type,
-            'person_name': self.name,
-            'person_email': self.email,
-            'download_timestamp': datetime.now().isoformat(),
-            'tracking_version': '1.0'
-        }
-    
-    def to_filename_suffix(self) -> str:
-        """Create unique filename suffix for organization"""
-        clean_type = self.type.replace('/', '-').replace(' ', '_').replace('#', 'num')
-        return f"_row{self.row_id}_{clean_type}"
+# RowContext class moved to utils/row_context.py for centralized row tracking
 
 
 @dataclass 
