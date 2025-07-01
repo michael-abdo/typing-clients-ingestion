@@ -435,22 +435,7 @@ def get_filename_from_response(response):
     
     return extension
 
-def is_folder_url(url):
-    """Check if URL is a Google Drive folder"""
-    return '/folders/' in url or 'drive.google.com/drive/folders' in url
-
-def extract_folder_id(url):
-    """Extract Google Drive folder ID from URL"""
-    patterns = [
-        r'/folders/([a-zA-Z0-9_-]+)',  # /folders/{folderId}
-    ]
-    
-    for pattern in patterns:
-        match = re.search(pattern, url)
-        if match:
-            return match.group(1)
-    
-    return None
+# Duplicate functions removed - using canonical versions defined earlier in file
 
 def get_folder_contents(folder_id, logger=None):
     """Not implemented - Google Drive API requires authentication"""
