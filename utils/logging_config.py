@@ -60,22 +60,7 @@ def get_logger(name: Optional[str] = None, component: Optional[str] = None) -> l
     # Get component logger
     return pipeline_logger.get_logger(component)
 
-def configure_module_logging(module_name: str) -> logging.Logger:
-    """
-    Configure logging for a specific module with proper formatting.
-    
-    Args:
-        module_name: The module name (typically __name__)
-    
-    Returns:
-        Configured logger instance
-    """
-    logger = get_logger(module_name)
-    
-    # Set module-specific name for better tracking
-    logger.logger.name = module_name
-    
-    return logger
+# Module logging configuration merged into get_logger() for consistency
 
 class LoggingAdapter:
     """

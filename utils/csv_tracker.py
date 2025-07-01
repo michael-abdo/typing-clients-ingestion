@@ -52,34 +52,7 @@ def safe_get_na_value(column_name: str = None, dtype: str = 'string') -> Any:
         return None
 
 
-def create_csv_backup(csv_path: str, operation_name: str = "write") -> str:
-    """
-    Create timestamped backup of CSV file before modification.
-    
-    Args:
-        csv_path: Path to CSV file to backup
-        operation_name: Description of the operation for backup naming
-        
-    Returns:
-        Path to created backup file
-    """
-    if not os.path.exists(csv_path):
-        raise FileNotFoundError(f"CSV file not found: {csv_path}")
-    
-    # Create backup directory if it doesn't exist
-    backup_dir = os.path.join(os.path.dirname(csv_path), "backups", "output")
-    os.makedirs(backup_dir, exist_ok=True)
-    
-    # Generate timestamped backup filename
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    filename = os.path.basename(csv_path)
-    backup_filename = f"{filename}.backup_{operation_name}_{timestamp}"
-    backup_path = os.path.join(backup_dir, backup_filename)
-    
-    # Create backup
-    shutil.copy2(csv_path, backup_path)
-    
-    return backup_path
+# CSV backup functionality moved to utils/csv_backup.py for comprehensive management
 
 
 # CSV validation moved to utils/error_handling.py for comprehensive error context tracking
