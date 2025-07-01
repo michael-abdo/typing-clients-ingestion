@@ -291,31 +291,7 @@ def validate_filename(filename):
     return filename
 
 
-def sanitize_csv_value(value):
-    """
-    Sanitize a value before writing to CSV to prevent injection
-    
-    Args:
-        value: The value to sanitize
-        
-    Returns:
-        Sanitized string safe for CSV
-    """
-    if value is None:
-        return ''
-    
-    # Convert to string
-    value = str(value)
-    
-    # Remove null bytes and control characters
-    value = re.sub(r'[\x00-\x08\x0b-\x0c\x0e-\x1f\x7f-\x9f]', '', value)
-    
-    # Prevent formula injection by prefixing with single quote
-    # if value starts with =, +, -, @, tab, carriage return
-    if value and value[0] in ('=', '+', '-', '@', '\t', '\r'):
-        value = "'" + value
-    
-    return value
+# CSV sanitization moved to utils/sanitization.py for comprehensive handling
 
 
 # Test the validation functions
