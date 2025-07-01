@@ -6,6 +6,11 @@ from typing import Callable, Any, Optional, Tuple, Type
 import subprocess
 import requests
 
+try:
+    from config import get_timeout
+except ImportError:
+    from .config import get_timeout
+
 
 class RetryError(Exception):
     """Raised when all retry attempts are exhausted"""
@@ -15,7 +20,7 @@ class RetryError(Exception):
 def exponential_backoff(
     attempt: int,
     base_delay: float = 1.0,
-    max_delay: float = 60.0,
+    max_delay: Optional[float] = None,
     jitter: bool = True
 ) -> float:
     """
@@ -24,12 +29,16 @@ def exponential_backoff(
     Args:
         attempt: Current attempt number (0-indexed)
         base_delay: Base delay in seconds
-        max_delay: Maximum delay in seconds
+        max_delay: Maximum delay in seconds (from config if None)
         jitter: Add random jitter to prevent thundering herd
     
     Returns:
         Delay in seconds
     """
+    # Get max_delay from config if not provided
+    if max_delay is None:
+        max_delay = get_timeout('retry_max')
+    
     # Calculate exponential delay: base * 2^attempt
     delay = min(base_delay * (2 ** attempt), max_delay)
     
@@ -45,7 +54,7 @@ def retry_with_backoff(
     *,
     max_attempts: int = 3,
     base_delay: float = 1.0,
-    max_delay: float = 60.0,
+    max_delay: Optional[float] = None,
     exceptions: Tuple[Type[Exception], ...] = (Exception,),
     on_retry: Optional[Callable[[Exception, int], None]] = None,
     logger: Optional[Any] = None
@@ -74,6 +83,8 @@ def retry_with_backoff(
     def decorator(f: Callable) -> Callable:
         @functools.wraps(f)
         def wrapper(*args, **kwargs):
+            # Get max_delay from config if not provided
+            actual_max_delay = max_delay if max_delay is not None else get_timeout('retry_max')
             last_exception = None
             
             for attempt in range(max_attempts):
@@ -89,7 +100,7 @@ def retry_with_backoff(
                         raise RetryError(f"Failed after {max_attempts} attempts: {e}") from e
                     
                     # Calculate backoff delay
-                    delay = exponential_backoff(attempt, base_delay, max_delay)
+                    delay = exponential_backoff(attempt, base_delay, actual_max_delay)
                     
                     # Log retry
                     if logger:

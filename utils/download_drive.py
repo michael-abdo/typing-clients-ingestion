@@ -16,6 +16,7 @@ try:
     from rate_limiter import rate_limit, wait_for_rate_limit
     from row_context import RowContext, DownloadResult
     from sanitization import sanitize_error_message, SafeDownloadError, validate_csv_field_safety
+    from config import get_drive_downloads_dir
 except ImportError:
     from .logger import setup_component_logging
     from .logging_config import get_logger
@@ -25,12 +26,13 @@ except ImportError:
     from .rate_limiter import rate_limit, wait_for_rate_limit
     from .row_context import RowContext, DownloadResult
     from .sanitization import sanitize_error_message, SafeDownloadError, validate_csv_field_safety
+    from .config import get_drive_downloads_dir
 
 # Setup module logger
 logger = get_logger(__name__)
 
-# Directory to save downloaded files
-DOWNLOADS_DIR = "drive_downloads"
+# Directory to save downloaded files (from config)
+DOWNLOADS_DIR = get_drive_downloads_dir()
 
 def create_download_dir(logger=None):
     """Create download directory if it doesn't exist"""

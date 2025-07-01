@@ -12,11 +12,20 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from utils.logger import pipeline_run, get_pipeline_logger
 from utils.logging_config import get_logger
 from utils.parallel_processor import parallel_download_youtube_videos
-from utils.config import get_config
+from utils.config import get_config, get_drive_downloads_dir
 from utils.csv_tracker import ensure_tracking_columns, get_pending_downloads, update_csv_download_status
 from utils.row_context import create_row_context_from_csv_row
 from utils.download_youtube import download_youtube_with_context
 from utils.download_drive import download_drive_with_context
+
+# Import enhanced download wrapper for real-time mapping database updates
+try:
+    import enhanced_download_wrapper
+    print("✅ Enhanced mapping database integration activated")
+except ImportError as e:
+    print(f"⚠️  Enhanced download wrapper not available: {e}")
+except Exception as e:
+    print(f"⚠️  Enhanced download wrapper failed to load: {e}")
 
 # Get configuration and set CSV field size limit
 config = get_config()
@@ -125,7 +134,7 @@ def main_workflow(args, logger=None):
                     print(f"\n{'=' * 80}\nStep 2: Downloading {len(pending_drive)} Google Drive files\n{'=' * 80}")
             
             # Create the drive_downloads directory if it doesn't exist
-            os.makedirs("drive_downloads", exist_ok=True)
+            os.makedirs(get_drive_downloads_dir(), exist_ok=True)
             
             # Process downloads with row context tracking
             import pandas as pd
