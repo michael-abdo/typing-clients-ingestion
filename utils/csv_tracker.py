@@ -16,10 +16,12 @@ try:
     from file_lock import file_lock
     from sanitization import sanitize_error_message, sanitize_csv_field
     from config import get_config
+    from row_context import RowContext
 except ImportError:
     from .file_lock import file_lock
     from .sanitization import sanitize_error_message, sanitize_csv_field
     from .config import get_config
+    from .row_context import RowContext
 
 
 def safe_get_na_value(column_name: str = None, dtype: str = 'string') -> Any:
@@ -52,135 +54,10 @@ def safe_get_na_value(column_name: str = None, dtype: str = 'string') -> Any:
         return None
 
 
-def create_csv_backup(csv_path: str, operation_name: str = "write") -> str:
-    """
-    Create timestamped backup of CSV file before modification.
-    
-    Args:
-        csv_path: Path to CSV file to backup
-        operation_name: Description of the operation for backup naming
-        
-    Returns:
-        Path to created backup file
-    """
-    if not os.path.exists(csv_path):
-        raise FileNotFoundError(f"CSV file not found: {csv_path}")
-    
-    # Create backup directory if it doesn't exist
-    backup_dir = os.path.join(os.path.dirname(csv_path), "backups", "output")
-    os.makedirs(backup_dir, exist_ok=True)
-    
-    # Generate timestamped backup filename
-    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    filename = os.path.basename(csv_path)
-    backup_filename = f"{filename}.backup_{operation_name}_{timestamp}"
-    backup_path = os.path.join(backup_dir, backup_filename)
-    
-    # Create backup
-    shutil.copy2(csv_path, backup_path)
-    
-    return backup_path
+# CSV backup functionality moved to utils/csv_backup.py for comprehensive management
 
 
-def validate_csv_integrity(csv_path: str, expected_columns: Optional[List[str]] = None):
-    """
-    Validate CSV file integrity after write operations.
-    
-    Checks for:
-    - File readability
-    - Expected column count and names
-    - No HTML/JavaScript content in fields
-    - Consistent row structure
-    
-    Args:
-        csv_path: Path to CSV file to validate
-        expected_columns: List of expected column names
-        
-    Returns:
-        tuple: (is_valid, error_message)
-    """
-    try:
-        # Test file readability
-        df = pd.read_csv(csv_path)
-        
-        # Check for empty file
-        if df.empty:
-            return False, "CSV file is empty"
-        
-        # Check expected columns if provided
-        if expected_columns:
-            if len(df.columns) != len(expected_columns):
-                return False, f"Column count mismatch: expected {len(expected_columns)}, got {len(df.columns)}"
-            
-            missing_cols = set(expected_columns) - set(df.columns)
-            if missing_cols:
-                return False, f"Missing columns: {missing_cols}"
-        
-        # Check for HTML/JavaScript content that could indicate corruption
-        # Skip extracted_links column which may have existing corruption from before our fixes
-        dangerous_patterns = [
-            '<script>', '<html>', 'window.', r'function\(', r'<!DOCTYPE'
-        ]
-        
-        for col in df.columns:
-            if df[col].dtype == 'object' and col != 'extracted_links':  # Skip extracted_links column
-                for pattern in dangerous_patterns:
-                    if df[col].astype(str).str.contains(pattern, case=False, na=False, regex=True).any():
-                        return False, f"Dangerous content detected in column '{col}': {pattern}"
-        
-        # Check for extremely long fields that could indicate corruption
-        # Skip extracted_links column which may legitimately contain long content
-        for col in df.columns:
-            if df[col].dtype == 'object' and col != 'extracted_links':
-                max_length = df[col].astype(str).str.len().max()
-                if max_length > 1000:  # No field should be longer than 1000 chars
-                    return False, f"Suspiciously long field detected in column '{col}': {max_length} characters"
-        
-        # Check for consistent row structure using intelligent validation
-        # Count meaningful fields (non-empty, non-dash) instead of just non-NA
-        def count_meaningful_fields(row):
-            count = 0
-            for val in row:
-                if pd.notna(val) and str(val).strip() not in ['', '-']:
-                    count += 1
-            return count
-        
-        meaningful_fields_per_row = df.apply(count_meaningful_fields, axis=1)
-        
-        # Check minimum required fields (row_id, name, type, etc.)
-        min_required_fields = 4  # At least row_id, name, type, and one other field
-        if meaningful_fields_per_row.min() < min_required_fields:
-            return False, f"Row with too few meaningful fields: {meaningful_fields_per_row.min()} (minimum required: {min_required_fields})"
-        
-        # NEW: State-aware validation - check logical consistency
-        # If status columns exist, validate their consistency
-        if 'youtube_status' in df.columns and 'youtube_files' in df.columns:
-            # Completed downloads should have files
-            completed_mask = df['youtube_status'] == 'completed'
-            if completed_mask.any():
-                missing_files = df.loc[completed_mask, 'youtube_files'].isna()
-                if missing_files.any():
-                    problem_rows = df.loc[completed_mask & missing_files, 'row_id'].tolist()
-                    return False, f"Completed YouTube downloads missing files for rows: {problem_rows[:5]}..."
-        
-        if 'drive_status' in df.columns and 'drive_files' in df.columns:
-            # Completed downloads should have files
-            completed_mask = df['drive_status'] == 'completed'
-            if completed_mask.any():
-                missing_files = df.loc[completed_mask, 'drive_files'].isna()
-                if missing_files.any():
-                    problem_rows = df.loc[completed_mask & missing_files, 'row_id'].tolist()
-                    return False, f"Completed Drive downloads missing files for rows: {problem_rows[:5]}..."
-        
-        return True, "CSV validation passed"
-        
-    except pd.errors.EmptyDataError:
-        return False, "CSV file is empty or corrupted"
-    except pd.errors.ParserError as e:
-        return False, f"CSV parsing error: {str(e)}"
-    except Exception as e:
-        return False, f"Validation error: {sanitize_error_message(str(e))}"
-
+# CSV validation moved to utils/error_handling.py for comprehensive error context tracking
 
 def safe_csv_write(df: pd.DataFrame, csv_path: str, operation_name: str = "write", 
                    expected_columns: Optional[List[str]] = None) -> bool:
@@ -246,31 +123,7 @@ def safe_csv_write(df: pd.DataFrame, csv_path: str, operation_name: str = "write
         return False
 
 
-@dataclass
-class RowContext:
-    """Context object that travels with every download to maintain CSV row relationship"""
-    row_id: str          # Primary key from CSV
-    row_index: int       # Position in CSV for atomic updates  
-    type: str           # Personality type - CRITICAL to preserve
-    name: str           # Person name for human-readable tracking
-    email: str          # Additional identifier
-    
-    def to_metadata_dict(self) -> Dict[str, Any]:
-        """Embed row context in download metadata files"""
-        return {
-            'source_csv_row_id': self.row_id,
-            'source_csv_index': self.row_index, 
-            'personality_type': self.type,
-            'person_name': self.name,
-            'person_email': self.email,
-            'download_timestamp': datetime.now().isoformat(),
-            'tracking_version': '1.0'
-        }
-    
-    def to_filename_suffix(self) -> str:
-        """Create unique filename suffix for organization"""
-        clean_type = self.type.replace('/', '-').replace(' ', '_').replace('#', 'num')
-        return f"_row{self.row_id}_{clean_type}"
+# RowContext class moved to utils/row_context.py for centralized row tracking
 
 
 @dataclass 

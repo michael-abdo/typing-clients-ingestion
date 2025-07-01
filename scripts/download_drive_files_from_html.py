@@ -22,6 +22,7 @@ from selenium.common.exceptions import TimeoutException, NoSuchElementException
 
 from utils.config import get_config
 from utils.logging_config import get_logger
+from utils.download_drive import extract_file_id
 
 logger = get_logger(__name__)
 config = get_config()
@@ -47,17 +48,7 @@ class DriveFileDownloader:
             with open(self.mapping_file, 'r') as f:
                 self.mapping = json.load(f)
     
-    def extract_file_id_from_url(self, url):
-        """Extract file ID from Google Drive URL"""
-        # Pattern: https://drive.google.com/file/d/{file_id}/view
-        match = re.search(r'/file/d/([a-zA-Z0-9_-]+)', url)
-        if match:
-            return match.group(1)
-        # Pattern: https://drive.google.com/open?id={file_id}
-        match = re.search(r'[?&]id=([a-zA-Z0-9_-]+)', url)
-        if match:
-            return match.group(1)
-        return None
+    # File ID extraction moved to utils.download_drive.extract_file_id for consistency
     
     def build_file_mapping(self):
         """Build mapping of file_id to row information from CSV"""
@@ -78,7 +69,7 @@ class DriveFileDownloader:
                     for link in links:
                         link = link.strip()
                         if link and link.startswith('http'):
-                            file_id = self.extract_file_id_from_url(link)
+                            file_id = extract_file_id(link)
                             
                             if file_id:
                                 if file_id not in file_to_rows:

@@ -14,7 +14,8 @@ import sys
 # Add parent directory to path to import utils
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from utils.csv_tracker import validate_csv_integrity, safe_csv_write, create_csv_backup
+from utils.csv_tracker import safe_csv_write
+from utils.csv_backup import backup_csv
 from utils.file_lock import file_lock
 
 def analyze_placeholders(csv_path: str) -> dict:
@@ -150,7 +151,7 @@ def migrate_placeholders_to_nan(csv_path: str, dry_run: bool = True) -> bool:
     # Actual migration
     with file_lock(f'{csv_path}.lock'):
         # Create backup
-        backup_path = create_csv_backup(csv_path, 'migrate_placeholders')
+        backup_path = backup_csv(csv_path, 'migrate_placeholders')
         print(f"\nCreated backup: {backup_path}")
         
         # Read CSV with string dtypes to preserve data

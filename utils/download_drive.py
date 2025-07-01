@@ -16,6 +16,7 @@ try:
     from rate_limiter import rate_limit, wait_for_rate_limit
     from row_context import RowContext, DownloadResult
     from sanitization import sanitize_error_message, SafeDownloadError, validate_csv_field_safety
+    from config import get_drive_downloads_dir
 except ImportError:
     from .logger import setup_component_logging
     from .logging_config import get_logger
@@ -25,19 +26,22 @@ except ImportError:
     from .rate_limiter import rate_limit, wait_for_rate_limit
     from .row_context import RowContext, DownloadResult
     from .sanitization import sanitize_error_message, SafeDownloadError, validate_csv_field_safety
+    from .config import get_drive_downloads_dir
 
 # Setup module logger
 logger = get_logger(__name__)
 
-# Directory to save downloaded files
-DOWNLOADS_DIR = "drive_downloads"
+# Directory to save downloaded files (from config)
+DOWNLOADS_DIR = get_drive_downloads_dir()
 
 def create_download_dir(logger=None):
     """Create download directory if it doesn't exist"""
-    if not os.path.exists(DOWNLOADS_DIR):
-        os.makedirs(DOWNLOADS_DIR)
+    downloads_path = Path(DOWNLOADS_DIR)
+    if not downloads_path.exists():
+        downloads_path.mkdir(parents=True)
         if logger:
             logger.info(f"Created downloads directory: {DOWNLOADS_DIR}")
+    return downloads_path
 
 def extract_file_id(url):
     """Extract Google Drive file ID from URL"""
@@ -433,22 +437,7 @@ def get_filename_from_response(response):
     
     return extension
 
-def is_folder_url(url):
-    """Check if URL is a Google Drive folder"""
-    return '/folders/' in url or 'drive.google.com/drive/folders' in url
-
-def extract_folder_id(url):
-    """Extract Google Drive folder ID from URL"""
-    patterns = [
-        r'/folders/([a-zA-Z0-9_-]+)',  # /folders/{folderId}
-    ]
-    
-    for pattern in patterns:
-        match = re.search(pattern, url)
-        if match:
-            return match.group(1)
-    
-    return None
+# Duplicate functions removed - using canonical versions defined earlier in file
 
 def get_folder_contents(folder_id, logger=None):
     """Not implemented - Google Drive API requires authentication"""

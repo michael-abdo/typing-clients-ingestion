@@ -9,7 +9,8 @@ import numpy as np
 import shutil
 from datetime import datetime
 import os
-from utils.csv_tracker import validate_csv_integrity, safe_csv_write, create_csv_backup
+from utils.csv_tracker import safe_csv_write
+from utils.csv_backup import backup_csv
 from utils.file_lock import file_lock
 
 def analyze_empty_strings(csv_path: str) -> dict:
@@ -87,7 +88,7 @@ def migrate_empty_strings_to_nan(csv_path: str, dry_run: bool = True) -> bool:
     # Actual migration
     with file_lock(f'{csv_path}.lock'):
         # Create backup
-        backup_path = create_csv_backup(csv_path, 'migrate_empty_strings')
+        backup_path = backup_csv(csv_path, 'migrate_empty_strings')
         print(f"\nCreated backup: {backup_path}")
         
         # Read CSV with string dtypes to preserve data
