@@ -36,6 +36,17 @@ These consolidations eliminate semantic duplicate functionality while:
 - Improving code maintainability
 - Ensuring consistent behavior across the codebase
 
+- **REMOVE duplicate configure_module_logging() from utils/logging_config.py → canonicalized in get_logger()**
+  - Redundant wrapper function removed
+  - Module name setting handled within main logger factory
+  - No imports found, safe removal - functionality preserved in get_logger()
+
+- **REMOVE duplicate create_csv_backup() from utils/csv_tracker.py → canonicalized in utils/csv_backup.py**
+  - Simple backup function removed in favor of comprehensive CSVBackupManager
+  - Updated migration scripts to use canonical backup system
+  - CSVBackupManager provides compression, cleanup, restoration capabilities
+  - Functionality enhanced with proper logging and configuration integration
+
 ### Breaking Changes
 
 None - all removals were verified to have no active imports.
