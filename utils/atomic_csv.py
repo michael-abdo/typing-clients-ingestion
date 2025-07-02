@@ -5,15 +5,13 @@ import tempfile
 from pathlib import Path
 from contextlib import contextmanager
 try:
-    from validation import sanitize_csv_value
-    from file_lock import file_lock, atomic_write_with_lock
-    from csv_backup import get_backup_manager
+    from sanitization import sanitize_csv_field as sanitize_csv_value
+    from file_lock import file_lock
     from config import get_config
     from logging_config import get_logger
 except ImportError:
-    from .validation import sanitize_csv_value
-    from .file_lock import file_lock, atomic_write_with_lock
-    from .csv_backup import get_backup_manager
+    from .sanitization import sanitize_csv_field as sanitize_csv_value
+    from .file_lock import file_lock
     from .config import get_config
     from .logging_config import get_logger
 

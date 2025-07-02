@@ -6,11 +6,18 @@ import sys
 # Add utils directory to the Python path
 sys.path.append(os.path.join(os.path.dirname(__file__), 'utils'))
 
-from scrape_google_sheets import fetch_table_data, update_csv
-from extract_links import process_url
-from logger import setup_component_logging
-from atomic_csv import atomic_csv_update, write_csv_atomic
-from streaming_csv import streaming_csv_update
+try:
+    from scrape_google_sheets import fetch_table_data, update_csv
+    from extract_links import process_url
+    from logger import setup_component_logging
+    from atomic_csv import atomic_csv_update, write_csv_atomic
+    from streaming_csv import streaming_csv_update
+except ImportError:
+    from .scrape_google_sheets import fetch_table_data, update_csv
+    from .extract_links import process_url
+    from .logger import setup_component_logging
+    from .atomic_csv import atomic_csv_update, write_csv_atomic
+    from .streaming_csv import streaming_csv_update
 
 def process_links_from_csv(max_rows=None, reset_processed=False, force_download=False):
     """

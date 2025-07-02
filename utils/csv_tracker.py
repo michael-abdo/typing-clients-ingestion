@@ -17,11 +17,13 @@ try:
     from sanitization import sanitize_error_message, sanitize_csv_field
     from config import get_config
     from row_context import RowContext
+    from error_handling import validate_csv_integrity
 except ImportError:
     from .file_lock import file_lock
     from .sanitization import sanitize_error_message, sanitize_csv_field
     from .config import get_config
     from .row_context import RowContext
+    from .error_handling import validate_csv_integrity
 
 
 def safe_get_na_value(column_name: str = None, dtype: str = 'string') -> Any:
@@ -55,6 +57,22 @@ def safe_get_na_value(column_name: str = None, dtype: str = 'string') -> Any:
 
 
 # CSV backup functionality moved to utils/csv_backup.py for comprehensive management
+def create_csv_backup(csv_path: str, operation_name: str = "backup") -> str:
+    """Create a backup of the CSV file"""
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    backup_dir = os.path.join(os.path.dirname(csv_path), 'backups', 'output')
+    os.makedirs(backup_dir, exist_ok=True)
+    
+    backup_filename = f"output_{timestamp}_{operation_name}.csv.gz"
+    backup_path = os.path.join(backup_dir, backup_filename)
+    
+    # Compress and save backup
+    import gzip
+    with open(csv_path, 'rb') as f_in:
+        with gzip.open(backup_path, 'wb') as f_out:
+            shutil.copyfileobj(f_in, f_out)
+    
+    return backup_path
 
 
 # CSV validation moved to utils/error_handling.py for comprehensive error context tracking
@@ -91,14 +109,20 @@ def safe_csv_write(df: pd.DataFrame, csv_path: str, operation_name: str = "write
         df.to_csv(csv_path, index=False)
         
         # Validate written file
-        is_valid, error_msg = validate_csv_integrity(csv_path, expected_columns)
+        errors = validate_csv_integrity(csv_path)
+        is_valid = len(errors) == 0
         
         if not is_valid:
+            error_msg = "; ".join([err.message for err in errors])
             print(f"  ❌ CSV validation failed: {error_msg}")
             
             # Rollback to backup if available
             if backup_path and os.path.exists(backup_path):
-                shutil.copy2(backup_path, csv_path)
+                # Decompress backup if it's gzipped
+                import gzip
+                with gzip.open(backup_path, 'rb') as f_in:
+                    with open(csv_path, 'wb') as f_out:
+                        shutil.copyfileobj(f_in, f_out)
                 print(f"  🔄 Rolled back to backup: {os.path.basename(backup_path)}")
                 return False
             else:
