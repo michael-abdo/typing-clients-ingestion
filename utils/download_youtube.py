@@ -10,7 +10,7 @@ try:
     from validation import validate_youtube_url, validate_file_path, ValidationError
     from retry_utils import retry_subprocess, retry_with_backoff
     from file_lock import file_lock, safe_file_operation
-    from config import get_config, get_youtube_downloads_dir, get_timeout
+    from config import get_config, get_youtube_downloads_dir, get_timeout, create_download_dir
     from rate_limiter import rate_limit, wait_for_rate_limit
     from row_context import RowContext, DownloadResult
     from sanitization import sanitize_error_message, SafeDownloadError
@@ -19,7 +19,7 @@ except ImportError:
     from .validation import validate_youtube_url, validate_file_path, ValidationError
     from .retry_utils import retry_subprocess, retry_with_backoff
     from .file_lock import file_lock, safe_file_operation
-    from .config import get_config, get_youtube_downloads_dir, get_timeout
+    from .config import get_config, get_youtube_downloads_dir, get_timeout, create_download_dir
     from .rate_limiter import rate_limit, wait_for_rate_limit
     from .row_context import RowContext, DownloadResult
     from .sanitization import sanitize_error_message, SafeDownloadError
@@ -29,15 +29,6 @@ config = get_config()
 
 # Directory to save downloaded videos and transcripts (from config)
 DOWNLOADS_DIR = get_youtube_downloads_dir()
-
-def create_download_dir(logger=None):
-    """Create download directory if it doesn't exist"""
-    downloads_path = Path(DOWNLOADS_DIR)
-    if not downloads_path.exists():
-        downloads_path.mkdir(parents=True)
-        if logger:
-            logger.info(f"Created downloads directory: {DOWNLOADS_DIR}")
-    return downloads_path
 
 @rate_limit('youtube')
 def download_single_video(url, video_id=None, title=None, transcript_only=False, resolution=None, output_format=None, yt_dlp_path="yt-dlp", logger=None):
@@ -61,7 +52,7 @@ def download_single_video(url, video_id=None, title=None, transcript_only=False,
         logger.error(f"Invalid YouTube URL: {safe_error}")
         return None, None
     
-    downloads_path = create_download_dir(logger)
+    downloads_path = create_download_dir(DOWNLOADS_DIR, logger)
     
     # If video_id and title not provided, get them first
     if not video_id or not title:

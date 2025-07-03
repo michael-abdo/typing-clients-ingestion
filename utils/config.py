@@ -139,6 +139,25 @@ def get_timeout(timeout_type: str = "default") -> float:
     return get_config().get(f"timeouts.{timeout_type}", 30.0)
 
 
+def create_download_dir(download_dir: str, logger=None) -> Path:
+    """
+    Create download directory if it doesn't exist.
+    
+    Args:
+        download_dir: Directory path to create
+        logger: Optional logger instance
+    
+    Returns:
+        Path object for the directory
+    """
+    downloads_path = Path(download_dir)
+    if not downloads_path.exists():
+        downloads_path.mkdir(parents=True)
+        if logger:
+            logger.info(f"Created downloads directory: {download_dir}")
+    return downloads_path
+
+
 def get_download_chunk_size(file_size: int) -> int:
     """
     Get appropriate chunk size based on file size.

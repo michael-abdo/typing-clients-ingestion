@@ -8,6 +8,18 @@ All notable changes to this project will be documented in this file.
 
 #### High Priority Consolidations
 
+- **REMOVE duplicate create_download_dir() from download_youtube.py & download_drive.py → canonicalized in config.py**
+  - Exact duplicate function (8 lines) existed in both download modules
+  - Consolidated into config.py which already manages directory paths
+  - Updated function signature to accept directory path parameter for flexibility
+  - All callers updated to use canonical version with proper imports
+
+- **REMOVE duplicate DownloadResult class from csv_tracker.py → canonicalized in row_context.py**
+  - Incomplete duplicate missing @dataclass decorator and critical fields
+  - Canonical version in row_context.py has all fields plus download_type and save_metadata()
+  - Updated csv_tracker.py imports to use canonical version
+  - Ensures consistent result tracking across all download operations
+
 - **REMOVE duplicate download_single_video() from utils/download_youtube_legacy.py → canonicalized in utils/download_youtube.py**
   - Legacy implementation lacked rate limiting, retry logic, validation
   - Missing error handling, configuration integration, structured logging  

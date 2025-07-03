@@ -16,13 +16,13 @@ try:
     from file_lock import file_lock
     from sanitization import sanitize_error_message, sanitize_csv_field
     from config import get_config
-    from row_context import RowContext
+    from row_context import RowContext, DownloadResult
     from error_handling import validate_csv_integrity
 except ImportError:
     from .file_lock import file_lock
     from .sanitization import sanitize_error_message, sanitize_csv_field
     from .config import get_config
-    from .row_context import RowContext
+    from .row_context import RowContext, DownloadResult
     from .error_handling import validate_csv_integrity
 
 
@@ -148,28 +148,7 @@ def safe_csv_write(df: pd.DataFrame, csv_path: str, operation_name: str = "write
 
 
 # RowContext class moved to utils/row_context.py for centralized row tracking
-
-
-@dataclass 
-class DownloadResult:
-    """Standardized result object maintaining full traceability"""
-    success: bool
-    files_downloaded: List[str]     # Actual filenames created
-    media_id: Optional[str]         # YouTube video_id or Drive file_id
-    error_message: Optional[str]
-    metadata_file: Optional[str]    # Path to metadata file
-    row_context: RowContext         # Preserve complete source data
-    permanent_failure: bool = False # Mark as permanent failure to skip retries
-    
-    def get_summary(self) -> Dict[str, Any]:
-        """Generate summary for CSV update"""
-        return {
-            'status': 'completed' if self.success else 'failed',
-            'files': ','.join(self.files_downloaded),
-            'media_id': self.media_id or '',
-            'error': self.error_message or '',
-            'last_attempt': datetime.now().isoformat()
-        }
+# DownloadResult class moved to utils/row_context.py for centralized result tracking
 
 
 def ensure_tracking_columns(csv_path: str = 'outputs/output.csv') -> bool:

@@ -16,7 +16,7 @@ try:
     from rate_limiter import rate_limit, wait_for_rate_limit
     from row_context import RowContext, DownloadResult
     from sanitization import sanitize_error_message, SafeDownloadError, validate_csv_field_safety
-    from config import get_drive_downloads_dir
+    from config import get_drive_downloads_dir, create_download_dir
 except ImportError:
     from .logger import setup_component_logging
     from .logging_config import get_logger
@@ -26,22 +26,13 @@ except ImportError:
     from .rate_limiter import rate_limit, wait_for_rate_limit
     from .row_context import RowContext, DownloadResult
     from .sanitization import sanitize_error_message, SafeDownloadError, validate_csv_field_safety
-    from .config import get_drive_downloads_dir
+    from .config import get_drive_downloads_dir, create_download_dir
 
 # Setup module logger
 logger = get_logger(__name__)
 
 # Directory to save downloaded files (from config)
 DOWNLOADS_DIR = get_drive_downloads_dir()
-
-def create_download_dir(logger=None):
-    """Create download directory if it doesn't exist"""
-    downloads_path = Path(DOWNLOADS_DIR)
-    if not downloads_path.exists():
-        downloads_path.mkdir(parents=True)
-        if logger:
-            logger.info(f"Created downloads directory: {DOWNLOADS_DIR}")
-    return downloads_path
 
 def extract_file_id(url):
     """Extract Google Drive file ID from URL"""
@@ -640,7 +631,7 @@ def process_direct_download_url(url, output_filename=None, logger=None):
         return None
     
     # For direct download URLs, we just download directly
-    create_download_dir(logger)
+    create_download_dir(DOWNLOADS_DIR, logger)
     
     # Create a session to handle the download
     session = requests.Session()
@@ -854,7 +845,7 @@ def process_drive_url(url, output_filename=None, save_metadata_flag=False, logge
         
         return downloaded_path, metadata_path
     
-    create_download_dir(logger)
+    create_download_dir(DOWNLOADS_DIR, logger)
     
     # Check if it's a folder BEFORE validating as a file URL
     if is_folder_url(url):

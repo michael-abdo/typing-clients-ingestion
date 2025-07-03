@@ -32,13 +32,54 @@ youtube_downloads/
 
 # Logs
 *.log
+logs/runs/*/
+logs/metrics/
+!logs/.gitkeep
 
 # macOS
 .DS_Store
 
 # Generated data
-output.csv
+outputs/output.csv
+outputs/*.csv
+!outputs/.gitkeep
 
 # Claude debug file
 claude.md
 **/.claude/settings.local.json
+
+# Database files
+data/*.db
+!data/.gitkeep
+
+# Backups
+backups/
+outputs/backups/
+*.backup
+*.gz
+
+# Config with potential secrets
+.env
+config/secrets.yaml
+
+# Temporary files
+*.tmp
+.tmp*
+tmp/
+cleanup_temp_files.py
+test_*.py
+verify_*.py
+commit_duplicate*.sh
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Reference datasets
+reference_dataset_*/
+
+# Reports
+reports/output/
+audit/processed/
