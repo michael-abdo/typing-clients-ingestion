@@ -11,13 +11,122 @@ from pathlib import Path
 from urllib.parse import urlparse
 import os
 import urllib.parse
+import time
 from bs4 import BeautifulSoup
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.common.by import By
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
 
 # Constants
 GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/u/1/d/e/2PACX-1vRqqjqoaj8sEZBfZRw0Og7g8ms_0yTL2MsegTubcjhhBnXr1s1jFBwIVAsbkyj1xD0TMj06LvGTQIHU/pubhtml?pli=1#"
 TARGET_DIV_ID = "1159146182"
 OUTPUT_DIR = Path("simple_downloads")
 OUTPUT_CSV = "simple_output.csv"
+
+# Global selenium driver
+_driver = None
+
+def get_selenium_driver():
+    """Initialize and return a Selenium WebDriver instance"""
+    global _driver
+    if _driver is None:
+        print("Initializing Selenium Chrome driver...")
+        chrome_options = Options()
+        chrome_options.add_argument("--headless")  # Run in headless mode
+        chrome_options.add_argument("--disable-gpu")
+        chrome_options.add_argument("--window-size=1920,1080")
+        chrome_options.add_argument("--disable-dev-shm-usage")
+        chrome_options.add_argument("--no-sandbox")
+        
+        try:
+            _driver = webdriver.Chrome(options=chrome_options)
+        except Exception as e:
+            print(f"Could not initialize Selenium driver: {str(e)}")
+            return None
+    
+    return _driver
+
+def cleanup_driver():
+    """Clean up the Selenium driver"""
+    global _driver
+    if _driver is not None:
+        try:
+            _driver.quit()
+            _driver = None
+            print("Selenium driver cleaned up")
+        except Exception as e:
+            print(f"Error cleaning up Selenium driver: {e}")
+
+def extract_google_doc_text(url):
+    """Extract text content from a Google Doc using Selenium"""
+    driver = get_selenium_driver()
+    if not driver:
+        print("Failed to initialize Selenium driver")
+        return ""
+    
+    try:
+        print(f"Loading Google Doc with Selenium: {url}")
+        driver.get(url)
+        
+        # Wait for page to load
+        WebDriverWait(driver, 30).until(
+            EC.presence_of_element_located((By.TAG_NAME, "body"))
+        )
+        
+        # Extra wait for Google Docs to render
+        time.sleep(3)
+        
+        # Scroll to ensure all content is loaded
+        height = driver.execute_script("return document.body.scrollHeight")
+        for i in range(0, height, 300):
+            driver.execute_script(f"window.scrollTo(0, {i});")
+            time.sleep(0.1)
+        
+        # Scroll back to top
+        driver.execute_script("window.scrollTo(0, 0);")
+        time.sleep(1)
+        
+        # Get the page source and extract text
+        html = driver.page_source
+        soup = BeautifulSoup(html, 'html.parser')
+        
+        # Extract text from the document content
+        # Google Docs puts content in divs with specific classes
+        text_content = ""
+        
+        # Try different selectors for Google Docs content
+        content_selectors = [
+            '.kix-pagesettings-protected-text',
+            '.kix-page',
+            '.doc-content',
+            '.google-docs-content'
+        ]
+        
+        for selector in content_selectors:
+            elements = soup.select(selector)
+            if elements:
+                for element in elements:
+                    text_content += element.get_text(separator=' ', strip=True) + " "
+                break
+        
+        # Fallback: extract all text from body
+        if not text_content.strip():
+            body = soup.find('body')
+            if body:
+                text_content = body.get_text(separator=' ', strip=True)
+        
+        # Clean up the text
+        text_content = re.sub(r'\s+', ' ', text_content).strip()
+        
+        print(f"✓ Extracted {len(text_content)} characters of text")
+        return text_content
+        
+    except Exception as e:
+        print(f"✗ Error extracting text from {url}: {e}")
+        return ""
 
 def extract_actual_url(google_url):
     """Extract the actual URL from a Google redirect URL"""
@@ -118,17 +227,34 @@ def step2_extract_people_and_docs(html_content):
     return people_data, people_with_docs
 
 def step3_scrape_doc_contents(doc_url):
-    """Step 3: Scrape contents of a Google Doc"""
+    """Step 3: Scrape contents and text of a Google Doc"""
     print(f"Step 3: Scraping doc: {doc_url}")
     
-    try:
-        response = requests.get(doc_url)
-        response.raise_for_status()
-        print("✓ Doc scraped successfully")
-        return response.text
-    except Exception as e:
-        print(f"✗ Failed to scrape doc: {e}")
-        return ""
+    # For Google Docs, use Selenium to get both HTML and text
+    if "docs.google.com/document" in doc_url:
+        # Extract the document text using Selenium
+        doc_text = extract_google_doc_text(doc_url)
+        
+        # Also get the HTML for link extraction
+        try:
+            response = requests.get(doc_url)
+            response.raise_for_status()
+            html_content = response.text
+            print("✓ Doc scraped successfully (HTML + text)")
+            return html_content, doc_text
+        except Exception as e:
+            print(f"✗ Failed to scrape HTML: {e}")
+            return "", doc_text
+    else:
+        # For other URLs, just get HTML
+        try:
+            response = requests.get(doc_url)
+            response.raise_for_status()
+            print("✓ Doc scraped successfully (HTML only)")
+            return response.text, ""
+        except Exception as e:
+            print(f"✗ Failed to scrape doc: {e}")
+            return "", ""
 
 def step4_extract_links(doc_content):
     """Step 4: Extract links from scraped content"""
@@ -157,7 +283,7 @@ def step4_extract_links(doc_content):
     
     return links
 
-def step5_download_links(links, name, email, type_info):
+def step5_download_links(links, name, email, type_info, doc_text=""):
     """Step 5: Download the links (placeholder - implement as needed)"""
     print("Step 5: Downloading links...")
     
@@ -175,6 +301,7 @@ def step5_download_links(links, name, email, type_info):
             'name': name,
             'email': email,
             'category': type_info,
+            'document_text': doc_text,
             'status': 'pending'
         })
     
@@ -186,6 +313,7 @@ def step5_download_links(links, name, email, type_info):
             'name': name,
             'email': email,
             'category': type_info,
+            'document_text': doc_text,
             'status': 'pending'
         })
     
@@ -197,6 +325,7 @@ def step5_download_links(links, name, email, type_info):
             'name': name,
             'email': email,
             'category': type_info,
+            'document_text': doc_text,
             'status': 'pending'
         })
     
@@ -236,15 +365,15 @@ def main():
     for i, person in enumerate(people_with_docs[:3]):
         print(f"\nProcessing person {i+1}/{len(people_with_docs)}: {person['name']}")
         
-        # Step 3: Scrape doc content
-        doc_content = step3_scrape_doc_contents(person['doc_link'])
+        # Step 3: Scrape doc content and text
+        doc_content, doc_text = step3_scrape_doc_contents(person['doc_link'])
         
-        if doc_content:
-            # Step 4: Extract links
+        if doc_content or doc_text:
+            # Step 4: Extract links from HTML content
             links = step4_extract_links(doc_content)
             
-            # Step 5: Download links (with actual person data)
-            downloaded_items = step5_download_links(links, person['name'], person['email'], person['type'])
+            # Step 5: Download links (with actual person data and document text)
+            downloaded_items = step5_download_links(links, person['name'], person['email'], person['type'], doc_text)
             all_downloaded_items.extend(downloaded_items)
     
     # Step 6: Map all data
@@ -252,6 +381,9 @@ def main():
         step6_map_data(all_downloaded_items)
     else:
         print("No items to map")
+    
+    # Cleanup Selenium driver
+    cleanup_driver()
     
     print("\n" + "=" * 50)
     print("WORKFLOW COMPLETE")
