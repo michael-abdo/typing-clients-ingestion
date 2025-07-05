@@ -256,45 +256,159 @@ def step3_scrape_doc_contents(doc_url):
             print(f"✗ Failed to scrape doc: {e}")
             return "", ""
 
-def step4_extract_links(doc_content):
-    """Step 4: Extract links from scraped content"""
+def clean_url(url):
+    """Clean up a URL by removing trailing junk and escape sequences"""
+    if not url:
+        return url
+    
+    # Decode unicode escapes
+    try:
+        if '\\u' in url:
+            url = url.encode('utf-8').decode('unicode_escape')
+    except:
+        pass
+    
+    # Remove common escape sequences
+    url = url.replace('\\n', '').replace('\\r', '').replace('\\t', '')
+    
+    # Remove trailing punctuation that's not part of a URL
+    url = re.sub(r'[.,;:!?\)\]\}"\'>]+$', '', url)
+    
+    # Clean YouTube URLs
+    if 'youtube.com' in url or 'youtu.be' in url:
+        # For youtu.be links
+        match = re.search(r'youtu\.be/([a-zA-Z0-9_-]{11})', url)
+        if match:
+            return f'https://youtu.be/{match.group(1)}'
+        
+        # For youtube.com watch links
+        match = re.search(r'youtube\.com/watch\?v=([a-zA-Z0-9_-]{11})', url)
+        if match:
+            video_id = match.group(1)
+            # Check for additional parameters
+            list_match = re.search(r'[&?]list=([a-zA-Z0-9_-]+)', url)
+            if list_match:
+                return f'https://www.youtube.com/watch?v={video_id}&list={list_match.group(1)}'
+            return f'https://www.youtube.com/watch?v={video_id}'
+        
+        # For playlist links
+        match = re.search(r'youtube\.com/playlist\?list=([a-zA-Z0-9_-]+)', url)
+        if match:
+            return f'https://www.youtube.com/playlist?list={match.group(1)}'
+    
+    # Clean Google Drive URLs
+    if 'drive.google.com' in url:
+        # File links
+        match = re.search(r'drive\.google\.com/file/d/([a-zA-Z0-9_-]+)', url)
+        if match:
+            return f'https://drive.google.com/file/d/{match.group(1)}/view'
+        
+        # Folder links
+        match = re.search(r'drive\.google\.com/drive/folders/([a-zA-Z0-9_-]+)', url)
+        if match:
+            return f'https://drive.google.com/drive/folders/{match.group(1)}'
+    
+    return url.strip()
+
+def step4_extract_links(doc_content, doc_text=""):
+    """Step 4: Extract links from scraped content and document text"""
     print("Step 4: Extracting links from doc content...")
+    
+    # Combine HTML content and plain text for comprehensive link extraction
+    combined_content = doc_content + " " + doc_text
     
     links = {
         'youtube': [],
         'drive_files': [],
-        'drive_folders': []
+        'drive_folders': [],
+        'all_links': []
     }
     
-    # YouTube links
-    yt_pattern = r'https?://(?:www\.)?(?:youtube\.com/watch\?v=|youtu\.be/)[a-zA-Z0-9_-]+'
-    links['youtube'] = re.findall(yt_pattern, doc_content)
+    # Enhanced YouTube patterns
+    youtube_patterns = [
+        r'https?://(?:www\.)?youtube\.com/watch\?v=([a-zA-Z0-9_-]{11})[^\s<>"]*',
+        r'https?://youtu\.be/([a-zA-Z0-9_-]{11})[^\s<>"]*',
+        r'https?://(?:www\.)?youtube\.com/playlist\?list=([a-zA-Z0-9_-]+)[^\s<>"]*'
+    ]
     
-    # Drive file links
-    drive_file_pattern = r'https://drive\.google\.com/file/d/[a-zA-Z0-9_-]+[^"\s<>]*'
-    links['drive_files'] = re.findall(drive_file_pattern, doc_content)
+    for pattern in youtube_patterns:
+        matches = re.findall(pattern, combined_content, re.IGNORECASE)
+        for match in matches:
+            if 'playlist' in pattern:
+                clean_link = f'https://www.youtube.com/playlist?list={match}'
+            else:
+                clean_link = f'https://www.youtube.com/watch?v={match}'
+            
+            if clean_link not in links['youtube']:
+                links['youtube'].append(clean_link)
     
-    # Drive folder links
-    drive_folder_pattern = r'https://drive\.google\.com/drive/folders/[a-zA-Z0-9_-]+[^"\s<>]*'
-    links['drive_folders'] = re.findall(drive_folder_pattern, doc_content)
+    # Enhanced Google Drive patterns
+    drive_patterns = [
+        r'https://drive\.google\.com/file/d/([a-zA-Z0-9_-]+)[^\s<>"]*',
+        r'https://drive\.google\.com/open\?id=([a-zA-Z0-9_-]+)[^\s<>"]*',
+        r'https://drive\.google\.com/drive/folders/([a-zA-Z0-9_-]+)[^\s<>"]*'
+    ]
+    
+    for pattern in drive_patterns:
+        matches = re.findall(pattern, combined_content, re.IGNORECASE)
+        for match in matches:
+            if 'folders' in pattern:
+                clean_link = f'https://drive.google.com/drive/folders/{match}'
+                if clean_link not in links['drive_folders']:
+                    links['drive_folders'].append(clean_link)
+            else:
+                clean_link = f'https://drive.google.com/file/d/{match}/view'
+                if clean_link not in links['drive_files']:
+                    links['drive_files'].append(clean_link)
+    
+    # Extract all HTTP(S) links for comprehensive coverage
+    all_link_pattern = r'https?://[^\s<>"{}\\|\^\[\]`]+[^\s<>"{}\\|\^\[\]`.,;:!?\)\]]'
+    all_found_links = re.findall(all_link_pattern, combined_content, re.IGNORECASE)
+    
+    # Clean and categorize all links
+    for link in all_found_links:
+        clean_link = clean_url(link)
+        if clean_link and clean_link not in links['all_links']:
+            links['all_links'].append(clean_link)
+            
+            # Additional categorization for missed links
+            if ('youtube.com' in clean_link or 'youtu.be' in clean_link) and clean_link not in links['youtube']:
+                links['youtube'].append(clean_link)
+            elif 'drive.google.com/file' in clean_link and clean_link not in links['drive_files']:
+                links['drive_files'].append(clean_link)
+            elif 'drive.google.com/drive/folders' in clean_link and clean_link not in links['drive_folders']:
+                links['drive_folders'].append(clean_link)
+    
+    # Remove duplicates
+    links['youtube'] = list(set(links['youtube']))
+    links['drive_files'] = list(set(links['drive_files']))
+    links['drive_folders'] = list(set(links['drive_folders']))
+    links['all_links'] = list(set(links['all_links']))
     
     total_links = len(links['youtube']) + len(links['drive_files']) + len(links['drive_folders'])
-    print(f"✓ Found {total_links} links (YT: {len(links['youtube'])}, Files: {len(links['drive_files'])}, Folders: {len(links['drive_folders'])})")
+    print(f"✓ Found {total_links} targeted links (YT: {len(links['youtube'])}, Files: {len(links['drive_files'])}, Folders: {len(links['drive_folders'])})")
+    print(f"✓ Found {len(links['all_links'])} total links")
     
     return links
 
 def step5_download_links(links, name, email, type_info, doc_text=""):
     """Step 5: Download the links (placeholder - implement as needed)"""
-    print("Step 5: Downloading links...")
+    print("Step 5: Processing extracted links...")
     
     # Create output directory
     OUTPUT_DIR.mkdir(exist_ok=True)
     
     downloaded_items = []
     
-    # For now, just log what we would download
+    # Convert links to pipe-separated strings for CSV storage
+    youtube_links_str = "|".join(links['youtube']) if links['youtube'] else ""
+    drive_files_str = "|".join(links['drive_files']) if links['drive_files'] else ""
+    drive_folders_str = "|".join(links['drive_folders']) if links['drive_folders'] else ""
+    all_links_str = "|".join(links['all_links']) if links['all_links'] else ""
+    
+    # Create individual entries for each link type (for compatibility)
     for yt_link in links['youtube']:
-        print(f"  Would download YouTube: {yt_link}")
+        print(f"  Found YouTube: {yt_link}")
         downloaded_items.append({
             'type': 'youtube',
             'url': yt_link,
@@ -302,11 +416,15 @@ def step5_download_links(links, name, email, type_info, doc_text=""):
             'email': email,
             'category': type_info,
             'document_text': doc_text,
+            'youtube_links': youtube_links_str,
+            'drive_file_links': drive_files_str,
+            'drive_folder_links': drive_folders_str,
+            'all_extracted_links': all_links_str,
             'status': 'pending'
         })
     
     for file_link in links['drive_files']:
-        print(f"  Would download Drive file: {file_link}")
+        print(f"  Found Drive file: {file_link}")
         downloaded_items.append({
             'type': 'drive_file',
             'url': file_link,
@@ -314,11 +432,15 @@ def step5_download_links(links, name, email, type_info, doc_text=""):
             'email': email,
             'category': type_info,
             'document_text': doc_text,
+            'youtube_links': youtube_links_str,
+            'drive_file_links': drive_files_str,
+            'drive_folder_links': drive_folders_str,
+            'all_extracted_links': all_links_str,
             'status': 'pending'
         })
     
     for folder_link in links['drive_folders']:
-        print(f"  Would download Drive folder: {folder_link}")
+        print(f"  Found Drive folder: {folder_link}")
         downloaded_items.append({
             'type': 'drive_folder',
             'url': folder_link,
@@ -326,10 +448,36 @@ def step5_download_links(links, name, email, type_info, doc_text=""):
             'email': email,
             'category': type_info,
             'document_text': doc_text,
+            'youtube_links': youtube_links_str,
+            'drive_file_links': drive_files_str,
+            'drive_folder_links': drive_folders_str,
+            'all_extracted_links': all_links_str,
             'status': 'pending'
         })
     
+    # If no individual links found, create a summary entry with all extracted links
+    if not downloaded_items and (youtube_links_str or drive_files_str or drive_folders_str or all_links_str):
+        print(f"  Creating summary entry for extracted links")
+        downloaded_items.append({
+            'type': 'summary',
+            'url': '',
+            'name': name,
+            'email': email,
+            'category': type_info,
+            'document_text': doc_text,
+            'youtube_links': youtube_links_str,
+            'drive_file_links': drive_files_str,
+            'drive_folder_links': drive_folders_str,
+            'all_extracted_links': all_links_str,
+            'status': 'analyzed'
+        })
+    
     print(f"✓ Processed {len(downloaded_items)} items")
+    print(f"  YouTube: {len(links['youtube'])} links")
+    print(f"  Drive Files: {len(links['drive_files'])} links") 
+    print(f"  Drive Folders: {len(links['drive_folders'])} links")
+    print(f"  Total Links: {len(links['all_links'])} links")
+    
     return downloaded_items
 
 def step6_map_data(all_downloaded_items):
@@ -369,8 +517,8 @@ def main():
         doc_content, doc_text = step3_scrape_doc_contents(person['doc_link'])
         
         if doc_content or doc_text:
-            # Step 4: Extract links from HTML content
-            links = step4_extract_links(doc_content)
+            # Step 4: Extract links from HTML content and document text
+            links = step4_extract_links(doc_content, doc_text)
             
             # Step 5: Download links (with actual person data and document text)
             downloaded_items = step5_download_links(links, person['name'], person['email'], person['type'], doc_text)
