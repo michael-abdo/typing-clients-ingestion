@@ -195,8 +195,12 @@ def step2_extract_people_and_docs(html_content):
             email = cells[3].get_text(strip=True)  # Email in column 3  
             type_val = cells[4].get_text(strip=True)  # Type in column 4
             
-            # Skip rows without a name
-            if not name:
+            # Skip header rows and invalid data
+            if not name or name.lower() == "name" or row_id == "#" or "name" in name.lower() and "email" in email.lower():
+                continue
+            
+            # Skip any row that looks like a header (contains "Name", "Email", "Type" pattern)
+            if any(["Name" in str(cell.get_text(strip=True)) and "Email" in str(cells[3].get_text(strip=True)) and "Type" in str(cells[4].get_text(strip=True)) for cell in cells]):
                 continue
             
             # Look for Google Doc link in the name cell
