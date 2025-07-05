@@ -391,108 +391,108 @@ def step4_extract_links(doc_content, doc_text=""):
     
     return links
 
-def step5_download_links(links, name, email, type_info, doc_text=""):
-    """Step 5: Download the links (placeholder - implement as needed)"""
-    print("Step 5: Processing extracted links...")
+def step5_process_extracted_data(person, links, doc_text=""):
+    """Step 5: Process extracted data and format for CSV matching main system"""
+    print("Step 5: Processing extracted data...")
     
     # Create output directory
     OUTPUT_DIR.mkdir(exist_ok=True)
     
-    downloaded_items = []
+    # Filter links to get only meaningful content links, not infrastructure
+    meaningful_youtube = []
+    meaningful_drive_files = []
+    meaningful_drive_folders = []
     
-    # Convert links to pipe-separated strings for CSV storage
-    youtube_links_str = "|".join(links['youtube']) if links['youtube'] else ""
-    drive_files_str = "|".join(links['drive_files']) if links['drive_files'] else ""
-    drive_folders_str = "|".join(links['drive_folders']) if links['drive_folders'] else ""
-    all_links_str = "|".join(links['all_links']) if links['all_links'] else ""
+    # Filter YouTube links - only keep actual video/playlist content
+    for link in links['youtube']:
+        if any([
+            '/watch?v=' in link and len(re.findall(r'v=([a-zA-Z0-9_-]{11})', link)) > 0,
+            '/playlist?list=' in link,
+            'youtu.be/' in link and len(link.split('/')[-1]) == 11
+        ]):
+            # Clean the link to get just the essential content
+            if '/watch?v=' in link:
+                match = re.search(r'v=([a-zA-Z0-9_-]{11})', link)
+                if match:
+                    meaningful_youtube.append(f"https://www.youtube.com/watch?v={match.group(1)}")
+            elif '/playlist?list=' in link:
+                match = re.search(r'list=([a-zA-Z0-9_-]+)', link)
+                if match:
+                    meaningful_youtube.append(f"https://www.youtube.com/playlist?list={match.group(1)}")
+            elif 'youtu.be/' in link:
+                video_id = link.split('/')[-1]
+                if len(video_id) == 11:
+                    meaningful_youtube.append(f"https://www.youtube.com/watch?v={video_id}")
     
-    # Create individual entries for each link type (for compatibility)
-    for yt_link in links['youtube']:
-        print(f"  Found YouTube: {yt_link}")
-        downloaded_items.append({
-            'type': 'youtube',
-            'url': yt_link,
-            'name': name,
-            'email': email,
-            'category': type_info,
-            'document_text': doc_text,
-            'youtube_links': youtube_links_str,
-            'drive_file_links': drive_files_str,
-            'drive_folder_links': drive_folders_str,
-            'all_extracted_links': all_links_str,
-            'status': 'pending'
-        })
+    # Keep all Drive links as they're likely meaningful
+    meaningful_drive_files = links['drive_files']
+    meaningful_drive_folders = links['drive_folders']
     
-    for file_link in links['drive_files']:
-        print(f"  Found Drive file: {file_link}")
-        downloaded_items.append({
-            'type': 'drive_file',
-            'url': file_link,
-            'name': name,
-            'email': email,
-            'category': type_info,
-            'document_text': doc_text,
-            'youtube_links': youtube_links_str,
-            'drive_file_links': drive_files_str,
-            'drive_folder_links': drive_folders_str,
-            'all_extracted_links': all_links_str,
-            'status': 'pending'
-        })
+    # Remove duplicates
+    meaningful_youtube = list(set(meaningful_youtube))
     
-    for folder_link in links['drive_folders']:
-        print(f"  Found Drive folder: {folder_link}")
-        downloaded_items.append({
-            'type': 'drive_folder',
-            'url': folder_link,
-            'name': name,
-            'email': email,
-            'category': type_info,
-            'document_text': doc_text,
-            'youtube_links': youtube_links_str,
-            'drive_file_links': drive_files_str,
-            'drive_folder_links': drive_folders_str,
-            'all_extracted_links': all_links_str,
-            'status': 'pending'
-        })
+    # Create record matching the main system's CSV structure
+    record = {
+        'row_id': person.get('row_id', ''),
+        'name': person['name'],
+        'email': person['email'],
+        'type': person['type'],
+        'link': person.get('doc_link', ''),
+        'extracted_links': '|'.join(links['all_links']) if links['all_links'] else '',
+        'youtube_playlist': '|'.join(meaningful_youtube) if meaningful_youtube else '',
+        'google_drive': '|'.join(meaningful_drive_files + meaningful_drive_folders) if (meaningful_drive_files or meaningful_drive_folders) else '',
+        'processed': 'yes',
+        'document_text': doc_text,
+        'youtube_status': '',
+        'youtube_files': '',
+        'youtube_media_id': '',
+        'drive_status': '',
+        'drive_files': '',
+        'drive_media_id': '',
+        'last_download_attempt': '',
+        'download_errors': '',
+        'permanent_failure': ''
+    }
     
-    # If no individual links found, create a summary entry with all extracted links
-    if not downloaded_items and (youtube_links_str or drive_files_str or drive_folders_str or all_links_str):
-        print(f"  Creating summary entry for extracted links")
-        downloaded_items.append({
-            'type': 'summary',
-            'url': '',
-            'name': name,
-            'email': email,
-            'category': type_info,
-            'document_text': doc_text,
-            'youtube_links': youtube_links_str,
-            'drive_file_links': drive_files_str,
-            'drive_folder_links': drive_folders_str,
-            'all_extracted_links': all_links_str,
-            'status': 'analyzed'
-        })
+    print(f"✓ Processed record for {person['name']}")
+    print(f"  Meaningful YouTube links: {len(meaningful_youtube)}")
+    print(f"  Drive Files: {len(meaningful_drive_files)}")
+    print(f"  Drive Folders: {len(meaningful_drive_folders)}")
+    print(f"  Total links extracted: {len(links['all_links'])}")
     
-    print(f"✓ Processed {len(downloaded_items)} items")
-    print(f"  YouTube: {len(links['youtube'])} links")
-    print(f"  Drive Files: {len(links['drive_files'])} links") 
-    print(f"  Drive Folders: {len(links['drive_folders'])} links")
-    print(f"  Total Links: {len(links['all_links'])} links")
-    
-    return downloaded_items
+    return record
 
-def step6_map_data(all_downloaded_items):
-    """Step 6: Map downloaded content to Name/Email/Type columns"""
-    print("Step 6: Mapping data to preserve Name/Email/Type...")
+def step6_map_data(processed_records):
+    """Step 6: Map data to CSV matching main system structure"""
+    print("Step 6: Mapping data to CSV format...")
     
-    # Create DataFrame
-    df = pd.DataFrame(all_downloaded_items)
+    # Create DataFrame with proper column order matching main system
+    df = pd.DataFrame(processed_records)
+    
+    # Ensure all required columns are present
+    required_columns = [
+        'row_id', 'name', 'email', 'type', 'link', 'extracted_links', 
+        'youtube_playlist', 'google_drive', 'processed', 'document_text',
+        'youtube_status', 'youtube_files', 'youtube_media_id',
+        'drive_status', 'drive_files', 'drive_media_id',
+        'last_download_attempt', 'download_errors', 'permanent_failure'
+    ]
+    
+    for col in required_columns:
+        if col not in df.columns:
+            df[col] = ''
+    
+    # Reorder columns to match main system
+    df = df[required_columns]
     
     # Save to CSV
     df.to_csv(OUTPUT_CSV, index=False)
     
     print(f"✓ Data mapped and saved to {OUTPUT_CSV}")
-    print(f"  Total items: {len(df)}")
-    print(f"  Unique people: {df['name'].nunique()}")
+    print(f"  Total records: {len(df)}")
+    print(f"  Records with docs: {len(df[df['link'] != ''])}")
+    print(f"  Records with YouTube: {len(df[df['youtube_playlist'] != ''])}")
+    print(f"  Records with Drive: {len(df[df['google_drive'] != ''])}")
     
     return df
 
@@ -501,7 +501,7 @@ def main():
     print("STARTING SIMPLE 6-STEP WORKFLOW")
     print("=" * 50)
     
-    all_downloaded_items = []
+    processed_records = []
     
     # Step 1: Download sheet
     html_content = step1_download_sheet()
@@ -509,26 +509,54 @@ def main():
     # Step 2: Extract people data and Google Doc links
     all_people, people_with_docs = step2_extract_people_and_docs(html_content)
     
-    # Process each person with a doc (limit to first 3 for testing)
-    for i, person in enumerate(people_with_docs[:3]):
-        print(f"\nProcessing person {i+1}/{len(people_with_docs)}: {person['name']}")
+    # Create records for all people (not just those with docs)
+    print(f"\nProcessing all {len(all_people)} people...")
+    
+    # Process people with docs first
+    for i, person in enumerate(people_with_docs[:5]):  # Limit to 5 for testing
+        print(f"\nProcessing person with doc {i+1}/{len(people_with_docs)}: {person['name']}")
         
         # Step 3: Scrape doc content and text
         doc_content, doc_text = step3_scrape_doc_contents(person['doc_link'])
         
-        if doc_content or doc_text:
-            # Step 4: Extract links from HTML content and document text
-            links = step4_extract_links(doc_content, doc_text)
-            
-            # Step 5: Download links (with actual person data and document text)
-            downloaded_items = step5_download_links(links, person['name'], person['email'], person['type'], doc_text)
-            all_downloaded_items.extend(downloaded_items)
+        # Step 4: Extract links from HTML content and document text
+        links = step4_extract_links(doc_content, doc_text)
+        
+        # Step 5: Process extracted data
+        record = step5_process_extracted_data(person, links, doc_text)
+        processed_records.append(record)
+    
+    # Add remaining people without docs (limit to first 20 for testing)
+    people_without_docs = [p for p in all_people if not p.get('doc_link')]
+    for person in people_without_docs[:20]:
+        record = {
+            'row_id': person.get('row_id', ''),
+            'name': person['name'],
+            'email': person['email'],
+            'type': person['type'],
+            'link': '',
+            'extracted_links': '',
+            'youtube_playlist': '',
+            'google_drive': '',
+            'processed': 'yes',
+            'document_text': '',
+            'youtube_status': '',
+            'youtube_files': '',
+            'youtube_media_id': '',
+            'drive_status': '',
+            'drive_files': '',
+            'drive_media_id': '',
+            'last_download_attempt': '',
+            'download_errors': '',
+            'permanent_failure': ''
+        }
+        processed_records.append(record)
     
     # Step 6: Map all data
-    if all_downloaded_items:
-        step6_map_data(all_downloaded_items)
+    if processed_records:
+        step6_map_data(processed_records)
     else:
-        print("No items to map")
+        print("No records to map")
     
     # Cleanup Selenium driver
     cleanup_driver()
