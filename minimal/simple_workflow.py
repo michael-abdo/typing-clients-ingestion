@@ -513,48 +513,57 @@ def main():
     # Step 2: Extract people data and Google Doc links
     all_people, people_with_docs = step2_extract_people_and_docs(html_content)
     
-    # Create records for all people (not just those with docs)
-    print(f"\nProcessing all {len(all_people)} people...")
+    print(f"\nProcessing ALL {len(all_people)} people...")
+    print(f"  - {len(people_with_docs)} people have documents")
+    print(f"  - {len(all_people) - len(people_with_docs)} people without documents")
     
-    # Process people with docs first
-    for i, person in enumerate(people_with_docs[:5]):  # Limit to 5 for testing
-        print(f"\nProcessing person with doc {i+1}/{len(people_with_docs)}: {person['name']}")
-        
-        # Step 3: Scrape doc content and text
-        doc_content, doc_text = step3_scrape_doc_contents(person['doc_link'])
-        
-        # Step 4: Extract links from HTML content and document text
-        links = step4_extract_links(doc_content, doc_text)
-        
-        # Step 5: Process extracted data
-        record = step5_process_extracted_data(person, links, doc_text)
-        processed_records.append(record)
+    # Create a lookup for people with docs for efficient processing
+    people_with_docs_dict = {person['row_id']: person for person in people_with_docs}
     
-    # Add remaining people without docs (limit to first 20 for testing)
-    people_without_docs = [p for p in all_people if not p.get('doc_link')]
-    for person in people_without_docs[:20]:
-        record = {
-            'row_id': person.get('row_id', ''),
-            'name': person['name'],
-            'email': person['email'],
-            'type': person['type'],
-            'link': '',
-            'extracted_links': '',
-            'youtube_playlist': '',
-            'google_drive': '',
-            'processed': 'yes',
-            'document_text': '',
-            'youtube_status': '',
-            'youtube_files': '',
-            'youtube_media_id': '',
-            'drive_status': '',
-            'drive_files': '',
-            'drive_media_id': '',
-            'last_download_attempt': '',
-            'download_errors': '',
-            'permanent_failure': ''
-        }
-        processed_records.append(record)
+    # Process ALL people (both with and without docs)
+    people_to_process = all_people  # Full processing of all people
+    
+    for i, person in enumerate(people_to_process):
+        print(f"\nProcessing person {i+1}/{len(people_to_process)}: {person['name']} (Row {person.get('row_id', 'Unknown')})")
+        
+        # Check if this person has a document
+        if person.get('row_id') in people_with_docs_dict and person.get('doc_link'):
+            print(f"  → Has document: {person['doc_link']}")
+            
+            # Step 3: Scrape doc content and text
+            doc_content, doc_text = step3_scrape_doc_contents(person['doc_link'])
+            
+            # Step 4: Extract links from HTML content and document text
+            links = step4_extract_links(doc_content, doc_text)
+            
+            # Step 5: Process extracted data
+            record = step5_process_extracted_data(person, links, doc_text)
+            processed_records.append(record)
+        else:
+            print(f"  → No document")
+            # Create record for person without document
+            record = {
+                'row_id': person.get('row_id', ''),
+                'name': person['name'],
+                'email': person['email'],
+                'type': person['type'],
+                'link': person.get('doc_link', ''),  # Include link even if empty
+                'extracted_links': '',
+                'youtube_playlist': '',
+                'google_drive': '',
+                'processed': 'yes',
+                'document_text': '',
+                'youtube_status': '',
+                'youtube_files': '',
+                'youtube_media_id': '',
+                'drive_status': '',
+                'drive_files': '',
+                'drive_media_id': '',
+                'last_download_attempt': '',
+                'download_errors': '',
+                'permanent_failure': ''
+            }
+            processed_records.append(record)
     
     # Step 6: Map all data
     if processed_records:
