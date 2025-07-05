@@ -7,28 +7,15 @@ from queue import Queue
 import multiprocessing
 from functools import partial
 
-try:
-    from logger import setup_component_logging
-except ImportError:
-    from .logger import setup_component_logging
+# Import utilities using centralized import handling
+from .import_utils import safe_import
 
+# Setup imports using safe_import to eliminate try/except blocks
+get_logger = safe_import('logging_config', ['get_logger'])
+RateLimiter = safe_import('rate_limiter', ['RateLimiter'])
 
-class RateLimiter:
-    """Thread-safe rate limiter to prevent overwhelming services"""
-    
-    def __init__(self, max_per_second: float = 2.0):
-        self.max_per_second = max_per_second
-        self.min_interval = 1.0 / max_per_second
-        self.last_call = 0
-        self.lock = threading.Lock()
-    
-    def wait_if_needed(self):
-        """Wait if necessary to maintain rate limit"""
-        with self.lock:
-            elapsed = time.time() - self.last_call
-            if elapsed < self.min_interval:
-                time.sleep(self.min_interval - elapsed)
-            self.last_call = time.time()
+# Setup module logger
+logger = get_logger(__name__)
 
 
 class ProgressTracker:
@@ -93,7 +80,9 @@ def parallel_process(
         return []
     
     if not logger:
-        logger = setup_component_logging('parallel')
+        # Use module-level logger
+        logger = globals()['logger']
+        logger = globals()['logger']
     
     # Default workers based on CPU count
     if max_workers is None:
@@ -180,7 +169,9 @@ def batch_parallel_process(
         List of tuples (item, result)
     """
     if not logger:
-        logger = setup_component_logging('parallel')
+        # Use module-level logger
+        logger = globals()['logger']
+        logger = globals()['logger']
     
     all_results = []
     
@@ -233,7 +224,8 @@ def parallel_download_youtube_videos(
         from .download_youtube import download_video
     
     if not logger:
-        logger = setup_component_logging('youtube_parallel')
+        # Use module-level logger
+        logger = globals()['logger']
     
     # Create partial function with fixed parameters
     download_func = partial(
@@ -259,7 +251,7 @@ def parallel_download_youtube_videos(
 if __name__ == "__main__":
     import random
     
-    logger = setup_component_logging('main')
+    # Use module-level logger
     logger.info("Testing parallel processing utilities...")
     
     # Test function that simulates work

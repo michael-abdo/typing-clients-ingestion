@@ -6,7 +6,7 @@ import subprocess
 import time
 from pathlib import Path
 try:
-    from logger import setup_component_logging
+    from logging_config import get_logger
     from validation import validate_youtube_url, validate_file_path, ValidationError
     from retry_utils import retry_subprocess, retry_with_backoff
     from file_lock import file_lock, safe_file_operation
@@ -14,8 +14,10 @@ try:
     from rate_limiter import rate_limit, wait_for_rate_limit
     from row_context import RowContext, DownloadResult
     from sanitization import sanitize_error_message, SafeDownloadError
+    from error_decorators import handle_download_operations, handle_validation_errors
+    from error_messages import download_error, validation_error
 except ImportError:
-    from .logger import setup_component_logging
+    from .logging_config import get_logger
     from .validation import validate_youtube_url, validate_file_path, ValidationError
     from .retry_utils import retry_subprocess, retry_with_backoff
     from .file_lock import file_lock, safe_file_operation
@@ -23,6 +25,11 @@ except ImportError:
     from .rate_limiter import rate_limit, wait_for_rate_limit
     from .row_context import RowContext, DownloadResult
     from .sanitization import sanitize_error_message, SafeDownloadError
+    from .error_decorators import handle_download_operations, handle_validation_errors
+    from .error_messages import download_error, validation_error
+
+# Setup module logger
+logger = get_logger(__name__)
 
 # Get configuration
 config = get_config()
@@ -34,7 +41,7 @@ DOWNLOADS_DIR = get_youtube_downloads_dir()
 def download_single_video(url, video_id=None, title=None, transcript_only=False, resolution=None, output_format=None, yt_dlp_path="yt-dlp", logger=None):
     """Download a single YouTube video using yt-dlp"""
     if not logger:
-        logger = setup_component_logging('youtube')
+        logger = globals()['logger']  # Use module-level logger
     
     # Use config defaults if not provided
     if resolution is None:
@@ -42,15 +49,20 @@ def download_single_video(url, video_id=None, title=None, transcript_only=False,
     if output_format is None:
         output_format = config.get('downloads.youtube.default_format', 'mp4')
     
-    # Validate URL
-    try:
+    # Validate URL using centralized error handling
+    @handle_validation_errors("YouTube URL validation", return_on_error=(None, None),
+                            context={'url': url, 'video_id': video_id})
+    def validate_url():
+        nonlocal url, video_id
         url, validated_video_id = validate_youtube_url(url)
         if not video_id:
             video_id = validated_video_id
-    except ValidationError as e:
-        safe_error = sanitize_error_message(str(e))
-        logger.error(f"Invalid YouTube URL: {safe_error}")
+        return url, video_id
+    
+    result = validate_url()
+    if result == (None, None):
         return None, None
+    url, video_id = result
     
     downloads_path = create_download_dir(DOWNLOADS_DIR, logger)
     
@@ -64,8 +76,11 @@ def download_single_video(url, video_id=None, title=None, transcript_only=False,
             url
         ]
         
-        try:
-            # Get video ID and title with retry
+        # Get video info using centralized error handling
+        @handle_download_operations("get video info", download_type='youtube', 
+                                  return_on_error=(None, None), retry_count=0,
+                                  context={'url': url, 'video_id': video_id})
+        def get_video_info():
             result = retry_subprocess(
                 info_cmd,
                 capture_output=True,
@@ -76,14 +91,17 @@ def download_single_video(url, video_id=None, title=None, transcript_only=False,
             )
             info = result.stdout.strip().split('\n')
             if len(info) != 2:
-                logger.error(f"Couldn't get video information for {url}")
-                return None, None
+                error_msg = download_error('YOUTUBE_ERROR', 
+                                         video_id=video_id or 'unknown',
+                                         details="Couldn't get video information")
+                raise ValueError(error_msg)
                 
-            video_id, title = info
-        except Exception as e:
-            safe_error = sanitize_error_message(str(e))
-            logger.error(f"Error getting video info after retries: {safe_error}")
+            return info
+        
+        info_result = get_video_info()
+        if info_result == (None, None):
             return None, None
+        video_id, title = info_result
     
     logger.info(f"Video ID: {video_id}")
     logger.info(f"Title: {title}")
@@ -165,8 +183,11 @@ def download_single_video(url, video_id=None, title=None, transcript_only=False,
                     has_transcript = True
                 else:
                     logger.warning("No transcript found for this video")
-            except subprocess.CalledProcessError:
-                logger.error("Error downloading transcript")
+            except subprocess.CalledProcessError as e:
+                error_msg = download_error('YOUTUBE_ERROR',
+                                         video_id=video_id,
+                                         details="Error downloading transcript")
+                logger.error(error_msg)
     
     # If transcript only mode, stop here
     if transcript_only:
@@ -191,7 +212,11 @@ def download_single_video(url, video_id=None, title=None, transcript_only=False,
             url
         ]
         
-        try:
+        # Download video using centralized error handling
+        @handle_download_operations("download video", download_type='youtube',
+                                  return_on_error=None, retry_count=0,
+                                  context={'url': url, 'video_id': video_id, 'resolution': resolution})
+        def download_video():
             logger.info(f"Downloading video in {resolution}p {output_format} format...")
             retry_subprocess(
                 video_cmd,
@@ -200,10 +225,12 @@ def download_single_video(url, video_id=None, title=None, transcript_only=False,
                 logger=logger
             )
             logger.success(f"Video downloaded to {video_file}")
-            return video_file, transcript_file if has_transcript else None
-        except Exception as e:
-            safe_error = sanitize_error_message(str(e))
-            logger.error(f"Error downloading video after retries: {safe_error}")
+            return video_file
+        
+        downloaded_video = download_video()
+        if downloaded_video:
+            return downloaded_video, transcript_file if has_transcript else None
+        else:
             # Still return transcript if we got it
             return None, transcript_file if has_transcript else None
 
@@ -211,7 +238,7 @@ def download_single_video(url, video_id=None, title=None, transcript_only=False,
 def download_youtube_with_context(url: str, row_context: RowContext, 
                                  transcript_only=False, resolution=None, output_format=None) -> DownloadResult:
     """Download YouTube video with full row context tracking"""
-    logger = setup_component_logging('youtube')
+    logger = globals()['logger']  # Use module-level logger
     
     # Check for null/empty URL first
     if not url or url == 'None' or url == 'nan' or url.strip() == '':
@@ -347,7 +374,7 @@ def download_youtube_with_context(url: str, row_context: RowContext,
 def download_video(url, transcript_only=False, resolution="720", output_format="mp4", logger=None):
     """Download a YouTube video or playlist using yt-dlp"""
     if not logger:
-        logger = setup_component_logging('youtube')
+        logger = globals()['logger']  # Use module-level logger
     
     # Basic URL validation first
     try:
@@ -476,7 +503,7 @@ def download_video(url, transcript_only=False, resolution="720", output_format="
 
 def main():
     # Setup logging
-    logger = setup_component_logging('youtube')
+    logger = globals()['logger']  # Use module-level logger
     
     parser = argparse.ArgumentParser(description='Download YouTube videos and transcripts using yt-dlp')
     parser.add_argument('url', help='YouTube video URL')

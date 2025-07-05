@@ -7,6 +7,11 @@ Keep it simple. No over-engineering.
 import requests
 import pandas as pd
 import re
+import argparse
+import sys
+import json
+import pickle
+from datetime import datetime
 from pathlib import Path
 from urllib.parse import urlparse
 import os
@@ -20,14 +25,55 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
-# Constants
-GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/u/1/d/e/2PACX-1vRqqjqoaj8sEZBfZRw0Og7g8ms_0yTL2MsegTubcjhhBnXr1s1jFBwIVAsbkyj1xD0TMj06LvGTQIHU/pubhtml?pli=1#"
-TARGET_DIV_ID = "1159146182"
-OUTPUT_DIR = Path("simple_downloads")
-OUTPUT_CSV = "simple_output.csv"
+# Configuration - centralized settings
+class Config:
+    GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/u/1/d/e/2PACX-1vRqqjqoaj8sEZBfZRw0Og7g8ms_0yTL2MsegTubcjhhBnXr1s1jFBwIVAsbkyj1xD0TMj06LvGTQIHU/pubhtml?pli=1#"
+    TARGET_DIV_ID = "1159146182"
+    OUTPUT_DIR = Path("simple_downloads")
+    OUTPUT_CSV_FULL = "simple_output.csv"
+    OUTPUT_CSV_BASIC = "simple_output.csv"  # Unified output file
+    
+    # Processing modes
+    BASIC_ONLY = False  # True = extract only basic columns, False = full processing
+    TEXT_ONLY = False   # True = extract only text (basic + document_text), False = full processing
+    TEST_LIMIT = None   # None = process all, int = limit for testing
+    
+    # Batch processing settings
+    BATCH_SIZE = 10     # Process N documents at a time
+    RETRY_ATTEMPTS = 3  # Retry failed extractions N times
+    DELAY_BETWEEN_DOCS = 2  # Seconds between document extractions
+    
+    # Progress tracking
+    PROGRESS_FILE = "extraction_progress.json"
+    FAILED_DOCS_FILE = "failed_extractions.json"
 
 # Global selenium driver
 _driver = None
+
+# Progress tracking functions
+def load_progress():
+    """Load extraction progress from file"""
+    if os.path.exists(Config.PROGRESS_FILE):
+        with open(Config.PROGRESS_FILE, 'r') as f:
+            return json.load(f)
+    return {"completed": [], "failed": [], "last_batch": 0, "total_processed": 0}
+
+def save_progress(progress):
+    """Save extraction progress to file"""
+    with open(Config.PROGRESS_FILE, 'w') as f:
+        json.dump(progress, f, indent=2)
+
+def load_failed_docs():
+    """Load failed document extraction list"""
+    if os.path.exists(Config.FAILED_DOCS_FILE):
+        with open(Config.FAILED_DOCS_FILE, 'r') as f:
+            return json.load(f)
+    return []
+
+def save_failed_docs(failed_list):
+    """Save failed document extraction list"""
+    with open(Config.FAILED_DOCS_FILE, 'w') as f:
+        json.dump(failed_list, f, indent=2)
 
 def get_selenium_driver():
     """Initialize and return a Selenium WebDriver instance"""
@@ -148,7 +194,7 @@ def step1_download_sheet():
     """Step 1: Download a local copy of the Google Sheet"""
     print("Step 1: Downloading Google Sheet...")
     
-    response = requests.get(GOOGLE_SHEET_URL)
+    response = requests.get(Config.GOOGLE_SHEET_URL)
     response.raise_for_status()
     
     # Save the HTML
@@ -165,7 +211,7 @@ def step2_extract_people_and_docs(html_content):
     soup = BeautifulSoup(html_content, "html.parser")
     
     # Look for the specific div with target ID
-    target_div = soup.find("div", {"id": TARGET_DIV_ID})
+    target_div = soup.find("div", {"id": Config.TARGET_DIV_ID})
     if target_div:
         table = target_div.find("table")
     else:
@@ -400,7 +446,7 @@ def step5_process_extracted_data(person, links, doc_text=""):
     print("Step 5: Processing extracted data...")
     
     # Create output directory
-    OUTPUT_DIR.mkdir(exist_ok=True)
+    Config.OUTPUT_DIR.mkdir(exist_ok=True)
     
     # Filter links to get only meaningful content links, not infrastructure
     meaningful_youtube = []
@@ -466,6 +512,52 @@ def step5_process_extracted_data(person, links, doc_text=""):
     
     return record
 
+def create_basic_record(person):
+    """Create a basic record with just the 5 core columns"""
+    return {
+        'row_id': person.get('row_id', ''),
+        'name': person['name'],
+        'email': person['email'],
+        'type': person['type'],
+        'link': person.get('doc_link', '')
+    }
+
+def create_text_record(person, doc_text=""):
+    """Create a record with basic columns + document_text"""
+    return {
+        'row_id': person.get('row_id', ''),
+        'name': person['name'],
+        'email': person['email'],
+        'type': person['type'],
+        'link': person.get('doc_link', ''),
+        'document_text': doc_text,
+        'processed': 'yes',
+        'extraction_date': datetime.now().isoformat()
+    }
+
+def extract_text_with_retry(doc_url, max_attempts=None):
+    """Extract text from document with retry logic"""
+    if max_attempts is None:
+        max_attempts = Config.RETRY_ATTEMPTS
+    
+    for attempt in range(max_attempts):
+        try:
+            print(f"  Attempt {attempt + 1}/{max_attempts}: Extracting text...")
+            text = extract_google_doc_text(doc_url)
+            if text and len(text.strip()) > 0:
+                print(f"  ✓ Extracted {len(text)} characters")
+                return text, None
+            else:
+                print(f"  ⚠ No text extracted on attempt {attempt + 1}")
+        except Exception as e:
+            error_msg = str(e)
+            print(f"  ✗ Attempt {attempt + 1} failed: {error_msg}")
+            if attempt < max_attempts - 1:
+                print(f"  Retrying in {Config.DELAY_BETWEEN_DOCS} seconds...")
+                time.sleep(Config.DELAY_BETWEEN_DOCS)
+    
+    return "", f"Failed after {max_attempts} attempts"
+
 def step6_map_data(processed_records):
     """Step 6: Map data to CSV matching main system structure"""
     print("Step 6: Mapping data to CSV format...")
@@ -473,37 +565,115 @@ def step6_map_data(processed_records):
     # Create DataFrame with proper column order matching main system
     df = pd.DataFrame(processed_records)
     
-    # Ensure all required columns are present
-    required_columns = [
-        'row_id', 'name', 'email', 'type', 'link', 'extracted_links', 
-        'youtube_playlist', 'google_drive', 'processed', 'document_text',
-        'youtube_status', 'youtube_files', 'youtube_media_id',
-        'drive_status', 'drive_files', 'drive_media_id',
-        'last_download_attempt', 'download_errors', 'permanent_failure'
-    ]
+    # Handle different column sets based on processing mode
+    if Config.BASIC_ONLY:
+        # Basic mode: only 5 columns
+        required_columns = ['row_id', 'name', 'email', 'type', 'link']
+    elif Config.TEXT_ONLY:
+        # Text mode: basic columns + document text + processing info
+        required_columns = ['row_id', 'name', 'email', 'type', 'link', 'document_text', 'processed', 'extraction_date']
+    else:
+        # Full mode: all columns matching main system
+        required_columns = [
+            'row_id', 'name', 'email', 'type', 'link', 'extracted_links', 
+            'youtube_playlist', 'google_drive', 'processed', 'document_text',
+            'youtube_status', 'youtube_files', 'youtube_media_id',
+            'drive_status', 'drive_files', 'drive_media_id',
+            'last_download_attempt', 'download_errors', 'permanent_failure'
+        ]
     
+    # Ensure all required columns are present
     for col in required_columns:
         if col not in df.columns:
             df[col] = ''
     
-    # Reorder columns to match main system
+    # Reorder columns to match requirements
     df = df[required_columns]
     
     # Save to CSV
-    df.to_csv(OUTPUT_CSV, index=False)
+    if Config.BASIC_ONLY:
+        output_file = Config.OUTPUT_CSV_BASIC
+    elif Config.TEXT_ONLY:
+        output_file = "text_extraction_output.csv"
+    else:
+        output_file = Config.OUTPUT_CSV_FULL
     
-    print(f"✓ Data mapped and saved to {OUTPUT_CSV}")
+    df.to_csv(output_file, index=False)
+    
+    print(f"✓ Data mapped and saved to {output_file}")
     print(f"  Total records: {len(df)}")
-    print(f"  Records with docs: {len(df[df['link'] != ''])}")
-    print(f"  Records with YouTube: {len(df[df['youtube_playlist'] != ''])}")
-    print(f"  Records with Drive: {len(df[df['google_drive'] != ''])}")
+    print(f"  Records with links: {len(df[df['link'] != ''])}")
+    
+    # Additional stats only for full mode
+    if not Config.BASIC_ONLY and not Config.TEXT_ONLY:
+        print(f"  Records with YouTube: {len(df[df['youtube_playlist'] != ''])}")
+        print(f"  Records with Drive: {len(df[df['google_drive'] != ''])}")
+    
+    # Text mode specific stats
+    if Config.TEXT_ONLY:
+        if 'document_text' in df.columns:
+            successful_extractions = len(df[(df['document_text'] != '') & (~df['document_text'].str.startswith('EXTRACTION_FAILED', na=False))])
+            failed_extractions = len(df[df['document_text'].str.startswith('EXTRACTION_FAILED', na=False)])
+            print(f"  Successful text extractions: {successful_extractions}")
+            print(f"  Failed text extractions: {failed_extractions}")
     
     return df
 
+def parse_arguments():
+    """Parse command line arguments"""
+    parser = argparse.ArgumentParser(description='Simple 6-Step Workflow - Unified Processing')
+    
+    # Processing mode options (mutually exclusive)
+    mode_group = parser.add_mutually_exclusive_group()
+    mode_group.add_argument('--basic', action='store_true', 
+                           help='Extract only basic columns (row_id, name, email, type, link)')
+    mode_group.add_argument('--text', action='store_true',
+                           help='Extract basic columns + document text (batch processing)')
+    
+    # Processing options
+    parser.add_argument('--test-limit', type=int, metavar='N',
+                       help='Limit processing to N records for testing')
+    parser.add_argument('--batch-size', type=int, metavar='N', default=10,
+                       help='Process N documents per batch (default: 10)')
+    parser.add_argument('--resume', action='store_true',
+                       help='Resume from previous extraction progress')
+    parser.add_argument('--retry-failed', action='store_true',
+                       help='Retry previously failed extractions')
+    parser.add_argument('--output', type=str, metavar='FILE',
+                       help='Override output CSV filename')
+    
+    return parser.parse_args()
+
 def main():
     """Run the complete 6-step workflow"""
-    print("STARTING SIMPLE 6-STEP WORKFLOW")
-    print("=" * 50)
+    # Parse command line arguments
+    args = parse_arguments()
+    
+    # Configure based on arguments
+    Config.BASIC_ONLY = args.basic
+    Config.TEXT_ONLY = args.text
+    Config.BATCH_SIZE = args.batch_size
+    
+    if args.test_limit:
+        Config.TEST_LIMIT = args.test_limit
+    if args.output:
+        Config.OUTPUT_CSV_FULL = args.output
+        Config.OUTPUT_CSV_BASIC = args.output
+    
+    # Display configuration
+    if Config.BASIC_ONLY:
+        mode = "BASIC MODE"
+    elif Config.TEXT_ONLY:
+        mode = f"TEXT EXTRACTION MODE (batch size: {Config.BATCH_SIZE})"
+    else:
+        mode = "FULL MODE"
+    
+    limit_text = f" (limited to {Config.TEST_LIMIT})" if Config.TEST_LIMIT else ""
+    resume_text = " [RESUMING]" if args.resume else ""
+    retry_text = " [RETRY FAILED]" if args.retry_failed else ""
+    
+    print(f"STARTING SIMPLE 6-STEP WORKFLOW - {mode}{limit_text}{resume_text}{retry_text}")
+    print("=" * 80)
     
     processed_records = []
     
@@ -520,50 +690,147 @@ def main():
     # Create a lookup for people with docs for efficient processing
     people_with_docs_dict = {person['row_id']: person for person in people_with_docs}
     
-    # Process ALL people (both with and without docs)
-    people_to_process = all_people  # Full processing of all people
+    # Determine processing approach based on mode
+    if Config.BASIC_ONLY:
+        print(f"\n🚀 BASIC MODE: Processing {len(all_people)} people (basic data only)...")
+        # Basic processing - just extract core data, no document processing
+        for i, person in enumerate(all_people):
+            if Config.TEST_LIMIT and i >= Config.TEST_LIMIT:
+                print(f"Test limit reached: {Config.TEST_LIMIT}")
+                break
+            record = create_basic_record(person)
+            processed_records.append(record)
+        print(f"✓ Processed {len(processed_records)} records in basic mode")
     
-    for i, person in enumerate(people_to_process):
-        print(f"\nProcessing person {i+1}/{len(people_to_process)}: {person['name']} (Row {person.get('row_id', 'Unknown')})")
+    elif Config.TEXT_ONLY:
+        print(f"\n🚀 TEXT EXTRACTION MODE: Processing {len(people_with_docs)} documents...")
         
-        # Check if this person has a document
-        if person.get('row_id') in people_with_docs_dict and person.get('doc_link'):
-            print(f"  → Has document: {person['doc_link']}")
-            
-            # Step 3: Scrape doc content and text
-            doc_content, doc_text = step3_scrape_doc_contents(person['doc_link'])
-            
-            # Step 4: Extract links from HTML content and document text
-            links = step4_extract_links(doc_content, doc_text)
-            
-            # Step 5: Process extracted data
-            record = step5_process_extracted_data(person, links, doc_text)
-            processed_records.append(record)
+        # Load previous progress if resuming
+        progress = load_progress() if args.resume else {"completed": [], "failed": [], "last_batch": 0, "total_processed": 0}
+        failed_docs = load_failed_docs() if args.retry_failed else []
+        
+        # Process all people first (add basic records for those without docs)
+        for person in all_people:
+            if not person.get('doc_link'):
+                record = create_text_record(person)
+                processed_records.append(record)
+        
+        # Determine which documents to process
+        if args.retry_failed and failed_docs:
+            docs_to_process = [person for person in people_with_docs if person['doc_link'] in failed_docs]
+            print(f"  Retrying {len(docs_to_process)} previously failed documents...")
+        elif args.resume:
+            docs_to_process = [person for person in people_with_docs if person['doc_link'] not in progress['completed']]
+            print(f"  Resuming: {len(docs_to_process)} remaining documents...")
         else:
-            print(f"  → No document")
-            # Create record for person without document
-            record = {
-                'row_id': person.get('row_id', ''),
-                'name': person['name'],
-                'email': person['email'],
-                'type': person['type'],
-                'link': person.get('doc_link', ''),  # Include link even if empty
-                'extracted_links': '',
-                'youtube_playlist': '',
-                'google_drive': '',
-                'processed': 'yes',
-                'document_text': '',
-                'youtube_status': '',
-                'youtube_files': '',
-                'youtube_media_id': '',
-                'drive_status': '',
-                'drive_files': '',
-                'drive_media_id': '',
-                'last_download_attempt': '',
-                'download_errors': '',
-                'permanent_failure': ''
-            }
-            processed_records.append(record)
+            docs_to_process = people_with_docs
+            print(f"  Processing all {len(docs_to_process)} documents...")
+        
+        # Apply test limit if specified
+        if Config.TEST_LIMIT:
+            docs_to_process = docs_to_process[:Config.TEST_LIMIT]
+            print(f"  Limited to {len(docs_to_process)} documents for testing")
+        
+        # Process documents in batches
+        current_failed = []
+        batch_start = progress.get('last_batch', 0) if args.resume else 0
+        
+        for i in range(batch_start, len(docs_to_process), Config.BATCH_SIZE):
+            batch = docs_to_process[i:i + Config.BATCH_SIZE]
+            batch_num = (i // Config.BATCH_SIZE) + 1
+            total_batches = (len(docs_to_process) + Config.BATCH_SIZE - 1) // Config.BATCH_SIZE
+            
+            print(f"\n📦 BATCH {batch_num}/{total_batches} ({len(batch)} documents)")
+            print("-" * 50)
+            
+            for j, person in enumerate(batch):
+                doc_index = i + j + 1
+                print(f"\n[{doc_index}/{len(docs_to_process)}] Processing: {person['name']}")
+                print(f"  Document: {person['doc_link']}")
+                
+                # Extract text with retry logic
+                doc_text, error = extract_text_with_retry(person['doc_link'])
+                
+                if error:
+                    print(f"  ✗ Failed: {error}")
+                    current_failed.append(person['doc_link'])
+                    progress['failed'].append(person['doc_link'])
+                    record = create_text_record(person, f"EXTRACTION_FAILED: {error}")
+                else:
+                    print(f"  ✓ Success: {len(doc_text)} characters extracted")
+                    progress['completed'].append(person['doc_link'])
+                    record = create_text_record(person, doc_text)
+                
+                processed_records.append(record)
+                progress['total_processed'] += 1
+                
+                # Add delay between documents
+                if j < len(batch) - 1:  # Don't delay after last document in batch
+                    time.sleep(Config.DELAY_BETWEEN_DOCS)
+            
+            # Save progress after each batch
+            progress['last_batch'] = i + Config.BATCH_SIZE
+            save_progress(progress)
+            save_failed_docs(current_failed)
+            
+            print(f"\n✓ Batch {batch_num} complete")
+            batch_records = processed_records[-len(batch):]
+            successful_in_batch = len([r for r in batch_records if not r.get('document_text', '').startswith('EXTRACTION_FAILED')])
+            failed_in_batch = len(batch) - successful_in_batch
+            print(f"  Successful: {successful_in_batch}")
+            print(f"  Failed: {failed_in_batch}")
+        
+        print(f"\n🎉 TEXT EXTRACTION COMPLETE")
+        print(f"  Total processed: {progress['total_processed']}")
+        print(f"  Successful extractions: {len(progress['completed'])}")
+        print(f"  Failed extractions: {len(current_failed)}")
+    
+    else:
+        print(f"\n🚀 FULL MODE: Processing {len(all_people)} people (with document processing)...")
+        # Full processing of all people (both with and without docs)
+        people_to_process = all_people[:Config.TEST_LIMIT] if Config.TEST_LIMIT else all_people
+        
+        for i, person in enumerate(people_to_process):
+            print(f"\nProcessing person {i+1}/{len(people_to_process)}: {person['name']} (Row {person.get('row_id', 'Unknown')})")
+            
+            # Check if this person has a document
+            if person.get('row_id') in people_with_docs_dict and person.get('doc_link'):
+                print(f"  → Has document: {person['doc_link']}")
+                
+                # Step 3: Scrape doc content and text
+                doc_content, doc_text = step3_scrape_doc_contents(person['doc_link'])
+                
+                # Step 4: Extract links from HTML content and document text
+                links = step4_extract_links(doc_content, doc_text)
+                
+                # Step 5: Process extracted data
+                record = step5_process_extracted_data(person, links, doc_text)
+                processed_records.append(record)
+            else:
+                print(f"  → No document")
+                # Create record for person without document
+                record = {
+                    'row_id': person.get('row_id', ''),
+                    'name': person['name'],
+                    'email': person['email'],
+                    'type': person['type'],
+                    'link': person.get('doc_link', ''),  # Include link even if empty
+                    'extracted_links': '',
+                    'youtube_playlist': '',
+                    'google_drive': '',
+                    'processed': 'yes',
+                    'document_text': '',
+                    'youtube_status': '',
+                    'youtube_files': '',
+                    'youtube_media_id': '',
+                    'drive_status': '',
+                    'drive_files': '',
+                    'drive_media_id': '',
+                    'last_download_attempt': '',
+                    'download_errors': '',
+                    'permanent_failure': ''
+                }
+                processed_records.append(record)
     
     # Step 6: Map all data
     if processed_records:

@@ -1,8 +1,9 @@
 """Configuration management module for centralized settings."""
 import os
 import yaml
+import importlib
 from pathlib import Path
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Union, List
 import logging
 
 # Singleton pattern for configuration
@@ -210,6 +211,71 @@ def get_allowed_domains(service: str) -> list:
 def get_streaming_threshold() -> int:
     """Get file size threshold for streaming operations."""
     return get_config().get("file_processing.streaming_threshold", 5242880)
+
+
+def safe_import(module_names: Union[str, List[str]], from_items: Optional[Union[str, List[str]]] = None, 
+                package: Optional[str] = None) -> Any:
+    """
+    Centralized import management with automatic fallback for relative/absolute imports.
+    
+    Eliminates the need for try/except ImportError blocks throughout the codebase.
+    
+    Args:
+        module_names: Module name(s) to import from
+        from_items: Specific items to import (functions, classes, etc.)
+        package: Package name for relative imports
+    
+    Returns:
+        Imported module or specific items
+        
+    Examples:
+        # Import entire module
+        csv_tracker = safe_import('csv_tracker')
+        
+        # Import specific functions
+        reset_func = safe_import('csv_tracker', 'reset_all_download_status')
+        
+        # Import multiple items
+        funcs = safe_import('csv_tracker', ['reset_all_download_status', 'ensure_tracking_columns'])
+    """
+    if isinstance(module_names, str):
+        module_names = [module_names]
+    if isinstance(from_items, str):
+        from_items = [from_items]
+    
+    last_error = None
+    
+    # Try absolute import first
+    for module_name in module_names:
+        try:
+            module = importlib.import_module(module_name)
+            if from_items:
+                if len(from_items) == 1:
+                    return getattr(module, from_items[0])
+                else:
+                    return [getattr(module, item) for item in from_items]
+            return module
+        except ImportError as e:
+            last_error = e
+            continue
+    
+    # Try relative import as fallback
+    if package:
+        for module_name in module_names:
+            try:
+                module = importlib.import_module(f'.{module_name}', package=package)
+                if from_items:
+                    if len(from_items) == 1:
+                        return getattr(module, from_items[0])
+                    else:
+                        return [getattr(module, item) for item in from_items]
+                return module
+            except ImportError as e:
+                last_error = e
+                continue
+    
+    # If all imports fail, raise the last error
+    raise last_error
 
 
 # Example usage

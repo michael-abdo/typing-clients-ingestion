@@ -11,14 +11,20 @@ from pathlib import Path
 from collections import defaultdict
 import argparse
 
+# Import standardized CSV reading function
+try:
+    from csv_tracker import safe_csv_read
+except ImportError:
+    from .csv_tracker import safe_csv_read
+
 
 def organize_files_by_type(mapping_csv: str = 'complete_file_mapping_100_percent.csv',
                           output_dir: str = 'organized_by_type',
                           copy_files: bool = True) -> None:
     """Organize all files by personality type using complete mapping"""
     
-    # Load complete mapping
-    df = pd.read_csv(mapping_csv)
+    # Load complete mapping with string dtype specification
+    df = safe_csv_read(mapping_csv, 'all_string')
     
     # Filter out system files
     df_persons = df[df['mapping_status'] != 'system_file']

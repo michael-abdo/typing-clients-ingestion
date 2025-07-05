@@ -1,10 +1,18 @@
 #!/usr/bin/env python3
 """
-Create Definitive CSV-to-File Mapping
-Creates the authoritative mapping of files to CSV rows based on CSV file listings.
+DEPRECATED: Create Definitive CSV-to-File Mapping - USE comprehensive_file_mapper.FileMapper INSTEAD
 
-UPDATED: Now uses CleanFileMapper for robust, contamination-free mapping.
+This module is deprecated. All functionality has been moved to comprehensive_file_mapper.py
+for better consolidation and DRY principle adherence.
+
+Use: from utils.comprehensive_file_mapper import FileMapper
 """
+import warnings
+warnings.warn(
+    "create_definitive_mapping.py is deprecated. Use comprehensive_file_mapper.FileMapper for definitive mapping.",
+    DeprecationWarning, 
+    stacklevel=2
+)
 
 import os
 import glob
@@ -13,9 +21,13 @@ import pandas as pd
 from collections import defaultdict
 from typing import Dict, List, Set, Tuple
 import shutil
+
+# Import consolidated functionality
 try:
-    from utils.clean_file_mapper import CleanFileMapper
+    from .comprehensive_file_mapper import FileMapper
+    from .clean_file_mapper import CleanFileMapper
 except ImportError:
+    from comprehensive_file_mapper import FileMapper
     from clean_file_mapper import CleanFileMapper
 
 

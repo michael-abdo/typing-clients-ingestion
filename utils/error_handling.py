@@ -270,13 +270,14 @@ def validate_csv_integrity(csv_path: str) -> List[ErrorContext]:
     
     try:
         import pandas as pd
+        from csv_tracker import safe_csv_read
         
         # Check if file exists
         if not os.path.exists(csv_path):
             raise FileNotFoundError(f"CSV file not found: {csv_path}")
             
-        # Check if file is readable
-        df = pd.read_csv(csv_path)
+        # Check if file is readable with standardized dtype specification
+        df = safe_csv_read(csv_path, 'basic')
         
         # Check required columns
         required_columns = ['row_id', 'name', 'email', 'type']

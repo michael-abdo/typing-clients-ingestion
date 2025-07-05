@@ -13,7 +13,7 @@ from utils.logger import pipeline_run, get_pipeline_logger
 from utils.logging_config import get_logger
 from utils.parallel_processor import parallel_download_youtube_videos
 from utils.config import get_config, get_drive_downloads_dir
-from utils.csv_tracker import ensure_tracking_columns, get_pending_downloads, update_csv_download_status
+from utils.csv_tracker import ensure_tracking_columns, get_pending_downloads, update_csv_download_status, safe_csv_read
 from utils.row_context import create_row_context_from_csv_row
 from utils.download_youtube import download_youtube_with_context
 from utils.download_drive import download_drive_with_context
@@ -68,6 +68,7 @@ def main():
     parser = argparse.ArgumentParser(description="Run the complete workflow: scrape Google Sheet, download Google Drive files and YouTube videos")
     parser.add_argument("--max-rows", type=int, default=None, help="Maximum number of rows to process for Google Sheet scraping")
     parser.add_argument("--reset", action="store_true", help="Reset processed status and reprocess all rows")
+    parser.add_argument("--reset-downloads", action="store_true", help="Reset download status (youtube_status, drive_status) for all rows")
     parser.add_argument("--skip-sheet", action="store_true", help="Skip Google Sheet scraping")
     parser.add_argument("--skip-drive", action="store_true", help="Skip Google Drive downloads")
     parser.add_argument("--skip-youtube", action="store_true", help="Skip YouTube downloads")
@@ -105,6 +106,8 @@ def main_workflow(args, logger=None):
             command.extend(["--max-rows", str(args.max_rows)])
         if args.reset:
             command.append("--reset")
+        if args.reset_downloads:
+            command.append("--reset-downloads")
         
         exit_code = run_process(command, "Step 1: Scraping Google Sheet and extracting links", 'scraper', logger)
         if exit_code != 0:
@@ -138,7 +141,7 @@ def main_workflow(args, logger=None):
             
             # Process downloads with row context tracking
             import pandas as pd
-            df = pd.read_csv(output_csv_path)
+            df = safe_csv_read(output_csv_path, 'tracking')
             
             drive_count = 0
             for row_context in pending_drive:
@@ -148,34 +151,45 @@ def main_workflow(args, logger=None):
                 # Get the actual row data
                 row = df.iloc[row_context.row_index]
                 drive_url = row.get('google_drive')
+                main_link = row.get('link')
                 
+                # Check both google_drive column and main link column for Google Drive URLs
+                urls_to_check = []
+                
+                # Add google_drive column URLs
                 if pd.notna(drive_url) and str(drive_url).strip() not in ['', "'-"]:
                     # Handle multiple drive links separated by |
                     drive_urls = str(drive_url).split('|') if '|' in str(drive_url) else [str(drive_url)]
+                    urls_to_check.extend(drive_urls)
+                
+                # Check if main link is a Google Drive file URL
+                if pd.notna(main_link) and "drive.google.com/file" in str(main_link):
+                    urls_to_check.append(str(main_link))
                     
-                    for drive_link in drive_urls:
-                        drive_link = drive_link.strip()
-                        if drive_link and "drive.google.com" in drive_link:
+                # Process all found Google Drive URLs
+                for drive_link in urls_to_check:
+                    drive_link = drive_link.strip()
+                    if drive_link and "drive.google.com" in drive_link:
+                        if logger:
+                            logger.get_logger('drive').info(f"Downloading Google Drive file for {row_context.name} (Type: {row_context.type}): {drive_link}")
+                        else:
+                            print(f"\nDownloading Google Drive file for {row_context.name} (Type: {row_context.type}): {drive_link}")
+                        
+                        # Use new row-centric download function
+                        result = download_drive_with_context(drive_link, row_context)
+                        
+                        # Update CSV with result
+                        update_csv_download_status(row_context.row_index, 'drive', result)
+                        
+                        if result.success:
                             if logger:
-                                logger.get_logger('drive').info(f"Downloading Google Drive file for {row_context.name} (Type: {row_context.type}): {drive_link}")
+                                logger.update_stats(drive_downloads=logger.run_stats['drive_downloads'] + 1)
+                            drive_count += 1
+                        else:
+                            if logger:
+                                logger.log_error(f"Failed to download Google Drive file for {row_context.name}: {result.error_message}")
                             else:
-                                print(f"\nDownloading Google Drive file for {row_context.name} (Type: {row_context.type}): {drive_link}")
-                            
-                            # Use new row-centric download function
-                            result = download_drive_with_context(drive_link, row_context)
-                            
-                            # Update CSV with result
-                            update_csv_download_status(row_context.row_index, 'drive', result)
-                            
-                            if result.success:
-                                if logger:
-                                    logger.update_stats(drive_downloads=logger.run_stats['drive_downloads'] + 1)
-                                drive_count += 1
-                            else:
-                                if logger:
-                                    logger.log_error(f"Failed to download Google Drive file for {row_context.name}: {result.error_message}")
-                                else:
-                                    print(f"Warning: Failed to download Google Drive file for {row_context.name}: {result.error_message}")
+                                print(f"Warning: Failed to download Google Drive file for {row_context.name}: {result.error_message}")
             
             if logger:
                 logger.get_logger('main').info(f"Completed {drive_count} Google Drive downloads with row tracking")
@@ -204,7 +218,7 @@ def main_workflow(args, logger=None):
             
             # Process downloads with row context tracking
             import pandas as pd
-            df = pd.read_csv(output_csv_path)
+            df = safe_csv_read(output_csv_path, 'tracking')
             
             youtube_count = 0
             for row_context in pending_youtube:

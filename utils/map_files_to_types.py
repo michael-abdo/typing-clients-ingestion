@@ -1,10 +1,18 @@
 #!/usr/bin/env python3
 """
-Map downloaded files to personality types using metadata files.
-Provides multiple organization strategies to preserve type information with content.
+DEPRECATED: Map files to personality types - USE comprehensive_file_mapper.FileMapper INSTEAD
 
-UPDATED: Now uses CleanFileMapper to eliminate directory-based contamination.
+This module is deprecated. All functionality has been moved to comprehensive_file_mapper.py
+for better consolidation and DRY principle adherence.
+
+Use: from utils.comprehensive_file_mapper import FileMapper
 """
+import warnings
+warnings.warn(
+    "map_files_to_types.py is deprecated. Use comprehensive_file_mapper.FileMapper for all mapping operations.",
+    DeprecationWarning, 
+    stacklevel=2
+)
 
 import json
 import os
@@ -15,9 +23,13 @@ from pathlib import Path
 from collections import defaultdict
 import argparse
 from typing import Dict, List, Tuple
+
+# Import consolidated functionality
 try:
-    from utils.clean_file_mapper import CleanFileMapper
+    from .comprehensive_file_mapper import FileMapper
+    from .clean_file_mapper import CleanFileMapper
 except ImportError:
+    from comprehensive_file_mapper import FileMapper
     from clean_file_mapper import CleanFileMapper
 
 

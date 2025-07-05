@@ -1,13 +1,30 @@
 #!/usr/bin/env python3
 """
-Recover unmapped files by matching video IDs and filenames to CSV data
+DEPRECATED: Recover unmapped files - USE comprehensive_file_mapper.FileMapper INSTEAD
+
+This module is deprecated. All functionality has been moved to comprehensive_file_mapper.py
+for better consolidation and DRY principle adherence.
+
+Use: from utils.comprehensive_file_mapper import FileMapper
 """
+import warnings
+warnings.warn(
+    "recover_unmapped_files.py is deprecated. Use comprehensive_file_mapper.FileMapper for file recovery.",
+    DeprecationWarning, 
+    stacklevel=2
+)
 
 import os
 import re
 import pandas as pd
 import glob
 from typing import Dict, Optional
+
+# Import consolidated functionality
+try:
+    from .comprehensive_file_mapper import FileMapper
+except ImportError:
+    from comprehensive_file_mapper import FileMapper
 
 
 def extract_video_id(filename: str) -> Optional[str]:

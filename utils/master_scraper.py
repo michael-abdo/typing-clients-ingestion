@@ -9,15 +9,20 @@ sys.path.append(os.path.join(os.path.dirname(__file__), 'utils'))
 try:
     from scrape_google_sheets import fetch_table_data, update_csv
     from extract_links import process_url
-    from logger import setup_component_logging
+    from logging_config import get_logger
     from atomic_csv import atomic_csv_update, write_csv_atomic
     from streaming_csv import streaming_csv_update
+    from csv_tracker import reset_all_download_status
+
+# Setup module logger
+logger = get_logger(__name__)
 except ImportError:
     from .scrape_google_sheets import fetch_table_data, update_csv
     from .extract_links import process_url
-    from .logger import setup_component_logging
+    from .logging_config import get_logger
     from .atomic_csv import atomic_csv_update, write_csv_atomic
     from .streaming_csv import streaming_csv_update
+    from .csv_tracker import reset_all_download_status
 
 def process_links_from_csv(max_rows=None, reset_processed=False, force_download=False):
     """
@@ -29,9 +34,13 @@ def process_links_from_csv(max_rows=None, reset_processed=False, force_download=
         max_rows (int, optional): Maximum number of rows to process. Defaults to None (process all).
         reset_processed (bool, optional): If True, reprocess rows even if they have already been processed. Defaults to False.
         force_download (bool, optional): If True, force a new download of the Google Sheet. Defaults to False.
+    
+    Note:
+        This function only resets the 'processed' column for link extraction.
+        To reset download status (youtube_status, drive_status), use --reset-downloads flag.
     """
-    # Setup logging
-    logger = setup_component_logging('scraper')
+    # Use module-level logger
+    # logger is already available at module level
     
     # First update the CSV with new data from Google Sheets
     logger.info("Updating CSV with latest Google Sheets data...")
@@ -285,9 +294,20 @@ if __name__ == "__main__":
                         help='Maximum number of rows to process')
     parser.add_argument('--reset', action='store_true',
                         help='Reset processed status and reprocess all rows')
+    parser.add_argument('--reset-downloads', action='store_true',
+                        help='Reset download status (youtube_status, drive_status) for all rows')
     parser.add_argument('--force-download', action='store_true',
                         help='Force new download of Google Sheet instead of using cached version')
     
     args = parser.parse_args()
     
+    # Handle download status reset if requested
+    # This resets youtube_status, drive_status, files, media_ids, errors, and attempt timestamps
+    # but preserves permanent_failure flags for safety
+    if args.reset_downloads:
+        print("Resetting download status for all rows...")
+        reset_counts = reset_all_download_status(download_type='both', csv_path='outputs/output.csv')
+        print(f"Reset complete: {reset_counts['youtube']} YouTube, {reset_counts['drive']} Drive downloads reset")
+    
+    # Process links from CSV (this handles the --reset flag for link extraction)
     process_links_from_csv(max_rows=args.max_rows, reset_processed=args.reset, force_download=args.force_download)

@@ -1,8 +1,18 @@
 #!/usr/bin/env python3
 """
-Fix mapping issues identified by comprehensive_file_mapper.py
-Achieves 100% file mapping and resolves data integrity issues.
+DEPRECATED: Fix mapping issues - USE comprehensive_file_mapper.FileMapper INSTEAD
+
+This module is deprecated. All functionality has been moved to comprehensive_file_mapper.py
+for better consolidation and DRY principle adherence.
+
+Use: from utils.comprehensive_file_mapper import FileMapper
 """
+import warnings
+warnings.warn(
+    "fix_mapping_issues.py is deprecated. Use comprehensive_file_mapper.FileMapper for all mapping operations.",
+    DeprecationWarning, 
+    stacklevel=2
+)
 
 import json
 import os
@@ -10,6 +20,12 @@ import shutil
 import pandas as pd
 import re
 from typing import Dict, List
+
+# Import consolidated functionality
+try:
+    from .comprehensive_file_mapper import FileMapper
+except ImportError:
+    from comprehensive_file_mapper import FileMapper
 
 
 class MappingIssueFixer:

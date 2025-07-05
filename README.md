@@ -73,7 +73,7 @@ python utils/monitoring.py --status
 
 View download statistics:
 ```bash
-python utils/csv_tracker.py --status
+python -c "from utils.csv_manager import CSVManager; CSVManager().get_download_status_summary()"
 ```
 
 ## 📁 Project Structure
@@ -84,7 +84,8 @@ python utils/csv_tracker.py --status
 ├── utils/                      # Core utilities
 │   ├── download_youtube.py     # YouTube downloader
 │   ├── download_drive.py       # Google Drive downloader
-│   ├── csv_tracker.py          # CSV tracking system
+│   ├── csv_manager.py          # Unified CSV operations (tracking, atomic, streaming)
+│   ├── comprehensive_file_mapper.py  # Unified file mapping system
 │   ├── monitoring.py           # System monitoring
 │   └── ...                     # Other utilities
 ├── config/                     # Configuration files
@@ -102,6 +103,55 @@ Edit `config/config.yaml` to customize:
 - Rate limits
 - Monitoring thresholds
 
+## 🔧 Core Modules (DRY Consolidated)
+
+### CSVManager - Unified CSV Operations
+Consolidates all CSV functionality into a single interface:
+
+```python
+from utils.csv_manager import CSVManager
+
+# Initialize CSV manager
+csv_manager = CSVManager('outputs/output.csv')
+
+# Read CSV with proper data types
+df = csv_manager.read()
+
+# Atomic operations
+csv_manager.atomic_write([{'name': 'John', 'type': 'ENFP'}])
+csv_manager.atomic_append([{'name': 'Jane', 'type': 'INFJ'}])
+
+# Streaming operations for large files
+csv_manager.stream_process(lambda chunk: len(chunk))
+
+# Tracking operations
+pending = csv_manager.get_pending_downloads()
+csv_manager.update_download_status(row_index=1, download_type='youtube', result=download_result)
+```
+
+### FileMapper - Unified File Mapping
+Consolidates all file mapping functionality:
+
+```python
+from utils.comprehensive_file_mapper import FileMapper
+
+# Initialize file mapper
+mapper = FileMapper('outputs/output.csv')
+
+# Map files to CSV rows
+mappings = mapper.map_files()
+
+# Organize files by personality type
+mapper.organize_by_type('organized_by_type')
+
+# Find and resolve mapping issues
+conflicts = mapper.find_mapping_conflicts()
+mapper.fix_orphaned_files()
+
+# Create definitive mapping
+definitive = mapper.create_definitive_mapping()
+```
+
 ## 📊 CSV Schema
 
 The system tracks downloads with these columns:
@@ -110,6 +160,65 @@ The system tracks downloads with these columns:
 - `drive_status`: Download status
 - `drive_files`: Downloaded filenames
 - `permanent_failure`: Marks content that should not be retried
+
+## 🔄 Migration Guide
+
+### From Legacy CSV Modules to CSVManager
+
+**Old approach** (deprecated modules):
+```python
+# Old way with multiple modules
+from utils.csv_tracker import get_pending_downloads, update_csv_download_status
+from utils.atomic_csv import atomic_csv_write
+from utils.streaming_csv import stream_csv_processing
+
+# Multiple different interfaces
+pending = get_pending_downloads('outputs/output.csv')
+atomic_csv_write('outputs/output.csv', data)
+stream_csv_processing('outputs/output.csv', process_func)
+```
+
+**New approach** (unified CSVManager):
+```python
+# New way with single unified interface
+from utils.csv_manager import CSVManager
+
+csv_manager = CSVManager('outputs/output.csv')
+pending = csv_manager.get_pending_downloads()
+csv_manager.atomic_write(data)
+csv_manager.stream_process(process_func)
+```
+
+### From Legacy File Mapping Modules to FileMapper
+
+**Old approach** (deprecated modules):
+```python
+# Old way with multiple modules
+from utils.clean_file_mapper import CleanFileMapper
+from utils.map_files_to_types import FileTypeMapper
+from utils.fix_mapping_issues import MappingIssueFixer
+from utils.recover_unmapped_files import match_unmapped_files
+
+# Multiple different interfaces and classes
+clean_mapper = CleanFileMapper('outputs/output.csv')
+type_mapper = FileTypeMapper('outputs/output.csv')  
+issue_fixer = MappingIssueFixer()
+match_unmapped_files('outputs/output.csv')
+```
+
+**New approach** (unified FileMapper):
+```python
+# New way with single unified interface
+from utils.comprehensive_file_mapper import FileMapper
+
+mapper = FileMapper('outputs/output.csv')
+mapper.map_files()  # Clean mapping
+mapper.organize_by_type()  # Type organization  
+mapper.fix_orphaned_files()  # Issue fixing
+mapper.recover_unmapped_files()  # Recovery
+```
+
+**Note**: Legacy modules still work but show deprecation warnings. Update your code to use the new consolidated interfaces for better maintainability.
 
 ## 🐛 Troubleshooting
 

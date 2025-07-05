@@ -314,23 +314,100 @@ print(f'Loaded {len(df)} rows')"""]
     
     return all(results)
 
+def test_minimal_functionality():
+    """Run minimal test set for quick validation (from run_minimal_test.py)"""
+    print_test_header("MINIMAL FUNCTIONALITY TESTS")
+    
+    results = []
+    
+    # Test critical imports
+    print("\nTesting critical imports...")
+    critical_imports = [
+        "from utils.csv_tracker import safe_get_na_value, update_csv_download_status",
+        "from utils.download_drive import download_drive_with_context", 
+        "from utils.download_youtube import download_youtube_with_context",
+        "from utils.config import get_config, create_download_dir",
+        "from utils.cleanup_manager import CleanupManager"
+    ]
+    
+    for import_test in critical_imports:
+        success, output, error = run_command(['python3', '-c', import_test])
+        results.append(success)
+        module_name = import_test.split('import')[1].split()[0]
+        print_result(f"Import {module_name}", success, error.split('\n')[0] if error else "")
+    
+    # Test basic functionality
+    basic_tests = [
+        ("Config Loading", "from utils.config import get_config; config = get_config(); print('Config loaded')"),
+        ("CSV Safe Read", "from utils.csv_tracker import safe_csv_read; df = safe_csv_read('outputs/output.csv', 'basic'); print(f'Loaded {len(df)} rows')"),
+        ("Cleanup Manager", "from utils.cleanup_manager import CleanupManager; manager = CleanupManager(); print('Manager created')")
+    ]
+    
+    for name, test_code in basic_tests:
+        success, output, error = run_command(['python3', '-c', test_code])
+        results.append(success)
+        print_result(name, success, error.split('\n')[0] if error else "")
+    
+    return all(results)
+
+def test_specific_component(component_name):
+    """Test a specific component (from run_test.py pattern)"""
+    print_test_header(f"SPECIFIC COMPONENT TEST: {component_name.upper()}")
+    
+    component_tests = {
+        'create_download_dir': "from utils.config import create_download_dir; create_download_dir('test_dir'); print('Directory creation works')",
+        'csv_tracker': "from utils.csv_tracker import get_download_status_summary; summary = get_download_status_summary(); print('CSV tracker works')",
+        'cleanup_manager': "from utils.cleanup_manager import CleanupManager; manager = CleanupManager(); stats = manager.cleanup_stats; print('Cleanup manager works')",
+        'rate_limiter': "from utils.rate_limiter import RateLimiter; rl = RateLimiter(); print('Rate limiter works')"
+    }
+    
+    if component_name not in component_tests:
+        print(f"Unknown component: {component_name}")
+        return False
+    
+    test_code = component_tests[component_name]
+    success, output, error = run_command(['python3', '-c', test_code])
+    print_result(f"{component_name} Test", success, error.split('\n')[0] if error else output.strip())
+    
+    return success
+
 def main():
     """Run all tests and provide summary"""
+    import argparse
+    
+    parser = argparse.ArgumentParser(description="Comprehensive test suite for the system")
+    parser.add_argument('--minimal', action='store_true', help='Run only minimal tests for quick validation')
+    parser.add_argument('--component', type=str, help='Test a specific component')
+    parser.add_argument('--quick', action='store_true', help='Skip performance and monitoring tests')
+    
+    args = parser.parse_args()
+    
     print(f"{Colors.BOLD}\n🧪 COMPREHENSIVE SYSTEM TEST SUITE 🧪{Colors.RESET}")
     print(f"Started at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    
+    # Handle specific component test
+    if args.component:
+        result = test_specific_component(args.component)
+        return 0 if result else 1
     
     # Track results
     test_results = {}
     
-    # Run all test categories
-    test_results['imports'] = test_imports()
-    test_results['cli_tools'] = test_cli_tools()
-    test_results['file_operations'] = test_file_operations()
-    test_results['core_functionality'] = test_core_functionality()
-    test_results['workflow_execution'] = test_workflow_execution()
-    test_results['error_handling'] = test_error_handling()
-    test_results['monitoring'] = test_monitoring_system()
-    test_results['performance'] = test_performance()
+    if args.minimal:
+        # Run minimal test set
+        test_results['minimal_functionality'] = test_minimal_functionality()
+    else:
+        # Run all test categories
+        test_results['imports'] = test_imports()
+        test_results['cli_tools'] = test_cli_tools()
+        test_results['file_operations'] = test_file_operations()
+        test_results['core_functionality'] = test_core_functionality()
+        test_results['workflow_execution'] = test_workflow_execution()
+        test_results['error_handling'] = test_error_handling()
+        
+        if not args.quick:
+            test_results['monitoring'] = test_monitoring_system()
+            test_results['performance'] = test_performance()
     
     # Summary
     print_test_header("TEST SUMMARY")

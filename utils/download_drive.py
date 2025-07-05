@@ -8,7 +8,6 @@ import requests
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 try:
-    from logger import setup_component_logging
     from logging_config import get_logger
     from validation import validate_google_drive_url, validate_file_path, ValidationError
     from retry_utils import retry_request, get_with_retry, retry_with_backoff
@@ -18,7 +17,6 @@ try:
     from sanitization import sanitize_error_message, SafeDownloadError, validate_csv_field_safety
     from config import get_drive_downloads_dir, create_download_dir
 except ImportError:
-    from .logger import setup_component_logging
     from .logging_config import get_logger
     from .validation import validate_google_drive_url, validate_file_path, ValidationError
     from .retry_utils import retry_request, get_with_retry, retry_with_backoff
@@ -93,7 +91,7 @@ def _validate_folder_response(response, logger=None):
                is_valid=False if response contains HTML/JavaScript
     """
     if not logger:
-        logger = setup_component_logging('drive')
+        logger = globals()['logger']  # Use module-level logger
     
     # Check response size - allow larger responses for legitimate folders
     content_length = len(response.text)
@@ -160,7 +158,7 @@ def list_folder_files(folder_url, logger=None):
     Returns list of file dictionaries with id and name
     """
     if not logger:
-        logger = setup_component_logging('drive')
+        logger = globals()['logger']  # Use module-level logger
     
     folder_id = extract_folder_id(folder_url)
     if not folder_id:
@@ -268,7 +266,7 @@ def download_folder_files(folder_url, row_context, logger=None):
     Returns DownloadResult with all downloaded files
     """
     if not logger:
-        logger = setup_component_logging('drive')
+        logger = globals()['logger']  # Use module-level logger
     
     logger.info(f"Starting Google Drive folder download for {row_context.name} (Row {row_context.row_id})")
     
@@ -449,7 +447,7 @@ def get_folder_contents(folder_id, logger=None):
 def download_drive_file(file_id, output_filename=None, logger=None):
     """Download a file from Google Drive using file ID"""
     if not logger:
-        logger = setup_component_logging('drive')
+        logger = globals()['logger']  # Use module-level logger
     
     # Validate file ID
     if not file_id or not re.match(r'^[a-zA-Z0-9_-]+$', file_id):
@@ -592,7 +590,7 @@ def download_drive_file(file_id, output_filename=None, logger=None):
 def save_metadata(file_id, url, metadata, logger=None):
     """Save file metadata to a JSON file"""
     if not logger:
-        logger = setup_component_logging('drive')
+        logger = globals()['logger']  # Use module-level logger
     
     metadata_file = os.path.join(DOWNLOADS_DIR, f"{file_id}_metadata.json")
     
@@ -619,7 +617,7 @@ def save_metadata(file_id, url, metadata, logger=None):
 def process_direct_download_url(url, output_filename=None, logger=None):
     """Process a direct drive.usercontent.google.com download URL"""
     if not logger:
-        logger = setup_component_logging('drive')
+        logger = globals()['logger']  # Use module-level logger
     
     # Extract parameters from URL
     parsed_url = urlparse(url)
@@ -776,7 +774,7 @@ def _download_individual_file_with_context(url: str, row_context: RowContext, lo
 
 def download_drive_with_context(url: str, row_context: RowContext) -> DownloadResult:
     """Download Google Drive file or folder with full row context tracking"""
-    logger = setup_component_logging('drive')
+    logger = globals()['logger']  # Use module-level logger
     
     # Check for null/empty URL first
     if not url or url == 'None' or url == 'nan' or url.strip() == '':
@@ -820,7 +818,7 @@ def download_drive_with_context(url: str, row_context: RowContext) -> DownloadRe
 def process_drive_url(url, output_filename=None, save_metadata_flag=False, logger=None):
     """Process a Google Drive URL (file or folder)"""
     if not logger:
-        logger = setup_component_logging('drive')
+        logger = globals()['logger']  # Use module-level logger
     
     # Check if this is a direct download URL
     if 'drive.usercontent.google.com/download' in url:
@@ -928,7 +926,7 @@ def process_drive_url(url, output_filename=None, save_metadata_flag=False, logge
 
 def main():
     # Setup logging
-    logger = setup_component_logging('drive')
+    logger = globals()['logger']  # Use module-level logger
     
     parser = argparse.ArgumentParser(description='Download Google Drive files')
     parser.add_argument('url', help='Google Drive file or folder URL')

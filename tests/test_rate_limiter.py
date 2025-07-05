@@ -3,13 +3,13 @@
 Unit tests for rate limiting module - prevents service blocking.
 """
 import unittest
-import sys
-import os
 import time
 import threading
 from unittest.mock import patch, MagicMock
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Use centralized path setup instead of manual sys.path manipulation
+from utils.path_setup import init_project_imports
+init_project_imports()
 
 from utils.rate_limiter import RateLimiter, ServiceRateLimiter, rate_limit, URLRateLimiter
 

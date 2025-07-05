@@ -130,3 +130,34 @@ rate_limiting:
     selenium:
       rate: 0.5  # 1 request every 2 seconds
       burst: 2   # Allow burst of 2 requests
+
+# Cleanup Configuration
+cleanup:
+  temp_file_patterns:
+    - "temp_*.py"
+    - "*_temp.py"
+    - "cleanup_*.py"
+    - "execute_cleanup.py"
+    - "simple_cleanup.py"
+    - "final_*.py"
+    - "run_cleanup.py"
+    - "*.tmp"
+    - "*.temp"
+    - "__pycache__"
+    - "*.pyc"
+  backup_patterns:
+    - "*.backup"
+    - "*.backup_*" 
+    - "backup_*"
+    - "backups/**/*.gz"
+    - "*.csv.backup_*"
+  empty_dir_patterns:
+    - "cache"
+    - "tmp"
+    - "temp"
+    - "html_cache"
+  default:
+    temp_files: true
+    old_backups: true
+    empty_dirs: true
+    backup_retention_days: 30
