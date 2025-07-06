@@ -31,7 +31,8 @@ BEGIN
 END;
 $$ language 'plpgsql';
 
--- Trigger to automatically update updated_at
+-- Trigger to automatically update updated_at (with IF NOT EXISTS)
+DROP TRIGGER IF EXISTS update_people_updated_at ON people;
 CREATE TRIGGER update_people_updated_at 
     BEFORE UPDATE ON people 
     FOR EACH ROW 

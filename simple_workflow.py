@@ -30,6 +30,9 @@ from utils.config import get_config, ensure_parent_dir, ensure_directory, format
 from utils.patterns import PatternRegistry, extract_youtube_id, extract_drive_id, clean_url, normalize_whitespace
 from utils.csv_manager import CSVManager
 
+# Import database operations for dual-write functionality
+from database.models.person import Person, PersonOperations
+
 # Configuration - centralized in config.yaml (DRY)
 config = get_config()
 
@@ -547,8 +550,8 @@ def extract_text_with_retry(doc_url, max_attempts=None):
     return "", f"Failed after {max_attempts} attempts"
 
 def step6_map_data(processed_records, basic_mode=False, text_mode=False, output_file=None):
-    """Step 6: Map data to CSV matching main system structure"""
-    print("Step 6: Mapping data to CSV format...")
+    """Step 6: Map data to CSV and Database (dual-write for migration)"""
+    print("Step 6: Mapping data to CSV and Database (dual-write)...")
     
     # Handle different column sets based on processing mode
     if basic_mode:
@@ -588,34 +591,91 @@ def step6_map_data(processed_records, basic_mode=False, text_mode=False, output_
         else:
             output_file = config.get("paths.output_csv", "simple_output.csv")
     
-    # Create DataFrame and write using centralized CSVManager (DRY)
+    # Create DataFrame for CSV operations
     df = pd.DataFrame(filtered_records)
     
-    # Use CSVManager for robust CSV operations with atomic writes and backup
-    csv_manager = CSVManager(csv_path=output_file)
-    success = csv_manager.safe_csv_write(df, operation_name="step6_workflow_output")
+    # DUAL-WRITE: Write to both CSV and Database
+    csv_success = False
+    db_success = False
     
-    if success:
-        print(f"✓ Data mapped and saved to {output_file}")
+    # 1. Write to CSV (existing functionality)
+    print("  📄 Writing to CSV...")
+    csv_manager = CSVManager(csv_path=output_file)
+    csv_success = csv_manager.safe_csv_write(df, operation_name="step6_workflow_output")
+    
+    if csv_success:
+        print(f"  ✅ CSV: Data saved to {output_file}")
     else:
-        print(f"✗ Failed to save data to {output_file}")
+        print(f"  ❌ CSV: Failed to save data to {output_file}")
+    
+    # 2. Write to Database (new functionality)
+    print("  🗄️  Writing to Database...")
+    try:
+        # Initialize database operations
+        person_ops = PersonOperations()
+        
+        # Create tables if they don't exist
+        if not person_ops.create_table():
+            print("  ❌ DB: Failed to create/verify people table")
+            db_success = False
+        else:
+            # Insert/update each person record
+            db_insert_count = 0
+            db_error_count = 0
+            
+            for record in filtered_records:
+                # Create Person object with core fields
+                person = Person(
+                    row_id=record['row_id'],
+                    name=record['name'],
+                    email=record['email'] if record['email'] else None,
+                    personality_type=record['type'] if record['type'] else None,
+                    source_link=record['link'] if record['link'] else None
+                )
+                
+                # Insert person (with ON CONFLICT UPDATE)
+                if person_ops.insert_person(person):
+                    db_insert_count += 1
+                else:
+                    db_error_count += 1
+            
+            if db_error_count == 0:
+                print(f"  ✅ DB: Successfully inserted/updated {db_insert_count} people")
+                db_success = True
+            else:
+                print(f"  ⚠️  DB: {db_insert_count} successful, {db_error_count} failed")
+                db_success = False
+    
+    except Exception as e:
+        print(f"  ❌ DB: Database write failed: {e}")
+        db_success = False
+    
+    # Evaluate overall success
+    if csv_success and db_success:
+        print("  🎉 DUAL-WRITE SUCCESS: Both CSV and Database updated")
+    elif csv_success:
+        print("  ⚠️  PARTIAL SUCCESS: CSV updated, Database failed")
+    elif db_success:
+        print("  ⚠️  PARTIAL SUCCESS: Database updated, CSV failed")
+    else:
+        print("  ❌ DUAL-WRITE FAILED: Both CSV and Database failed")
         return None
     
-    print(f"  Total records: {len(df)}")
-    print(f"  Records with links: {len(df[df['link'] != ''])}")
+    print(f"  📊 Total records: {len(df)}")
+    print(f"  📊 Records with links: {len(df[df['link'] != ''])}")
     
     # Additional stats only for full mode
     if not basic_mode and not text_mode:
-        print(f"  Records with YouTube: {len(df[df['youtube_playlist'] != ''])}")
-        print(f"  Records with Drive: {len(df[df['google_drive'] != ''])}")
+        print(f"  📊 Records with YouTube: {len(df[df['youtube_playlist'] != ''])}")
+        print(f"  📊 Records with Drive: {len(df[df['google_drive'] != ''])}")
     
     # Text mode specific stats
     if text_mode:
         if 'document_text' in df.columns:
             successful_extractions = len(df[(df['document_text'] != '') & (~df['document_text'].str.startswith('EXTRACTION_FAILED', na=False))])
             failed_extractions = len(df[df['document_text'].str.startswith('EXTRACTION_FAILED', na=False)])
-            print(f"  Successful text extractions: {successful_extractions}")
-            print(f"  Failed text extractions: {failed_extractions}")
+            print(f"  📊 Successful text extractions: {successful_extractions}")
+            print(f"  📊 Failed text extractions: {failed_extractions}")
     
     return df
 
