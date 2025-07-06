@@ -9,7 +9,7 @@ from pathlib import Path
 
 # Import standardized CSV reading function
 sys.path.append(os.path.join(os.path.dirname(__file__), 'utils'))
-from csv_tracker import safe_csv_read
+from csv_manager import safe_csv_read
 
 # Load the CSV with tracking dtype specification
 df = safe_csv_read('outputs/output.csv', 'tracking')

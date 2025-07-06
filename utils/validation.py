@@ -294,6 +294,380 @@ def validate_filename(filename):
 # CSV sanitization moved to utils/sanitization.py for comprehensive handling
 
 
+# DRY: URL Processing Functions (absorbed from utils/extract_links.py - Phase 3F)
+def clean_url(url):
+    """
+    Clean up a URL by removing trailing junk and escape sequences.
+    Consolidated from utils/extract_links.py and minimal/extraction_utils.py
+    """
+    if not url:
+        return url
+    
+    original_url = url
+    
+    # First, decode unicode escape sequences like \u000b to actual characters
+    # This handles cases like \u003d becoming =
+    try:
+        # Decode unicode escapes
+        if '\\u' in url:
+            url = url.encode('utf-8').decode('unicode_escape')
+    except:
+        # If decoding fails, continue with original
+        pass
+    
+    # Special handling for YouTube playlist URLs that might have control chars in the middle
+    if 'youtube.com/playlist?list' in url:
+        # Try to extract the playlist ID even if there are control characters
+        # Look for pattern: list[any char]=PLAYLIST_ID
+        match = re.search(r'youtube\.com/playlist\?list.{0,5}=([a-zA-Z0-9_-]+)', url)
+        if match:
+            playlist_id = match.group(1)
+            # Check if there's also an si parameter
+            si_match = re.search(r'[&?]si.{0,5}=([a-zA-Z0-9_-]+)', url)
+            if si_match:
+                return f'https://www.youtube.com/playlist?list={playlist_id}&si={si_match.group(1)}'
+            return f'https://www.youtube.com/playlist?list={playlist_id}'
+    
+    # Find where the URL should end by looking for control characters or certain text patterns
+    # This is crucial - we want to cut off anything after control characters
+    control_char_pos = float('inf')
+    for i, char in enumerate(url):
+        if ord(char) < 32 or ord(char) > 126:  # Control chars or non-ASCII
+            control_char_pos = i
+            break
+    
+    # Truncate at the first control character
+    if control_char_pos < len(url):
+        url = url[:control_char_pos]
+    
+    # Remove common escape sequences that might remain
+    url = url.replace('\\n', '').replace('\\r', '').replace('\\t', '')
+    
+    # Remove trailing punctuation that's not part of a URL
+    # But keep trailing slashes and common URL endings
+    url = re.sub(r'[.,;:!?\)\]\}"\'>]+$', '', url)
+    
+    # Handle YouTube URLs specifically
+    if 'youtube.com' in url or 'youtu.be' in url:
+        # For youtu.be links, extract just the video ID
+        match = re.search(r'youtu\.be/([a-zA-Z0-9_-]{11})', url)
+        if match:
+            # Check if there's a trailing slash in the original
+            if original_url.rstrip().endswith(match.group(0) + '/'):
+                return f'https://youtu.be/{match.group(1)}/'
+            return f'https://youtu.be/{match.group(1)}'
+        # For youtube.com watch links
+        match = re.search(r'((?:www\.)?youtube\.com)/watch\?v=([a-zA-Z0-9_-]{11})', url)
+        if match:
+            # Preserve www. if it was in the original
+            domain = match.group(1)
+            video_id = match.group(2)
+            
+            # Check for additional parameters
+            params = []
+            list_match = re.search(r'[&?]list=([a-zA-Z0-9_-]+)', url)
+            if list_match:
+                params.append(f'list={list_match.group(1)}')
+            
+            base_url = f'https://{domain}/watch?v={video_id}'
+            if params:
+                return base_url + '&' + '&'.join(params)
+            return base_url
+        # For youtube.com playlist links
+        match = re.search(r'youtube\.com/playlist\?list=([a-zA-Z0-9_-]+)', url)
+        if match:
+            # Extract list ID and any additional parameters
+            list_id = match.group(1)
+            # Check for si parameter
+            si_match = re.search(r'[&?]si=([a-zA-Z0-9_-]+)', url)
+            if si_match:
+                return f'https://youtube.com/playlist?list={list_id}&si={si_match.group(1)}'
+            return f'https://youtube.com/playlist?list={list_id}'
+    
+    # For non-YouTube URLs, just clean and return
+    url = url.strip()
+    
+    # If it's a valid URL, return it as-is
+    if url.startswith('http://') or url.startswith('https://'):
+        return url
+    
+    return url
+
+
+def determine_url_type(url):
+    """
+    Determine the type of URL (youtube, drive, docs, etc.)
+    DRY: Centralized URL type detection
+    """
+    if not url:
+        return 'unknown'
+    
+    url_lower = url.lower()
+    
+    # YouTube detection
+    if 'youtube.com' in url_lower or 'youtu.be' in url_lower:
+        if '/playlist' in url_lower or 'list=' in url_lower:
+            return 'youtube_playlist'
+        elif 'watch_videos' in url_lower:
+            return 'youtube_synthetic_playlist'
+        else:
+            return 'youtube_video'
+    
+    # Google Drive detection
+    elif 'drive.google.com' in url_lower:
+        if '/folders/' in url_lower:
+            return 'drive_folder'
+        else:
+            return 'drive_file'
+    
+    # Google Docs detection
+    elif 'docs.google.com' in url_lower:
+        if '/document/' in url_lower:
+            return 'google_doc'
+        elif '/spreadsheets/' in url_lower:
+            return 'google_sheet'
+        elif '/presentation/' in url_lower:
+            return 'google_slide'
+        else:
+            return 'google_docs_other'
+    
+    # Email detection
+    elif url_lower.startswith('mailto:'):
+        return 'email'
+    
+    # Other web URLs
+    elif url_lower.startswith('http://') or url_lower.startswith('https://'):
+        return 'web'
+    
+    return 'unknown'
+
+
+def extract_actual_url(url):
+    """
+    Extract the actual URL from a Google redirect URL.
+    Handles google.com/url?q= redirects
+    """
+    if 'google.com/url?' in url:
+        try:
+            parsed = urlparse(url)
+            params = parse_qs(parsed.query)
+            if 'q' in params and params['q']:
+                actual_url = params['q'][0]
+                # Clean the extracted URL
+                return clean_url(actual_url)
+        except:
+            pass
+    return url
+
+
+def extract_youtube_ids(links):
+    """Extract YouTube video IDs from a list of links"""
+    yt_ids = set()
+    for link in links:
+        try:
+            # Skip non-URL links like mailto: or invalid URLs
+            if not link.startswith('http'):
+                continue
+                
+            parsed = urlparse(link)
+            if "youtube.com" in parsed.netloc:
+                qs = parse_qs(parsed.query)
+                if "v" in qs:
+                    yt_ids.update(qs["v"])
+            elif "youtu.be" in parsed.netloc:
+                yt_id = parsed.path.lstrip("/")
+                if yt_id:
+                    yt_ids.add(yt_id)
+        except Exception as e:
+            continue
+    return list(yt_ids)
+
+
+def extract_youtube_playlists(links):
+    """
+    Extract YouTube playlist URLs from a list of links.
+    
+    This function specifically looks for actual YouTube playlists (not synthetic ones)
+    and returns clean playlist URLs with just the list parameter.
+    """
+    playlists = []
+    for link in links:
+        try:
+            # Skip non-URL links
+            if not link.startswith('http'):
+                continue
+                
+            parsed = urlparse(link)
+            if "youtube.com" in parsed.netloc and "/playlist" in parsed.path:
+                qs = parse_qs(parsed.query)
+                if "list" in qs and qs["list"]:
+                    # Reconstruct clean playlist URL with only the list parameter
+                    playlist_id = qs["list"][0]
+                    playlist_url = f"https://www.youtube.com/playlist?list={playlist_id}"
+                    if playlist_url not in playlists:
+                        playlists.append(playlist_url)
+        except Exception as e:
+            continue
+    return playlists
+
+
+def build_youtube_playlist_url(yt_ids):
+    """Build a YouTube synthetic playlist URL from video IDs"""
+    if yt_ids:
+        return "https://www.youtube.com/watch_videos?video_ids=" + ",".join(yt_ids)
+    return None
+
+
+def extract_drive_links_from_html(html):
+    """Extract Google Drive links directly from HTML content"""
+    # Comprehensive pattern to match Google Drive links in HTML
+    # This matches the file ID in drive.google.com/file/d/ or drive.google.com/open?id= links
+    file_pattern = re.compile(r'https?://drive\.google\.com/(?:file/d/|open\?id=)([a-zA-Z0-9_\-]+)')
+    folder_pattern = re.compile(r'https?://drive\.google\.com/drive/folders/([a-zA-Z0-9_\-]+)')
+    
+    # Find all file and folder IDs
+    file_ids = file_pattern.findall(html)
+    folder_ids = folder_pattern.findall(html)
+    
+    # Construct clean URLs
+    drive_links = []
+    
+    # Add file links
+    for file_id in file_ids:
+        drive_links.append(f"https://drive.google.com/file/d/{file_id}/view")
+    
+    # Add folder links
+    for folder_id in folder_ids:
+        drive_links.append(f"https://drive.google.com/drive/folders/{folder_id}")
+    
+    # Remove duplicates while preserving order
+    seen = set()
+    unique_links = []
+    for link in drive_links:
+        if link not in seen:
+            seen.add(link)
+            unique_links.append(link)
+    
+    return unique_links
+
+
+def extract_drive_links(links, html=None):
+    """Extract Google Drive links from URLs and optionally from HTML content"""
+    drive_urls = []
+    
+    # First extract from regular links
+    for link in links:
+        try:
+            # Skip non-URL links or invalid URLs
+            if not link.startswith('http'):
+                continue
+                
+            # Match Google Drive file links
+            if ('drive.google.com/file/d/' in link or 
+                'drive.google.com/open?id=' in link or
+                'drive.google.com/drive/folders/' in link):
+                drive_urls.append(link)
+        except Exception as e:
+            continue
+    
+    # If HTML content is provided, also extract links from there
+    if html:
+        html_drive_links = extract_drive_links_from_html(html)
+        drive_urls.extend([link for link in html_drive_links if link not in drive_urls])
+    
+    return drive_urls
+
+
+def filter_meaningful_links(links, source_url=None):
+    """
+    Filter out infrastructure links and keep only meaningful content links.
+    Useful for extracting actual content links from Google Docs.
+    """
+    filtered_links = set()
+    
+    # Always include the source URL if provided
+    if source_url:
+        filtered_links.add(source_url)
+    
+    for link in links:
+        # Keep email links
+        if link.startswith('mailto:'):
+            filtered_links.add(link)
+            continue
+            
+        # Keep drive links that aren't infrastructure
+        if 'drive.google.com/drive' in link and 'folder' in link:
+            # Clean up Google Drive links
+            if '?usp' in link:
+                clean_link = link.split('?usp')[0]
+                filtered_links.add(clean_link)
+            else:
+                filtered_links.add(link)
+            continue
+            
+        # Check if it's a content link and not an infrastructure link
+        is_infrastructure = any([
+            'gstatic.com' in link,
+            'apis.google.com' in link,
+            'script.google.com' in link,
+            'chrome.google.com' in link,
+            'clients6.google.com' in link,
+            '/static/' in link,
+            'accounts.google.com' in link,
+            'docs.google.com/picker' in link,
+            'docs.google.com/relay.html' in link,
+            'contacts.google.com' in link,
+            'lh7-rt.googleusercontent.com' in link,
+            'googleusercontent.com/docs' in link,
+            'schema.org' in link,
+            'w3.org' in link,
+            '#' in link,
+            link.endswith('.js'),
+            link.endswith('.css'),
+            link.endswith('.png'),
+            link.endswith('.gif'),
+            'docs.google.com/static' in link,
+            'docs.google.com/preview' in link,
+            'docs.google.com?usp=' in link,
+            '",s-blob-v1-IMAGE-' in link,
+            '"' in link,
+            'support.google.com' in link,
+            "}.config['csfu']" in link
+        ])
+        
+        if not is_infrastructure:
+            # Clean up URL if needed (remove trailing quotes or parentheses, etc.)
+            link = re.sub(r'[\"\'\)]$', '', link)
+            
+            # Skip links that have JSON/code markers or font references
+            if any([
+                '{' in link,
+                '}' in link,
+                '[' in link,
+                ']' in link,
+                'si:' in link,
+                'ei:' in link,
+                'sm:' in link,
+                'spi:' in link,
+                'docs/fonts' in link,
+                '.woff' in link
+            ]):
+                continue
+                
+            # Skip Google Doc internal links that aren't really content
+            if link.startswith('https://docs.google.com') and source_url and link != source_url:
+                if any([
+                    'usp\u003d' in link,
+                    '/preview' in link,
+                    '/edit?' in link and source_url.split('/edit')[0] in link
+                ]):
+                    continue
+            
+            filtered_links.add(link)
+    
+    return list(filtered_links)
+
+
 # Test the validation functions
 if __name__ == "__main__":
     # Test URL validation

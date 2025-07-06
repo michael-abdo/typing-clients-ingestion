@@ -10,19 +10,15 @@ try:
     from scrape_google_sheets import fetch_table_data, update_csv
     from extract_links import process_url
     from logging_config import get_logger
-    from atomic_csv import atomic_csv_update, write_csv_atomic
-    from streaming_csv import streaming_csv_update
-    from csv_tracker import reset_all_download_status
-
-# Setup module logger
-logger = get_logger(__name__)
+    from csv_manager import CSVManager, atomic_csv_update, streaming_csv_update
 except ImportError:
     from .scrape_google_sheets import fetch_table_data, update_csv
     from .extract_links import process_url
     from .logging_config import get_logger
-    from .atomic_csv import atomic_csv_update, write_csv_atomic
-    from .streaming_csv import streaming_csv_update
-    from .csv_tracker import reset_all_download_status
+    from .csv_manager import CSVManager, atomic_csv_update, streaming_csv_update
+
+# Setup module logger
+logger = get_logger(__name__)
 
 def process_links_from_csv(max_rows=None, reset_processed=False, force_download=False):
     """
@@ -306,7 +302,8 @@ if __name__ == "__main__":
     # but preserves permanent_failure flags for safety
     if args.reset_downloads:
         print("Resetting download status for all rows...")
-        reset_counts = reset_all_download_status(download_type='both', csv_path='outputs/output.csv')
+        csv_manager = CSVManager('outputs/output.csv')
+        reset_counts = csv_manager.reset_all_download_status(download_type='both')
         print(f"Reset complete: {reset_counts['youtube']} YouTube, {reset_counts['drive']} Drive downloads reset")
     
     # Process links from CSV (this handles the --reset flag for link extraction)

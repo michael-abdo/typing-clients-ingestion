@@ -23,8 +23,10 @@ from typing import Dict, Optional
 # Import consolidated functionality
 try:
     from .comprehensive_file_mapper import FileMapper
+    from .csv_manager import safe_csv_read
 except ImportError:
     from comprehensive_file_mapper import FileMapper
+    from csv_manager import safe_csv_read
 
 
 def extract_video_id(filename: str) -> Optional[str]:
@@ -46,7 +48,7 @@ def extract_drive_id(filename: str) -> Optional[str]:
 def match_unmapped_files(csv_path: str = 'outputs/output.csv') -> Dict:
     """Try to match unmapped files using various strategies"""
     
-    df = pd.read_csv(csv_path)
+    df = safe_csv_read(csv_path, 'tracking')
     unmapped_files = []
     matched = []
     

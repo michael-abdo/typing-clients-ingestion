@@ -10,7 +10,10 @@ from typing import Optional, Dict, Any, List
 from datetime import datetime
 from enum import Enum
 from dataclasses import dataclass
-from utils.path_setup import ensure_directory_exists
+try:
+    from path_setup import ensure_directory_exists
+except ImportError:
+    from .path_setup import ensure_directory_exists
 from pathlib import Path
 
 try:
@@ -272,7 +275,7 @@ def validate_csv_integrity(csv_path: str) -> List[ErrorContext]:
     
     try:
         import pandas as pd
-        from csv_tracker import safe_csv_read
+        from csv_manager import safe_csv_read
         
         # Check if file exists
         if not os.path.exists(csv_path):

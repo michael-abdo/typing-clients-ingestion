@@ -119,8 +119,6 @@ class RefactoringTester:
     def test_csv_manager(self) -> bool:
         """Test CSV manager functionality."""
         try:
-            csv_manager = CSVManager()
-            
             # Test CSV writing
             test_file = Path(self.temp_dir) / "test.csv"
             test_data = [
@@ -128,15 +126,18 @@ class RefactoringTester:
                 {'name': 'Test2', 'value': '456'}
             ]
             
-            # Write CSV
-            csv_manager.write_csv(
-                str(test_file),
+            csv_manager = CSVManager(str(test_file))
+            
+            # Write CSV using atomic write
+            success = csv_manager.atomic_write(
                 test_data,
                 fieldnames=['name', 'value']
             )
+            assert success, "CSV write failed"
             
             # Read CSV
-            read_data = csv_manager.read_csv(str(test_file))
+            df = csv_manager.read(dtype_spec='all_string')
+            read_data = df.to_dict('records')
             assert len(read_data) == 2, f"Expected 2 rows, got {len(read_data)}"
             assert read_data[0]['name'] == 'Test1', "Data mismatch"
             

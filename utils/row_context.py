@@ -2,15 +2,42 @@
 """
 Row Context - Core data structures for row-centric download tracking
 Maintains perfect traceability between downloaded files and CSV rows
+
+DRY: Enhanced with consolidated download result patterns (Phase 3G)
 """
 
 import os
 import json
-from dataclasses import dataclass
-from typing import List, Optional, Dict, Any
+from dataclasses import dataclass, field
+from typing import List, Optional, Dict, Any, Tuple
 from datetime import datetime
+from enum import Enum
 from utils.path_setup import ensure_directory_exists
 from pathlib import Path
+import threading
+
+
+# DRY: Consolidated download status enum
+class DownloadStatus(Enum):
+    """Standardized download status values across all download types"""
+    PENDING = 'pending'
+    IN_PROGRESS = 'in_progress'
+    COMPLETED = 'completed'
+    FAILED = 'failed'
+    SKIPPED = 'skipped'
+    RETRYING = 'retrying'
+
+
+# DRY: Consolidated error categories
+class ErrorCategory(Enum):
+    """Categorize errors for better retry logic and reporting"""
+    TEMPORARY = 'temporary'      # Network issues, timeouts - should retry
+    PERMANENT = 'permanent'      # Video deleted, access denied - don't retry
+    NETWORK = 'network'          # Connection errors - retry with backoff
+    PERMISSION = 'permission'    # Authentication/authorization - may need user action
+    NOT_FOUND = 'not_found'      # Resource doesn't exist - permanent
+    RATE_LIMIT = 'rate_limit'    # API rate limiting - retry after delay
+    UNKNOWN = 'unknown'          # Uncategorized errors
 
 
 @dataclass
@@ -50,7 +77,7 @@ class RowContext:
 
 @dataclass 
 class DownloadResult:
-    """Standardized result object maintaining full traceability"""
+    """Standardized result object maintaining full traceability (DRY: enhanced)"""
     success: bool
     files_downloaded: List[str]     # Actual filenames created
     media_id: Optional[str]         # YouTube video_id or Drive file_id
@@ -60,14 +87,26 @@ class DownloadResult:
     download_type: str              # 'youtube' or 'drive'
     permanent_failure: bool = False # Mark as permanent failure to skip retries
     
+    # Enhanced fields (DRY: consolidated from various download modules)
+    status: DownloadStatus = DownloadStatus.PENDING
+    error_category: ErrorCategory = ErrorCategory.UNKNOWN
+    attempt_count: int = 0
+    file_sizes: List[int] = field(default_factory=list)  # File sizes in bytes
+    duration_seconds: Optional[float] = None
+    start_time: Optional[datetime] = None
+    end_time: Optional[datetime] = None
+    additional_metadata: Dict[str, Any] = field(default_factory=dict)
+    
     def get_summary(self) -> Dict[str, Any]:
         """Generate summary for CSV update"""
         return {
-            'status': 'completed' if self.success else 'failed',
+            'status': self.status.value,
             'files': ','.join(self.files_downloaded),
             'media_id': self.media_id or '',
             'error': self.error_message or '',
-            'last_attempt': datetime.now().isoformat()
+            'last_attempt': datetime.now().isoformat(),
+            'attempt_count': self.attempt_count,
+            'total_size_mb': sum(self.file_sizes) / (1024 * 1024) if self.file_sizes else 0
         }
     
     def save_metadata(self, downloads_dir: str) -> str:
@@ -81,10 +120,19 @@ class DownloadResult:
         metadata = {
             'download_result': {
                 'success': self.success,
+                'status': self.status.value,
                 'files_downloaded': self.files_downloaded,
                 'media_id': self.media_id,
                 'error_message': self.error_message,
-                'download_type': self.download_type
+                'error_category': self.error_category.value,
+                'download_type': self.download_type,
+                'attempt_count': self.attempt_count,
+                'file_sizes': self.file_sizes,
+                'total_size_mb': sum(self.file_sizes) / (1024 * 1024) if self.file_sizes else 0,
+                'duration_seconds': self.duration_seconds,
+                'start_time': self.start_time.isoformat() if self.start_time else None,
+                'end_time': self.end_time.isoformat() if self.end_time else None,
+                **self.additional_metadata
             },
             **self.row_context.to_metadata_dict()
         }
@@ -96,6 +144,229 @@ class DownloadResult:
         except Exception as e:
             print(f"Warning: Could not save metadata file {metadata_path}: {e}")
             return ""
+    
+    # DRY: Helper methods for common operations
+    def is_retryable(self) -> bool:
+        """Check if download error is temporary and should be retried"""
+        if self.permanent_failure:
+            return False
+        return self.error_category in [
+            ErrorCategory.TEMPORARY, 
+            ErrorCategory.NETWORK, 
+            ErrorCategory.RATE_LIMIT
+        ]
+    
+    def should_skip(self) -> bool:
+        """Check if download should be skipped (permanent failure)"""
+        return self.permanent_failure or self.error_category in [
+            ErrorCategory.PERMANENT,
+            ErrorCategory.NOT_FOUND
+        ]
+    
+    def mark_complete(self, files: List[str], sizes: Optional[List[int]] = None):
+        """Mark download as completed with file info"""
+        self.success = True
+        self.status = DownloadStatus.COMPLETED
+        self.files_downloaded = files
+        if sizes:
+            self.file_sizes = sizes
+        self.end_time = datetime.now()
+        if self.start_time:
+            self.duration_seconds = (self.end_time - self.start_time).total_seconds()
+    
+    def mark_failed(self, error: str, category: ErrorCategory = ErrorCategory.UNKNOWN):
+        """Mark download as failed with error info"""
+        self.success = False
+        self.status = DownloadStatus.FAILED
+        self.error_message = error
+        self.error_category = category
+        self.permanent_failure = category in [ErrorCategory.PERMANENT, ErrorCategory.NOT_FOUND]
+        self.end_time = datetime.now()
+        if self.start_time:
+            self.duration_seconds = (self.end_time - self.start_time).total_seconds()
+    
+    def to_csv_fields(self) -> Dict[str, Any]:
+        """Convert to CSV-compatible fields for atomic updates"""
+        prefix = f"{self.download_type}_"
+        return {
+            f"{prefix}status": self.status.value,
+            f"{prefix}files": ','.join(self.files_downloaded),
+            f"{prefix}media_id": self.media_id or '',
+            f"{prefix}error": self.error_message or '',
+            f"{prefix}last_attempt": datetime.now().isoformat(),
+            f"{prefix}attempt_count": self.attempt_count,
+            f"{prefix}size_mb": sum(self.file_sizes) / (1024 * 1024) if self.file_sizes else 0
+        }
+
+
+# DRY: Consolidated download statistics aggregator
+@dataclass
+class DownloadStats:
+    """Aggregate download statistics across all download types"""
+    # YouTube stats
+    youtube_pending: int = 0
+    youtube_in_progress: int = 0
+    youtube_completed: int = 0
+    youtube_failed: int = 0
+    youtube_skipped: int = 0
+    youtube_success_rate: float = 0.0
+    
+    # Drive stats
+    drive_pending: int = 0
+    drive_in_progress: int = 0
+    drive_completed: int = 0
+    drive_failed: int = 0
+    drive_skipped: int = 0
+    drive_success_rate: float = 0.0
+    
+    # Overall stats
+    total_files_downloaded: int = 0
+    total_size_mb: float = 0.0
+    total_duration_seconds: float = 0.0
+    error_categories: Dict[str, int] = field(default_factory=dict)
+    
+    # Thread-safe tracking
+    _lock: threading.Lock = field(default_factory=threading.Lock, init=False, repr=False)
+    
+    def update_from_result(self, result: DownloadResult):
+        """Update stats from a download result (thread-safe)"""
+        with self._lock:
+            # Update type-specific counters
+            type_prefix = result.download_type
+            status_field = f"{type_prefix}_{result.status.value}"
+            
+            if hasattr(self, status_field):
+                setattr(self, status_field, getattr(self, status_field) + 1)
+            
+            # Update overall stats
+            if result.success:
+                self.total_files_downloaded += len(result.files_downloaded)
+                if result.file_sizes:
+                    self.total_size_mb += sum(result.file_sizes) / (1024 * 1024)
+                if result.duration_seconds:
+                    self.total_duration_seconds += result.duration_seconds
+            
+            # Track error categories
+            if result.error_message:
+                category = result.error_category.value
+                self.error_categories[category] = self.error_categories.get(category, 0) + 1
+            
+            # Recalculate success rates
+            self._recalculate_success_rates()
+    
+    def _recalculate_success_rates(self):
+        """Recalculate success rates for each download type"""
+        # YouTube success rate
+        youtube_total = self.youtube_completed + self.youtube_failed
+        if youtube_total > 0:
+            self.youtube_success_rate = (self.youtube_completed / youtube_total) * 100
+        
+        # Drive success rate
+        drive_total = self.drive_completed + self.drive_failed
+        if drive_total > 0:
+            self.drive_success_rate = (self.drive_completed / drive_total) * 100
+    
+    def get_summary(self) -> Dict[str, Any]:
+        """Get summary statistics"""
+        with self._lock:
+            return {
+                'youtube': {
+                    'pending': self.youtube_pending,
+                    'in_progress': self.youtube_in_progress,
+                    'completed': self.youtube_completed,
+                    'failed': self.youtube_failed,
+                    'skipped': self.youtube_skipped,
+                    'success_rate': f"{self.youtube_success_rate:.1f}%"
+                },
+                'drive': {
+                    'pending': self.drive_pending,
+                    'in_progress': self.drive_in_progress,
+                    'completed': self.drive_completed,
+                    'failed': self.drive_failed,
+                    'skipped': self.drive_skipped,
+                    'success_rate': f"{self.drive_success_rate:.1f}%"
+                },
+                'overall': {
+                    'total_files': self.total_files_downloaded,
+                    'total_size_mb': round(self.total_size_mb, 2),
+                    'total_duration_minutes': round(self.total_duration_seconds / 60, 1),
+                    'error_categories': dict(self.error_categories)
+                }
+            }
+
+
+# DRY: Error categorization helper
+def categorize_error(error_message: str) -> ErrorCategory:
+    """Categorize an error message for better retry logic"""
+    if not error_message:
+        return ErrorCategory.UNKNOWN
+    
+    error_lower = error_message.lower()
+    
+    # Permanent failures
+    permanent_phrases = [
+        'video unavailable', 'removed by uploader', 'deleted',
+        'private video', 'video not available', 'this video has been removed',
+        'video is private', 'copyright claim', 'copyright grounds',
+        'account associated with this video has been terminated',
+        'no longer available', 'file not found', '404', 'access denied',
+        'permission denied', 'forbidden'
+    ]
+    if any(phrase in error_lower for phrase in permanent_phrases):
+        return ErrorCategory.PERMANENT
+    
+    # Not found errors
+    if any(phrase in error_lower for phrase in ['not found', '404', 'does not exist']):
+        return ErrorCategory.NOT_FOUND
+    
+    # Permission errors
+    if any(phrase in error_lower for phrase in ['permission', 'unauthorized', 'forbidden', 'access denied']):
+        return ErrorCategory.PERMISSION
+    
+    # Network errors
+    network_phrases = [
+        'connection', 'timeout', 'timed out', 'network', 'socket',
+        'dns', 'resolve', 'urlopen error', 'connection reset',
+        'connection refused', 'temporary failure'
+    ]
+    if any(phrase in error_lower for phrase in network_phrases):
+        return ErrorCategory.NETWORK
+    
+    # Rate limit errors
+    if any(phrase in error_lower for phrase in ['rate limit', 'too many requests', '429']):
+        return ErrorCategory.RATE_LIMIT
+    
+    # Default to temporary for other errors
+    return ErrorCategory.TEMPORARY
+
+
+def create_download_result(
+    download_type: str,
+    row_context: RowContext,
+    success: bool = False,
+    error: Optional[str] = None
+) -> DownloadResult:
+    """Factory method to create a properly initialized DownloadResult"""
+    result = DownloadResult(
+        success=success,
+        files_downloaded=[],
+        media_id=None,
+        error_message=error,
+        metadata_file=None,
+        row_context=row_context,
+        download_type=download_type,
+        status=DownloadStatus.PENDING,
+        start_time=datetime.now()
+    )
+    
+    if error:
+        result.error_category = categorize_error(error)
+        result.permanent_failure = result.error_category in [
+            ErrorCategory.PERMANENT, 
+            ErrorCategory.NOT_FOUND
+        ]
+    
+    return result
 
 
 def create_row_context_from_csv_row(row, row_index: int) -> RowContext:

@@ -25,22 +25,39 @@ This document describes the production-ready architecture implemented for person
 
 ### Core Modules
 
-#### 1. `utils/csv_tracker.py` - Central Tracking System
+#### 1. `utils/csv_manager.py` - Unified CSV Operations (DRY Consolidated)
 ```python
-# Key Functions:
-- ensure_tracking_columns()     # Add 8 tracking columns to CSV
-- get_pending_downloads()       # Get rows needing downloads
-- update_csv_download_status()  # Atomic CSV updates with error tracking
-- reset_download_status()       # Reset specific downloads for retry
+# CSVManager Class - Consolidated CSV Operations:
+from utils.csv_manager import CSVManager
+
+manager = CSVManager('outputs/output.csv')
+
+# Key Methods:
+manager.ensure_tracking_columns()          # Add 8 tracking columns to CSV
+manager.get_pending_downloads()            # Get rows needing downloads  
+manager.update_download_status()           # Atomic CSV updates with error tracking
+manager.safe_csv_read()                    # Standardized CSV reading
+manager.safe_csv_write()                   # Atomic CSV writing with backup
+manager.atomic_write()                     # Atomic operations with file locking
+manager.stream_process()                   # Streaming for large files
 ```
+
+**DRY Consolidation**: Unified CSV operations replacing deprecated modules:
+- ✅ `csv_tracker.py` → `CSVManager` (tracking operations)
+- ✅ `atomic_csv.py` → `CSVManager.atomic_*()` methods  
+- ✅ `streaming_csv.py` → `CSVManager.stream_*()` methods
+- ✅ `csv_file_integrity_mapper.py` → `CSVManager` validation methods
 
 **Schema Enhancement**: Automatically adds 8 tracking columns:
 - `youtube_status`, `youtube_files`, `youtube_media_id`
 - `drive_status`, `drive_files`, `drive_media_id` 
 - `last_download_attempt`, `download_errors`
 
-#### 2. `utils/row_context.py` - Context Objects
+#### 2. `utils/row_context.py` - Context Objects (DRY Enhanced)
 ```python
+# Enhanced with consolidated download result patterns
+from utils.row_context import RowContext, DownloadResult, DownloadStatus, ErrorCategory
+
 @dataclass
 class RowContext:
     row_id: str          # Primary key from CSV
@@ -48,17 +65,56 @@ class RowContext:
     type: str           # CRITICAL: Personality type data
     name: str           # Human-readable identifier
     email: str          # Additional identifier
+
+# Enhanced DownloadResult with consolidated patterns
+@dataclass
+class DownloadResult:
+    status: DownloadStatus          # Standardized status enum
+    error_category: ErrorCategory   # Categorized error handling
+    attempt_count: int             # Retry tracking
+    file_sizes: List[int]          # Performance metrics
+    duration_seconds: float        # Timing data
 ```
 
-#### 3. `utils/error_handling.py` - Production Error Management
-- **7 Error Categories**: network, file_io, validation, permission, quota, rate_limit, system
-- **Intelligent Retry Logic**: Retry decisions based on error classification
-- **Statistical Tracking**: Error pattern analysis for system optimization
+#### 3. `utils/validation.py` - Unified Validation & URL Processing (DRY Consolidated)
+```python
+# Consolidated URL processing and validation
+from utils.validation import validate_url, clean_url, determine_url_type
 
-#### 4. `utils/monitoring.py` - Production Monitoring
-- **Real-time Health Checks**: System status with configurable alert thresholds
-- **Performance Metrics**: Success rates, failure analysis, disk usage monitoring
-- **Actionable Recommendations**: Automated suggestions based on system state
+# URL Processing (absorbed from extract_links.py):
+clean_url(url)                    # Clean malformed URLs
+determine_url_type(url)           # Detect URL type (youtube, drive, etc.)
+extract_youtube_ids(links)        # Extract video IDs
+extract_drive_links(links)        # Extract Drive links
+filter_meaningful_links(links)    # Remove infrastructure links
+
+# Enhanced Validation:
+validate_youtube_url(url)         # YouTube-specific validation
+validate_google_drive_url(url)    # Drive-specific validation
+validate_file_path(path)          # Secure path validation
+```
+
+#### 4. `utils/logging_config.py` - Unified Logging System (DRY Consolidated)
+```python
+# Consolidated logging (absorbed utils/logger.py functionality)
+from utils.logging_config import get_logger, PipelineLogger, pipeline_run
+
+logger = get_logger(__name__)     # Standardized logger setup
+with pipeline_run() as pl:        # Pipeline run context
+    pl.log_subprocess(cmd)        # Subprocess logging
+```
+
+#### 5. `utils/cleanup_manager.py` - Centralized Cleanup Operations (DRY Consolidated) 
+```python
+# Consolidated cleanup (absorbed all cleanup scripts)
+from utils.cleanup_manager import CleanupManager
+
+manager = CleanupManager()
+manager.cleanup_temporary_files()      # Remove temp files
+manager.cleanup_redundant_backups()    # Remove old backups
+manager.cleanup_csv_fields()           # Fix oversized CSV fields
+manager.emergency_cleanup()            # System-wide cleanup
+```
 
 ### Enhanced Download Modules
 
@@ -135,23 +191,45 @@ def download_drive_with_context(url: str, row_context: RowContext) -> DownloadRe
 - **Concurrent Safety**: File locking enables safe parallel processing
 - **Resource Monitoring**: Disk space and system resource tracking
 
-## CLI Interface
+## CLI Interface (DRY Consolidated)
 
-### System Management
+### System Management  
 ```bash
+# Unified CSV operations (replaces csv_tracker.py)
+python utils/csv_manager.py --status          # Download statistics  
+python utils/csv_manager.py --pending         # Show pending downloads
+python utils/csv_manager.py --failed          # Show failed downloads
+python utils/csv_manager.py --reset-status 151 --reset-type both
+
+# Centralized cleanup operations (replaces multiple cleanup scripts)  
+python utils/cleanup_manager.py --temp-files  # Remove temp files
+python utils/cleanup_manager.py --old-backups # Remove old backups
+python utils/cleanup_manager.py --csv-fields outputs/output.csv  # Fix CSV fields
+python utils/cleanup_manager.py --emergency   # Emergency disk cleanup
+python utils/cleanup_manager.py --full        # Complete cleanup
+
 # System health monitoring
 python utils/monitoring.py --status           # Quick status check
 python utils/monitoring.py --report           # Full system report
 python utils/monitoring.py --alerts           # Check alert conditions
 
-# Download status management  
-python utils/csv_tracker.py --status          # Download statistics
-python utils/csv_tracker.py --failed both     # Show failed downloads
-python utils/csv_tracker.py --reset-status 151 --reset-type both
-
-# Error handling and validation
+# Enhanced validation and error handling
 python utils/error_handling.py --validate-csv output.csv
 python utils/error_handling.py --validate-environment
+```
+
+### DRY Migration Guide
+```bash
+# OLD (deprecated):                    # NEW (consolidated):
+python utils/csv_tracker.py            → python utils/csv_manager.py
+python final_cleanup.py                → python utils/cleanup_manager.py --legacy  
+python scripts/cleanup_csv_fields.py   → python utils/cleanup_manager.py --csv-fields
+python temp_cleanup.py                 → python utils/cleanup_manager.py --temp-files
+
+# Enhanced import patterns:
+from csv_tracker import CSVTracker      → from utils.csv_manager import CSVManager
+from atomic_csv import atomic_write     → manager = CSVManager(); manager.atomic_write()
+from extract_links import clean_url     → from utils.validation import clean_url
 ```
 
 ### Production Workflow

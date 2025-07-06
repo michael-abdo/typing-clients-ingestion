@@ -25,13 +25,48 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
-# Configuration - centralized settings
+from extraction_utils import download_google_sheet, scrape_document_content, extract_text_with_retry
+
+# Graceful handling for database dependencies (DRY: unified approach)
+from utils.config import bulk_safe_import
+
+try:
+    imports = bulk_safe_import([
+        ('database_manager', 'DatabaseManager'),
+        ('database_manager', 'Person'),
+        ('database_manager', 'Document'),
+        ('database_manager', 'ExtractedLink')
+    ])
+    DatabaseManager = imports['DatabaseManager']
+    Person = imports['Person']
+    Document = imports['Document']
+    ExtractedLink = imports['ExtractedLink']
+    DATABASE_AVAILABLE = True
+except ImportError:
+    DATABASE_AVAILABLE = False
+    print("Warning: Database modules not available. Database mode disabled.")
+    
+    # Create dummy classes for graceful degradation
+    class DatabaseManager:
+        def __init__(self, *args, **kwargs): pass
+        def connect(self): return False
+        def disconnect(self): pass
+    
+    class Person: pass
+    class Document: pass
+    class ExtractedLink: pass
+# Configuration - centralized settings (DRY: absorbed database config)
 class Config:
     GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/u/1/d/e/2PACX-1vRqqjqoaj8sEZBfZRw0Og7g8ms_0yTL2MsegTubcjhhBnXr1s1jFBwIVAsbkyj1xD0TMj06LvGTQIHU/pubhtml?pli=1#"
     TARGET_DIV_ID = "1159146182"
     OUTPUT_DIR = Path("simple_downloads")
     OUTPUT_CSV_FULL = "simple_output.csv"
     OUTPUT_CSV_BASIC = "simple_output.csv"  # Unified output file
+    
+    # Database configuration (DRY: moved from simple_workflow_db.py)
+    DATABASE_PATH = "xenodx.db"
+    USE_DATABASE = False  # Default to CSV mode for backward compatibility
+    OUTPUT_FORMAT = "csv"  # Options: "csv", "db", "both"
     
     # Processing modes
     BASIC_ONLY = False  # True = extract only basic columns, False = full processing
@@ -42,6 +77,14 @@ class Config:
     BATCH_SIZE = 10     # Process N documents at a time
     RETRY_ATTEMPTS = 3  # Retry failed extractions N times
     DELAY_BETWEEN_DOCS = 2  # Seconds between document extractions
+    
+    # Row range filtering
+    START_ROW = None    # Start from row N (inclusive)
+    END_ROW = None      # End at row N (inclusive)
+    
+    # Incremental processing (DRY: moved from simple_workflow_db.py)
+    SKIP_PROCESSED = True
+    RETRY_FAILED = False
     
     # Progress tracking
     PROGRESS_FILE = "extraction_progress.json"
@@ -190,19 +233,31 @@ def extract_actual_url(google_url):
     # URL decode
     return urllib.parse.unquote(actual_url)
 
-def step1_download_sheet():
-    """Step 1: Download a local copy of the Google Sheet"""
-    print("Step 1: Downloading Google Sheet...")
+
+def filter_people_by_row_range(people_data):
+    """Filter people data by row range if specified"""
+    if not Config.START_ROW and not Config.END_ROW:
+        return people_data
     
-    response = requests.get(Config.GOOGLE_SHEET_URL)
-    response.raise_for_status()
+    filtered_people = []
+    for person in people_data:
+        try:
+            row_id = int(person.get('row_id', 0))
+            if Config.START_ROW and row_id < Config.START_ROW:
+                continue
+            if Config.END_ROW and row_id > Config.END_ROW:
+                continue
+            filtered_people.append(person)
+        except (ValueError, TypeError):
+            # Skip rows with invalid row_id
+            continue
     
-    # Save the HTML
-    with open("sheet.html", "w", encoding="utf-8") as f:
-        f.write(response.text)
+    if Config.START_ROW or Config.END_ROW:
+        start_text = f"row {Config.START_ROW}" if Config.START_ROW else "beginning"
+        end_text = f"row {Config.END_ROW}" if Config.END_ROW else "end"
+        print(f"✓ Filtered to rows {start_text} to {end_text}: {len(filtered_people)} people")
     
-    print("✓ Sheet downloaded")
-    return response.text
+    return filtered_people
 
 def step2_extract_people_and_docs(html_content):
     """Step 2: Extract people data and Google Doc links from the sheet"""
@@ -276,35 +331,6 @@ def step2_extract_people_and_docs(html_content):
     
     return people_data, people_with_docs
 
-def step3_scrape_doc_contents(doc_url):
-    """Step 3: Scrape contents and text of a Google Doc"""
-    print(f"Step 3: Scraping doc: {doc_url}")
-    
-    # For Google Docs, use Selenium to get both HTML and text
-    if "docs.google.com/document" in doc_url:
-        # Extract the document text using Selenium
-        doc_text = extract_google_doc_text(doc_url)
-        
-        # Also get the HTML for link extraction
-        try:
-            response = requests.get(doc_url)
-            response.raise_for_status()
-            html_content = response.text
-            print("✓ Doc scraped successfully (HTML + text)")
-            return html_content, doc_text
-        except Exception as e:
-            print(f"✗ Failed to scrape HTML: {e}")
-            return "", doc_text
-    else:
-        # For other URLs, just get HTML
-        try:
-            response = requests.get(doc_url)
-            response.raise_for_status()
-            print("✓ Doc scraped successfully (HTML only)")
-            return response.text, ""
-        except Exception as e:
-            print(f"✗ Failed to scrape doc: {e}")
-            return "", ""
 
 def clean_url(url):
     """Clean up a URL by removing trailing junk and escape sequences"""
@@ -535,28 +561,6 @@ def create_text_record(person, doc_text=""):
         'extraction_date': datetime.now().isoformat()
     }
 
-def extract_text_with_retry(doc_url, max_attempts=None):
-    """Extract text from document with retry logic"""
-    if max_attempts is None:
-        max_attempts = Config.RETRY_ATTEMPTS
-    
-    for attempt in range(max_attempts):
-        try:
-            print(f"  Attempt {attempt + 1}/{max_attempts}: Extracting text...")
-            text = extract_google_doc_text(doc_url)
-            if text and len(text.strip()) > 0:
-                print(f"  ✓ Extracted {len(text)} characters")
-                return text, None
-            else:
-                print(f"  ⚠ No text extracted on attempt {attempt + 1}")
-        except Exception as e:
-            error_msg = str(e)
-            print(f"  ✗ Attempt {attempt + 1} failed: {error_msg}")
-            if attempt < max_attempts - 1:
-                print(f"  Retrying in {Config.DELAY_BETWEEN_DOCS} seconds...")
-                time.sleep(Config.DELAY_BETWEEN_DOCS)
-    
-    return "", f"Failed after {max_attempts} attempts"
 
 def step6_map_data(processed_records):
     """Step 6: Map data to CSV matching main system structure"""
@@ -637,10 +641,32 @@ def parse_arguments():
                        help='Process N documents per batch (default: 10)')
     parser.add_argument('--resume', action='store_true',
                        help='Resume from previous extraction progress')
-    parser.add_argument('--retry-failed', action='store_true',
-                       help='Retry previously failed extractions')
-    parser.add_argument('--output', type=str, metavar='FILE',
-                       help='Override output CSV filename')
+    parser.add_argument("--retry-failed", action="store_true",
+                       help="Retry previously failed extractions")
+    parser.add_argument("--output", type=str, metavar="FILE",
+                       help="Override output CSV filename")
+    
+    # Database options (DRY: added from simple_workflow_db.py)
+    parser.add_argument("--db", action="store_true", default=False,
+                       help="Use database mode")
+    parser.add_argument("--no-db", dest="db", action="store_false",
+                       help="Disable database, use CSV only")
+    parser.add_argument("--db-path", type=str, default="xenodx.db",
+                       help="Database file path (default: xenodx.db)")
+    
+    # Output options (DRY: added from simple_workflow_db.py)
+    parser.add_argument("--output-format", choices=["csv", "db", "both"],
+                       default="csv", help="Output format (default: csv)")
+    parser.add_argument("--skip-processed", action="store_true", default=True,
+                       help="Skip already processed documents (default)")
+    parser.add_argument("--reprocess-all", dest="skip_processed", action="store_false",
+                       help="Reprocess all documents")
+    
+    # Row range options
+    parser.add_argument("--start-row", type=int, metavar="N",
+                       help="Start processing from row N (inclusive)")
+    parser.add_argument("--end-row", type=int, metavar="N",
+                       help="End processing at row N (inclusive)")
     
     return parser.parse_args()
 
@@ -660,6 +686,21 @@ def main():
         Config.OUTPUT_CSV_FULL = args.output
         Config.OUTPUT_CSV_BASIC = args.output
     
+    # Database configuration (DRY: unified from simple_workflow_db.py)
+    Config.USE_DATABASE = args.db
+    Config.DATABASE_PATH = args.db_path
+    Config.OUTPUT_FORMAT = args.output_format
+    Config.SKIP_PROCESSED = args.skip_processed
+    Config.RETRY_FAILED = args.retry_failed
+    Config.START_ROW = args.start_row
+    Config.END_ROW = args.end_row
+    
+    
+    # Validate database dependencies
+    if Config.USE_DATABASE and not DATABASE_AVAILABLE:
+        print("Error: Database mode requested but database modules not available.")
+        print("Please install required dependencies or use CSV mode (--no-db)")
+        sys.exit(1)
     # Display configuration
     if Config.BASIC_ONLY:
         mode = "BASIC MODE"
@@ -671,19 +712,31 @@ def main():
     limit_text = f" (limited to {Config.TEST_LIMIT})" if Config.TEST_LIMIT else ""
     resume_text = " [RESUMING]" if args.resume else ""
     retry_text = " [RETRY FAILED]" if args.retry_failed else ""
+    db_text = f" [DB: {Config.DATABASE_PATH}]" if Config.USE_DATABASE else " [CSV ONLY]"
     
-    print(f"STARTING SIMPLE 6-STEP WORKFLOW - {mode}{limit_text}{resume_text}{retry_text}")
+    # Row range text
+    row_range_text = ""
+    if Config.START_ROW or Config.END_ROW:
+        start_text = f"row {Config.START_ROW}" if Config.START_ROW else "start"
+        end_text = f"row {Config.END_ROW}" if Config.END_ROW else "end"
+        row_range_text = f" [ROWS {start_text}-{end_text}]"
+    
+    print(f"STARTING SIMPLE 6-STEP WORKFLOW - {mode}{db_text}{limit_text}{resume_text}{retry_text}{row_range_text}")
     print("=" * 80)
     
     processed_records = []
     
     # Step 1: Download sheet
-    html_content = step1_download_sheet()
+    html_content = download_google_sheet(Config.GOOGLE_SHEET_URL)
     
     # Step 2: Extract people data and Google Doc links
     all_people, people_with_docs = step2_extract_people_and_docs(html_content)
     
-    print(f"\nProcessing ALL {len(all_people)} people...")
+    # Apply row range filtering if specified
+    all_people = filter_people_by_row_range(all_people)
+    people_with_docs = filter_people_by_row_range(people_with_docs)
+    
+    print(f"\nProcessing {len(all_people)} people...")
     print(f"  - {len(people_with_docs)} people have documents")
     print(f"  - {len(all_people) - len(people_with_docs)} people without documents")
     
@@ -749,7 +802,7 @@ def main():
                 print(f"  Document: {person['doc_link']}")
                 
                 # Extract text with retry logic
-                doc_text, error = extract_text_with_retry(person['doc_link'])
+                doc_text, error = extract_text_with_retry(person["doc_link"], Config.RETRY_ATTEMPTS, Config.DELAY_BETWEEN_DOCS)
                 
                 if error:
                     print(f"  ✗ Failed: {error}")
@@ -798,7 +851,7 @@ def main():
                 print(f"  → Has document: {person['doc_link']}")
                 
                 # Step 3: Scrape doc content and text
-                doc_content, doc_text = step3_scrape_doc_contents(person['doc_link'])
+                doc_content, doc_text = scrape_document_content(person['doc_link'])
                 
                 # Step 4: Extract links from HTML content and document text
                 links = step4_extract_links(doc_content, doc_text)

@@ -2,9 +2,10 @@
 """Check if specific entries have Google Doc links"""
 
 import pandas as pd
+from utils.csv_manager import safe_csv_read
 
 # Load the CSV
-df = pd.read_csv('outputs/output.csv')
+df = safe_csv_read('outputs/output.csv', 'basic')
 
 # List of names to check
 names_to_check = [

@@ -1,18 +1,24 @@
 #!/usr/bin/env python3
-import csv
 import os
 from bs4 import BeautifulSoup
 import sys
-try:
-    from atomic_csv import write_csv_atomic, append_csv_atomic, prepend_csv_atomic
-    from config import get_config, get_google_sheets_url
-    from http_pool import get as http_get
-    from logging_config import get_logger
-except ImportError:
-    from .atomic_csv import write_csv_atomic, append_csv_atomic, prepend_csv_atomic
-    from .config import get_config, get_google_sheets_url
-    from .http_pool import get as http_get
-    from .logging_config import get_logger
+import pandas as pd
+# DRY: Use consolidated import management (Phase 3A)
+from config import bulk_safe_import
+
+imports = bulk_safe_import([
+    ('csv_manager', 'CSVManager'),
+    ('config', 'get_config'),
+    ('config', 'get_google_sheets_url'),
+    ('http_pool', 'get'),
+    ('logging_config', 'get_logger')
+])
+
+CSVManager = imports['CSVManager']
+get_config = imports['get_config']
+get_google_sheets_url = imports['get_google_sheets_url']
+http_get = imports['get']
+get_logger = imports['get_logger']
 
 # Setup module logger
 logger = get_logger(__name__)
@@ -20,8 +26,7 @@ logger = get_logger(__name__)
 # Get configuration
 config = get_config()
 
-# Increase CSV field size limit to handle large fields
-csv.field_size_limit(config.get('file_processing.max_csv_field_size', sys.maxsize))
+# CSV field size limit is now handled by CSVManager internally
 
 # Google Sheets published URL (from config)
 URL = get_google_sheets_url()
@@ -298,17 +303,25 @@ def update_csv():
     existing_links = set()
     existing_row_ids = set()
     
-    # Check if file exists and read existing links and row_ids
+    # Check if file exists and read existing links and row_ids using CSVManager
     if os.path.exists(filename):
-        with open(filename, "r", newline="", encoding="utf-8") as csvfile:
-            reader = csv.DictReader(csvfile)
-            for row in reader:
+        manager = CSVManager(filename)
+        try:
+            df = manager.read(dtype_spec='basic')
+            for _, row in df.iterrows():
                 # Track row_ids (primary duplicate detection)
-                if row.get("row_id"):
-                    existing_row_ids.add(row["row_id"])
+                if pd.notna(row.get("row_id")) and row.get("row_id"):
+                    existing_row_ids.add(str(row["row_id"]))
                 # Track links (legacy duplicate detection)
-                if row.get("link"):
-                    existing_links.add(row["link"])
+                if pd.notna(row.get("link")) and row.get("link"):
+                    existing_links.add(str(row["link"]))
+        except Exception as e:
+            logger.error(f"Failed to read existing CSV: {e}")
+            # Initialize CSVManager for new file
+            manager = CSVManager(filename)
+    else:
+        # Initialize CSVManager for new file
+        manager = CSVManager(filename)
     
     # Fetch the data from the Google Sheet
     data = fetch_table_data()
@@ -318,20 +331,20 @@ def update_csv():
     new_records = []
     for record in data:
         # Primary: Check row_id (most reliable)
-        if record.get("row_id") and record["row_id"] in existing_row_ids:
+        if record.get("row_id") and str(record["row_id"]) in existing_row_ids:
             continue  # Skip if row_id exists
         
         # Secondary: Check link (legacy compatibility)
-        if record.get("link") and record["link"] in existing_links:
+        if record.get("link") and str(record["link"]) in existing_links:
             continue  # Skip if link exists
             
         new_records.append(record)
         
         # Add to tracking sets to prevent duplicates within this batch
         if record.get("row_id"):
-            existing_row_ids.add(record["row_id"])
+            existing_row_ids.add(str(record["row_id"]))
         if record.get("link"):
-            existing_links.add(record["link"])
+            existing_links.add(str(record["link"]))
     
     logger.info(f"{len(new_records)} new records to add to CSV")
     
@@ -342,12 +355,26 @@ def update_csv():
         
         if write_header:
             # Write a new file with header and all records (atomic)
-            write_csv_atomic(filename, data, fieldnames=["row_id", "name", "email", "type", "link"])
-            logger.info(f"Created new CSV with {len(data)} records")
+            success = manager.atomic_write(data, fieldnames=["row_id", "name", "email", "type", "link"])
+            if success:
+                logger.info(f"Created new CSV with {len(data)} records")
+            else:
+                logger.error("Failed to create new CSV file")
         else:
             # Prepend new records to the top of the file (highest row_ids first)
-            prepend_csv_atomic(filename, new_records)
-            logger.info(f"Added {len(new_records)} new records to top of CSV")
+            try:
+                existing_df = manager.read(dtype_spec='basic')
+                existing_records = existing_df.to_dict('records')
+            except:
+                existing_records = []
+            
+            # Combine new records + existing records (prepend = new first)
+            all_records = new_records + existing_records
+            success = manager.atomic_write(all_records, fieldnames=["row_id", "name", "email", "type", "link"])
+            if success:
+                logger.info(f"Added {len(new_records)} new records to top of CSV")
+            else:
+                logger.error("Failed to prepend new records to CSV")
 
 if __name__ == "__main__":
     logger.info("Fetching data from Google Sheets...")

@@ -213,6 +213,53 @@ def get_streaming_threshold() -> int:
     return get_config().get("file_processing.streaming_threshold", 5242880)
 
 
+def get_minimal_config():
+    """
+    Get minimal workflow configuration (DRY: absorbed from minimal/simple_workflow.py).
+    
+    Returns:
+        Object with all minimal workflow configuration constants
+    """
+    from pathlib import Path
+    
+    class MinimalConfig:
+        # Google Sheets configuration
+        GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/u/1/d/e/2PACX-1vRqqjqoaj8sEZBfZRw0Og7g8ms_0yTL2MsegTubcjhhBnXr1s1jFBwIVAsbkyj1xD0TMj06LvGTQIHU/pubhtml?pli=1#"
+        TARGET_DIV_ID = "1159146182"
+        OUTPUT_DIR = Path("simple_downloads")
+        OUTPUT_CSV_FULL = "simple_output.csv"
+        OUTPUT_CSV_BASIC = "simple_output.csv"  # Unified output file
+        
+        # Database configuration (DRY: moved from simple_workflow_db.py)
+        DATABASE_PATH = "xenodx.db"
+        USE_DATABASE = False  # Default to CSV mode for backward compatibility
+        OUTPUT_FORMAT = "csv"  # Options: "csv", "db", "both"
+        
+        # Processing modes
+        BASIC_ONLY = False  # True = extract only basic columns, False = full processing
+        TEXT_ONLY = False   # True = extract only text (basic + document_text), False = full processing
+        TEST_LIMIT = None   # None = process all, int = limit for testing
+        
+        # Batch processing settings
+        BATCH_SIZE = 10     # Process N documents at a time
+        RETRY_ATTEMPTS = 3  # Retry failed extractions N times
+        DELAY_BETWEEN_DOCS = 2  # Seconds between document extractions
+        
+        # Row range filtering
+        START_ROW = None    # Start from row N (inclusive)
+        END_ROW = None      # End at row N (inclusive)
+        
+        # Incremental processing (DRY: moved from simple_workflow_db.py)
+        SKIP_PROCESSED = True
+        RETRY_FAILED = False
+        
+        # Progress tracking
+        PROGRESS_FILE = "extraction_progress.json"
+        FAILED_DOCS_FILE = "failed_extractions.json"
+    
+    return MinimalConfig()
+
+
 def safe_import(module_names: Union[str, List[str]], from_items: Optional[Union[str, List[str]]] = None, 
                 package: Optional[str] = None) -> Any:
     """
@@ -276,6 +323,77 @@ def safe_import(module_names: Union[str, List[str]], from_items: Optional[Union[
     
     # If all imports fail, raise the last error
     raise last_error
+
+
+def safe_relative_import(module_name: str, item_name: str, package: str = None):
+    """
+    Safely import with fallback to relative import.
+    Replaces all try/except ImportError patterns in the codebase.
+    
+    Args:
+        module_name: Name of module to import from
+        item_name: Specific item to import
+        package: Package for relative import (auto-detected if None)
+    
+    Returns:
+        The imported item
+        
+    Example:
+        # Instead of:
+        # try:
+        #     from csv_manager import CSVManager
+        # except ImportError:
+        #     from .csv_manager import CSVManager
+        
+        # Use:
+        CSVManager = safe_relative_import('csv_manager', 'CSVManager')
+    """
+    try:
+        # Try absolute import first
+        module = __import__(module_name, fromlist=[item_name])
+        return getattr(module, item_name)
+    except ImportError:
+        # Fall back to relative import
+        if package is None:
+            # Auto-detect package from caller's __name__
+            import inspect
+            frame = inspect.currentframe().f_back
+            caller_module = frame.f_globals.get('__name__', '')
+            if '.' in caller_module:
+                package = caller_module.rsplit('.', 1)[0]
+        
+        try:
+            relative_module_name = f'.{module_name}'
+            module = __import__(relative_module_name, package=package, fromlist=[item_name])
+            return getattr(module, item_name)
+        except ImportError as e:
+            raise ImportError(f"Could not import {item_name} from {module_name} (tried both absolute and relative imports): {e}")
+
+
+def bulk_safe_import(import_specs: list, package: str = None):
+    """
+    Import multiple items safely with single function call.
+    
+    Args:
+        import_specs: List of (module_name, item_name) tuples
+        package: Package for relative imports
+    
+    Returns:
+        Dictionary mapping item_name -> imported_item
+    
+    Example:
+        imports = bulk_safe_import([
+            ('csv_manager', 'CSVManager'),
+            ('logging_config', 'get_logger'),
+            ('config', 'get_config')
+        ])
+        CSVManager = imports['CSVManager']
+        get_logger = imports['get_logger']
+    """
+    results = {}
+    for module_name, item_name in import_specs:
+        results[item_name] = safe_relative_import(module_name, item_name, package)
+    return results
 
 
 # Example usage

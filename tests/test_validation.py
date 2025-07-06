@@ -12,8 +12,9 @@ init_project_imports()
 
 from utils.validation import (
     validate_url, validate_youtube_url, validate_google_drive_url,
-    validate_file_path, sanitize_csv_value, ValidationError
+    validate_file_path, ValidationError
 )
+from utils.sanitization import sanitize_csv_field
 
 
 class TestURLValidation(unittest.TestCase):
@@ -182,7 +183,7 @@ class TestFilePathValidation(unittest.TestCase):
 class TestCSVSanitization(unittest.TestCase):
     """Test CSV value sanitization"""
     
-    def test_sanitize_csv_value_safe(self):
+    def test_sanitize_csv_field_safe(self):
         """Test safe values are preserved"""
         safe_values = [
             "Normal text",
@@ -193,10 +194,10 @@ class TestCSVSanitization(unittest.TestCase):
         ]
         
         for value in safe_values:
-            sanitized = sanitize_csv_value(value)
+            sanitized = sanitize_csv_field(value)
             self.assertEqual(sanitized, value)
     
-    def test_sanitize_csv_value_formula_injection(self):
+    def test_sanitize_csv_field_formula_injection(self):
         """Test CSV formula injection is prevented"""
         malicious_values = [
             "=1+1",
@@ -209,20 +210,20 @@ class TestCSVSanitization(unittest.TestCase):
         ]
         
         for value in malicious_values:
-            sanitized = sanitize_csv_value(value)
+            sanitized = sanitize_csv_field(value)
             # Should be quoted or prefixed
             self.assertNotEqual(sanitized[0], value[0])
             self.assertIn(value[1:], sanitized)  # Rest of content preserved
     
-    def test_sanitize_csv_value_none(self):
+    def test_sanitize_csv_field_none(self):
         """Test None values are handled"""
-        self.assertEqual(sanitize_csv_value(None), "")
+        self.assertEqual(sanitize_csv_field(None), "")
     
-    def test_sanitize_csv_value_numbers(self):
+    def test_sanitize_csv_field_numbers(self):
         """Test numeric values are converted to strings"""
-        self.assertEqual(sanitize_csv_value(123), "123")
-        self.assertEqual(sanitize_csv_value(45.67), "45.67")
-        self.assertEqual(sanitize_csv_value(True), "True")
+        self.assertEqual(sanitize_csv_field(123), "123")
+        self.assertEqual(sanitize_csv_field(45.67), "45.67")
+        self.assertEqual(sanitize_csv_field(True), "True")
 
 
 if __name__ == "__main__":

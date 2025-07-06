@@ -20,10 +20,11 @@ from typing import Dict, List, Set, Tuple, Optional
 import argparse
 from utils.path_setup import ensure_directory_exists
 from pathlib import Path
-try:
-    from utils.clean_file_mapper import CleanFileMapper
-except ImportError:
-    from clean_file_mapper import CleanFileMapper
+from utils.csv_manager import CSVManager
+# DRY: Use consolidated import management (Phase 3A)
+from utils.config import safe_relative_import
+
+CleanFileMapper = safe_relative_import('clean_file_mapper', 'CleanFileMapper', 'utils')
 
 
 class ComprehensiveFileMapper:
@@ -31,7 +32,8 @@ class ComprehensiveFileMapper:
     
     def __init__(self, csv_path: str = 'outputs/output.csv'):
         self.csv_path = csv_path
-        self.df = pd.read_csv(csv_path)
+        self.csv_manager = CSVManager(csv_path)
+        self.df = self.csv_manager.read(dtype_spec='basic')
         
         # Use CleanFileMapper to eliminate contamination
         self.clean_mapper = CleanFileMapper(csv_path)
@@ -427,7 +429,8 @@ class ComprehensiveFileMapper:
         
         if mapping_data:
             df_mapped = pd.DataFrame(mapping_data)
-            df_mapped.to_csv('comprehensive_file_mapping.csv', index=False)
+            csv_manager = CSVManager('comprehensive_file_mapping.csv')
+            csv_manager.safe_csv_write(df_mapped, operation_name="comprehensive_mapping")
             print(f"\nMapped files saved to: comprehensive_file_mapping.csv")
         
         # Unmapped files report
@@ -443,7 +446,8 @@ class ComprehensiveFileMapper:
                 })
             
             df_unmapped = pd.DataFrame(unmapped_data)
-            df_unmapped.to_csv('unmapped_files.csv', index=False)
+            csv_manager = CSVManager('unmapped_files.csv')
+            csv_manager.safe_csv_write(df_unmapped, operation_name="unmapped_files")
             print(f"Unmapped files saved to: unmapped_files.csv")
         
         # Duplicates report
@@ -461,13 +465,15 @@ class ComprehensiveFileMapper:
         
         if duplicate_data:
             df_duplicates = pd.DataFrame(duplicate_data)
-            df_duplicates.to_csv('duplicate_files.csv', index=False)
+            csv_manager = CSVManager('duplicate_files.csv')
+            csv_manager.safe_csv_write(df_duplicates, operation_name="duplicate_files")
             print(f"Duplicate files saved to: duplicate_files.csv")
         
         # Orphaned entries report
         if self.orphaned_csv_entries:
             df_orphaned = pd.DataFrame(self.orphaned_csv_entries)
-            df_orphaned.to_csv('orphaned_csv_entries.csv', index=False)
+            csv_manager = CSVManager('orphaned_csv_entries.csv')
+            csv_manager.safe_csv_write(df_orphaned, operation_name="orphaned_entries")
             print(f"Orphaned CSV entries saved to: orphaned_csv_entries.csv")
         
         # Summary statistics
@@ -564,7 +570,7 @@ class FileMapper:
         """
         self.csv_path = csv_path
         self.mode = mode
-        self.df = safe_csv_read(csv_path, 'basic')  # Use standardized CSV reading
+        self.df = CSVManager.safe_csv_read(csv_path, 'basic')  # Use standardized CSV reading
         
         # Initialize base mappers
         self.clean_mapper = CleanFileMapper(csv_path)
@@ -1278,7 +1284,8 @@ class FileMapper:
         # Export in requested format
         if format == 'csv':
             df_export = pd.DataFrame(mapping_data)
-            df_export.to_csv(output_path, index=False)
+            csv_manager = CSVManager(output_path)
+            csv_manager.safe_csv_write(df_export, operation_name="mapping_export")
         elif format == 'json':
             with open(output_path, 'w') as f:
                 json.dump(mapping_data, f, indent=2)
@@ -1291,11 +1298,7 @@ class FileMapper:
         return output_path
 
 
-# Add import for standardized CSV reading at the top
-try:
-    from csv_tracker import safe_csv_read
-except ImportError:
-    from .csv_tracker import safe_csv_read
+# CSVManager is already imported at the top - no need for separate safe_csv_read import
 
 
 if __name__ == "__main__":

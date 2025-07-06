@@ -7,8 +7,8 @@ import sys
 import os
 import time
 import json
-import pandas as pd
 from datetime import datetime
+from utils.csv_manager import CSVManager, safe_csv_read
 
 class Colors:
     GREEN = '\033[92m'
@@ -60,7 +60,7 @@ def test_imports():
     print_test_header("1. PYTHON MODULE IMPORTS")
     
     test_cases = [
-        ("CSV Tracker", "from utils.csv_tracker import safe_get_na_value, update_csv_download_status"),
+        ("CSV Manager", "from utils.csv_manager import CSVManager, safe_get_na_value"),
         ("Download Drive", "from utils.download_drive import download_drive_with_context"),
         ("Download YouTube", "from utils.download_youtube import download_youtube_with_context"),
         ("Row Context", "from utils.row_context import RowContext"),
@@ -89,8 +89,7 @@ def test_cli_tools():
     print_test_header("2. CLI TOOL INTERFACES")
     
     test_cases = [
-        ("CSV Tracker Status", "python3 utils/csv_tracker.py --status"),
-        ("CSV Tracker Help", "python3 utils/csv_tracker.py --help"),
+        ("CSV Manager Test", ["python3", "-c", "from utils.csv_manager import CSVManager; print('CSV Manager available')"]),
         ("Error Handling Validation", "python3 utils/error_handling.py --validate-environment"),
         ("Monitoring Status", "python3 utils/monitoring.py --status"),
         ("Monitoring Alerts", "python3 utils/monitoring.py --alerts"),
@@ -119,7 +118,7 @@ def test_file_operations():
     # Test 1: Check CSV file exists and is readable
     csv_path = "outputs/output.csv"
     try:
-        df = pd.read_csv(csv_path)
+        df = safe_csv_read(csv_path, 'tracking')
         csv_exists = True
         row_count = len(df)
         col_count = len(df.columns)
@@ -292,8 +291,9 @@ def test_performance():
     
     # Test CSV read performance
     start_time = time.time()
-    cmd = ['python3', '-c', """import pandas as pd
-df = pd.read_csv('outputs/output.csv')
+    cmd = ['python3', '-c', """from utils.csv_manager import CSVManager
+csv_manager = CSVManager('outputs/output.csv')
+df = csv_manager.read(dtype_spec='basic')
 print(f'Loaded {len(df)} rows')"""]
     success, output, error = run_command(cmd)
     elapsed = time.time() - start_time
@@ -304,7 +304,7 @@ print(f'Loaded {len(df)} rows')"""]
     
     # Test import performance
     start_time = time.time()
-    cmd = ['python3', '-c', "import utils.csv_tracker; import utils.download_youtube; import utils.download_drive"]
+    cmd = ['python3', '-c', "import utils.csv_manager; import utils.download_youtube; import utils.download_drive"]
     success, output, error = run_command(cmd)
     elapsed = time.time() - start_time
     
@@ -323,7 +323,7 @@ def test_minimal_functionality():
     # Test critical imports
     print("\nTesting critical imports...")
     critical_imports = [
-        "from utils.csv_tracker import safe_get_na_value, update_csv_download_status",
+        "from utils.csv_manager import CSVManager, safe_get_na_value",
         "from utils.download_drive import download_drive_with_context", 
         "from utils.download_youtube import download_youtube_with_context",
         "from utils.config import get_config, create_download_dir",
@@ -339,7 +339,7 @@ def test_minimal_functionality():
     # Test basic functionality
     basic_tests = [
         ("Config Loading", "from utils.config import get_config; config = get_config(); print('Config loaded')"),
-        ("CSV Safe Read", "from utils.csv_tracker import safe_csv_read; df = safe_csv_read('outputs/output.csv', 'basic'); print(f'Loaded {len(df)} rows')"),
+        ("CSV Safe Read", "from utils.csv_manager import safe_csv_read; df = safe_csv_read('outputs/output.csv', 'basic'); print(f'Loaded {len(df)} rows')"),
         ("Cleanup Manager", "from utils.cleanup_manager import CleanupManager; manager = CleanupManager(); print('Manager created')")
     ]
     
@@ -356,7 +356,7 @@ def test_specific_component(component_name):
     
     component_tests = {
         'create_download_dir': "from utils.config import create_download_dir; create_download_dir('test_dir'); print('Directory creation works')",
-        'csv_tracker': "from utils.csv_tracker import get_download_status_summary; summary = get_download_status_summary(); print('CSV tracker works')",
+        'csv_manager': "from utils.csv_manager import CSVManager; manager = CSVManager(); summary = manager.get_download_status_summary(); print('CSV manager works')",
         'cleanup_manager': "from utils.cleanup_manager import CleanupManager; manager = CleanupManager(); stats = manager.cleanup_stats; print('Cleanup manager works')",
         'rate_limiter': "from utils.rate_limiter import RateLimiter; rl = RateLimiter(); print('Rate limiter works')"
     }

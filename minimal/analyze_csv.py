@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 import pandas as pd
+from utils.csv_manager import safe_csv_read
 
 # Read CSV
-df = pd.read_csv('/home/Mike/projects/xenodex/typing-clients-ingestion/minimal/simple_output.csv')
+df = safe_csv_read('/home/Mike/projects/xenodex/typing-clients-ingestion/minimal/simple_output.csv', 'all_string')
 
 print('CSV ANALYSIS')
 print('=' * 80)

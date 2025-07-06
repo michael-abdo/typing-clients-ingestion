@@ -18,6 +18,7 @@ from datetime import datetime
 from contextlib import contextmanager
 from dataclasses import dataclass
 
+# DRY: Consolidated import management (temporarily using try/except for testing)
 try:
     from file_lock import file_lock
     from sanitization import sanitize_error_message, sanitize_csv_field
@@ -482,6 +483,64 @@ class CSVManager:
         except Exception as e:
             logger.error(csv_error('CSV_READ_ERROR', path=str(self.csv_path), error=str(e)))
             return {}
+    
+    def get_failed_downloads(self, download_type: str = 'both') -> List[RowContext]:
+        """Get list of failed downloads"""
+        try:
+            df = self.safe_csv_read(str(self.csv_path))
+            failed_rows = []
+            
+            for _, row in df.iterrows():
+                # Check if this row has failed downloads
+                youtube_failed = (download_type in ['both', 'youtube'] and 
+                                str(row.get('youtube_status', '')) == 'failed')
+                drive_failed = (download_type in ['both', 'drive'] and 
+                              str(row.get('drive_status', '')) == 'failed')
+                
+                if youtube_failed or drive_failed:
+                    row_context = RowContext(
+                        row_id=str(row.get('row_id', '')),
+                        name=str(row.get('name', '')),
+                        email=str(row.get('email', '')),
+                        type=str(row.get('type', '')),
+                        link=str(row.get('link', ''))
+                    )
+                    failed_rows.append(row_context)
+            
+            return failed_rows
+            
+        except Exception as e:
+            logger.error(csv_error('CSV_READ_ERROR', path=str(self.csv_path), error=str(e)))
+            return []
+    
+    def reset_all_download_status(self, download_type: str = 'both') -> Dict[str, int]:
+        """Reset download status for all rows"""
+        try:
+            df = self.safe_csv_read(str(self.csv_path))
+            reset_counts = {'youtube': 0, 'drive': 0}
+            
+            if download_type in ['both', 'youtube']:
+                # Reset YouTube status columns
+                youtube_mask = df['youtube_status'].notna() & (df['youtube_status'] != '')
+                reset_counts['youtube'] = youtube_mask.sum()
+                df.loc[youtube_mask, 'youtube_status'] = 'pending'
+                df.loc[youtube_mask, 'youtube_error'] = ''
+            
+            if download_type in ['both', 'drive']:
+                # Reset Drive status columns
+                drive_mask = df['drive_status'].notna() & (df['drive_status'] != '')
+                reset_counts['drive'] = drive_mask.sum()
+                df.loc[drive_mask, 'drive_status'] = 'pending'
+                df.loc[drive_mask, 'drive_error'] = ''
+            
+            # Save the updated dataframe
+            self.safe_csv_write(df, "reset_download_status")
+            
+            return reset_counts
+            
+        except Exception as e:
+            logger.error(csv_error('CSV_WRITE_ERROR', path=str(self.csv_path), error=str(e)))
+            return {'youtube': 0, 'drive': 0}
     
     # Note: File integrity and mapping operations are handled by FileMapper
     # Use utils.comprehensive_file_mapper.FileMapper for:

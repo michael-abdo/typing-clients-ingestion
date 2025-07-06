@@ -10,6 +10,7 @@ import re
 from pathlib import Path
 from urllib.parse import urlparse
 import os
+from utils.csv_manager import CSVManager
 
 # Constants
 GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/u/1/d/e/2PACX-1vRqqjqoaj8sEZBfZRw0Og7g8ms_0yTL2MsegTubcjhhBnXr1s1jFBwIVAsbkyj1xD0TMj06LvGTQIHU/pubhtml?pli=1#"
@@ -137,8 +138,9 @@ def step6_map_data(all_downloaded_items):
     # Create DataFrame
     df = pd.DataFrame(all_downloaded_items)
     
-    # Save to CSV
-    df.to_csv(OUTPUT_CSV, index=False)
+    # Save to CSV using CSVManager
+    csv_manager = CSVManager(OUTPUT_CSV)
+    csv_manager.safe_csv_write(df, operation_name="simple_workflow_mapping")
     
     print(f"✓ Data mapped and saved to {OUTPUT_CSV}")
     print(f"  Total items: {len(df)}")

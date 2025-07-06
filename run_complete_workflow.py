@@ -7,14 +7,13 @@ import csv
 from pathlib import Path
 
 # Add parent directory to path to access utils
-from utils.path_setup import init_project_imports
+from utils.path_setup import init_project_imports, ensure_directory_exists
 init_project_imports()
 
-from utils.logger import pipeline_run, get_pipeline_logger
-from utils.logging_config import get_logger
+from utils.logging_config import get_logger, pipeline_run, get_pipeline_logger
 from utils.parallel_processor import parallel_download_youtube_videos
 from utils.config import get_config, get_drive_downloads_dir
-from utils.csv_tracker import ensure_tracking_columns, get_pending_downloads, update_csv_download_status, safe_csv_read
+from utils.csv_manager import CSVManager
 from utils.row_context import create_row_context_from_csv_row
 from utils.download_youtube import download_youtube_with_context
 from utils.download_drive import download_drive_with_context
@@ -90,10 +89,12 @@ def main():
 def main_workflow(args, logger=None):
     """Main workflow logic with row-centric tracking"""
     
-    # Step 0: Ensure CSV has tracking columns
+    # Step 0: Initialize CSV Manager and ensure tracking columns
     output_csv_path = config.get('paths.output_csv', 'output.csv')
+    csv_manager = CSVManager(output_csv_path)
+    
     if os.path.exists(output_csv_path):
-        tracking_added = ensure_tracking_columns(output_csv_path)
+        tracking_added = csv_manager.ensure_tracking_columns()
         if tracking_added and logger:
             logger.get_logger('main').info("Enhanced CSV with tracking columns for row-centric downloads")
     
@@ -121,7 +122,7 @@ def main_workflow(args, logger=None):
     # Step 2: Download Google Drive files using row-centric tracking
     if not args.skip_drive:
         # Get pending Drive downloads from CSV tracking system
-        pending_drive = get_pending_downloads(output_csv_path, 'drive')
+        pending_drive = csv_manager.get_pending_downloads('drive')
         
         if pending_drive:
             # Apply max-drive limit if specified
@@ -142,7 +143,7 @@ def main_workflow(args, logger=None):
             
             # Process downloads with row context tracking
             import pandas as pd
-            df = safe_csv_read(output_csv_path, 'tracking')
+            df = csv_manager.read(dtype_spec='tracking')
             
             drive_count = 0
             for row_context in pending_drive:
@@ -180,7 +181,7 @@ def main_workflow(args, logger=None):
                         result = download_drive_with_context(drive_link, row_context)
                         
                         # Update CSV with result
-                        update_csv_download_status(row_context.row_index, 'drive', result)
+                        csv_manager.update_download_status(row_context.row_index, 'drive', result)
                         
                         if result.success:
                             if logger:
@@ -198,7 +199,7 @@ def main_workflow(args, logger=None):
     # Step 3: Download YouTube videos using row-centric tracking
     if not args.skip_youtube:
         # Get pending YouTube downloads from CSV tracking system
-        pending_youtube = get_pending_downloads(output_csv_path, 'youtube')
+        pending_youtube = csv_manager.get_pending_downloads('youtube')
         
         if pending_youtube:
             # Apply max-youtube limit if specified
@@ -219,7 +220,7 @@ def main_workflow(args, logger=None):
             
             # Process downloads with row context tracking
             import pandas as pd
-            df = safe_csv_read(output_csv_path, 'tracking')
+            df = csv_manager.read(dtype_spec='tracking')
             
             youtube_count = 0
             for row_context in pending_youtube:
@@ -242,7 +243,7 @@ def main_workflow(args, logger=None):
                     result = download_youtube_with_context(youtube_link, row_context)
                     
                     # Update CSV with result
-                    update_csv_download_status(row_context.row_index, 'youtube', result)
+                    csv_manager.update_download_status(row_context.row_index, 'youtube', result)
                     
                     if result.success:
                         if logger:
@@ -262,8 +263,8 @@ def main_workflow(args, logger=None):
         csv_rows = 0
         output_csv_path = config.get('paths.output_csv', 'output.csv')
         if os.path.exists(output_csv_path):
-            with open(output_csv_path, 'r', newline='', encoding='utf-8') as f:
-                csv_rows = sum(1 for _ in csv.DictReader(f))
+            df = csv_manager.read(dtype_spec='basic')
+            csv_rows = len(df)
         logger.update_stats(rows_processed=csv_rows)
     
     if logger:

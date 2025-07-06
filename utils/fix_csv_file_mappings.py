@@ -11,6 +11,10 @@ import json
 import shutil
 from typing import Dict, List, Set, Tuple
 import argparse
+# DRY: Use consolidated import management (Phase 3A)
+from config import safe_relative_import
+
+CSVManager = safe_relative_import('csv_manager', 'CSVManager')
 
 
 class CSVFileMappingFixer:
@@ -18,7 +22,8 @@ class CSVFileMappingFixer:
     
     def __init__(self, csv_path: str = 'outputs/output.csv'):
         self.csv_path = csv_path
-        self.df = pd.read_csv(csv_path)
+        self.csv_manager = CSVManager(csv_path)
+        self.df = self.csv_manager.read(dtype_spec='basic')
         self.fixes_applied = []
         self.conflicts_found = []
         
@@ -278,21 +283,29 @@ class CSVFileMappingFixer:
         print(f"  Missing files: {len(missing)}")
         print(f"  Fixes applied: {len(self.fixes_applied)}")
         
-        # Save detailed reports
+        # Save detailed reports using CSVManager
         if mismatches:
-            pd.DataFrame(mismatches).to_csv('mismatched_mappings.csv', index=False)
+            df_mismatches = pd.DataFrame(mismatches)
+            csv_manager = CSVManager('mismatched_mappings.csv')
+            csv_manager.safe_csv_write(df_mismatches, operation_name="mismatched_mappings")
             print(f"\nMismatched mappings saved to: mismatched_mappings.csv")
         
         if orphaned:
-            pd.DataFrame({'file_path': orphaned}).to_csv('orphaned_files.csv', index=False)
+            df_orphaned = pd.DataFrame({'file_path': orphaned})
+            csv_manager = CSVManager('orphaned_files.csv')
+            csv_manager.safe_csv_write(df_orphaned, operation_name="orphaned_files")
             print(f"Orphaned files saved to: orphaned_files.csv")
         
         if missing:
-            pd.DataFrame(missing).to_csv('missing_csv_files.csv', index=False)
+            df_missing = pd.DataFrame(missing)
+            csv_manager = CSVManager('missing_csv_files.csv')
+            csv_manager.safe_csv_write(df_missing, operation_name="missing_files")
             print(f"Missing files saved to: missing_csv_files.csv")
         
         if self.fixes_applied:
-            pd.DataFrame(self.fixes_applied).to_csv('mapping_fixes_applied.csv', index=False)
+            df_fixes = pd.DataFrame(self.fixes_applied)
+            csv_manager = CSVManager('mapping_fixes_applied.csv')
+            csv_manager.safe_csv_write(df_fixes, operation_name="fixes_applied")
             print(f"Fixes applied saved to: mapping_fixes_applied.csv")
         
         # Summary

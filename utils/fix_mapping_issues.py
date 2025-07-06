@@ -26,8 +26,10 @@ from typing import Dict, List
 # Import consolidated functionality
 try:
     from .comprehensive_file_mapper import FileMapper
+    from .csv_manager import CSVManager, safe_csv_read
 except ImportError:
     from comprehensive_file_mapper import FileMapper
+    from csv_manager import CSVManager, safe_csv_read
 
 
 class MappingIssueFixer:
@@ -35,13 +37,13 @@ class MappingIssueFixer:
     
     def __init__(self):
         # Load reports
-        self.mapped_df = pd.read_csv('comprehensive_file_mapping.csv')
-        self.unmapped_df = pd.read_csv('unmapped_files.csv')
-        self.duplicates_df = pd.read_csv('duplicate_files.csv')
-        self.orphaned_df = pd.read_csv('orphaned_csv_entries.csv')
+        self.mapped_df = safe_csv_read('comprehensive_file_mapping.csv', 'basic')
+        self.unmapped_df = safe_csv_read('unmapped_files.csv', 'basic')
+        self.duplicates_df = safe_csv_read('duplicate_files.csv', 'basic')
+        self.orphaned_df = safe_csv_read('orphaned_csv_entries.csv', 'basic')
         
         # Load main CSV
-        self.main_csv = pd.read_csv('outputs/output.csv')
+        self.main_csv = safe_csv_read('outputs/output.csv', 'tracking')
         
         # Track fixes
         self.fixes_applied = []
@@ -146,7 +148,8 @@ class MappingIssueFixer:
             duplicates = dup_files[dup_files['is_primary'] == False]
             
             for idx, dup in duplicates.iterrows():
-                # Move to duplicates folder insteensure_directory_exists(Path(dup_dir))dir = 'removed_duplicates'
+                # Move to duplicates folder instead
+                dup_dir = 'removed_duplicates'
                 os.makedirs(dup_dir, exist_ok=True)
                 
                 dest_path = os.path.join(dup_dir, dup['filename'])
@@ -234,13 +237,15 @@ class MappingIssueFixer:
         
         # Save complete mapping
         df_complete = pd.DataFrame(complete_mappings)
-        df_complete.to_csv('complete_file_mapping_100_percent.csv', index=False)
+        csv_manager = CSVManager('complete_file_mapping_100_percent.csv')
+        csv_manager.safe_csv_write(df_complete, operation_name="complete_file_mapping")
         
         print(f"  Created complete mapping with {len(complete_mappings)} entries")
         
         # Save fixes report
         df_fixes = pd.DataFrame(self.fixes_applied)
-        df_fixes.to_csv('mapping_fixes_applied.csv', index=False)
+        csv_manager = CSVManager('mapping_fixes_applied.csv')
+        csv_manager.safe_csv_write(df_fixes, operation_name="mapping_fixes")
         
         print(f"  Saved {len(self.fixes_applied)} fixes to mapping_fixes_applied.csv")
     

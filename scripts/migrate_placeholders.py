@@ -14,13 +14,13 @@ import sys
 # Add parent directory to path to import utils
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from utils.csv_tracker import safe_csv_write
+from utils.csv_manager import CSVManager, safe_csv_read
 from utils.csv_backup import backup_csv
 from utils.file_lock import file_lock
 
 def analyze_placeholders(csv_path: str) -> dict:
     """Analyze current placeholder usage in CSV"""
-    df = pd.read_csv(csv_path, dtype=str)
+    df = safe_csv_read(csv_path, 'all_string')
     
     analysis = {
         'total_rows': len(df),
@@ -94,7 +94,7 @@ def migrate_placeholders_to_nan(csv_path: str, dry_run: bool = True) -> bool:
     
     if dry_run:
         # Simulate the migration
-        df = pd.read_csv(csv_path, dtype=str)
+        df = safe_csv_read(csv_path, 'all_string')
         df_simulated = df.copy()
         
         # Values to convert to NaN
@@ -109,7 +109,8 @@ def migrate_placeholders_to_nan(csv_path: str, dry_run: bool = True) -> bool:
         
         # Check what validation would be after migration
         temp_path = csv_path + '.temp_simulation'
-        df_simulated.to_csv(temp_path, index=False)
+        csv_manager = CSVManager(temp_path)
+        csv_manager.safe_csv_write(df_simulated, operation_name="temp_simulation")
         
         is_valid_after, message_after = validate_csv_integrity(temp_path)
         print(f"\nPost-migration validation (simulated): {'Valid' if is_valid_after else f'Invalid - {message_after}'}")
@@ -155,7 +156,7 @@ def migrate_placeholders_to_nan(csv_path: str, dry_run: bool = True) -> bool:
         print(f"\nCreated backup: {backup_path}")
         
         # Read CSV with string dtypes to preserve data
-        df = pd.read_csv(csv_path, dtype=str)
+        df = safe_csv_read(csv_path, 'all_string')
         
         # Values to convert to NaN
         placeholder_values = ['-', "'-", "'", '"-"', "'-'"]
@@ -176,8 +177,8 @@ def migrate_placeholders_to_nan(csv_path: str, dry_run: bool = True) -> bool:
         print(f"\nReplacing {changes_made} placeholder values with NaN...")
         
         # Save migrated CSV
-        expected_cols = df.columns.tolist()
-        success = safe_csv_write(df, csv_path, 'migrate_placeholders', expected_cols)
+        csv_manager = CSVManager(csv_path)
+        success = csv_manager.safe_csv_write(df, operation_name="migrate_placeholders")
         
         if success:
             print("✅ Migration completed successfully")

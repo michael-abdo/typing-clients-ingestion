@@ -1,24 +1,21 @@
 # DRY Refactoring Test Report
-Generated: 2025-07-06 00:33:26.834013
+Generated: 2025-07-06 02:27:40.972793
 
 ## Test Results Summary
 
 - Total Tests: 10
-- Passed: 8
-- Failed: 2
-- Success Rate: 80.0%
+- Passed: 9
+- Failed: 1
+- Success Rate: 90.0%
 
 ## Failed Tests
-- **CSV Manager functionality**
-  - Error: 'CSVManager' object has no attribute 'write_csv'
 - **Pytest collection**
   - Error: Failed to collect tests
 
 ## Detailed Results
 - ✓ Module imports
 - ✓ Path setup functionality
-- ✗ CSV Manager functionality
-  - 'CSVManager' object has no attribute 'write_csv'
+- ✓ CSV Manager functionality
 - ✓ Configuration access
 - ✓ Error decorators
 - ✓ Subprocess handler

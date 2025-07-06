@@ -15,9 +15,9 @@ from pathlib import Path
 
 # Import standardized CSV reading function
 try:
-    from csv_tracker import safe_csv_read
+    from csv_manager import safe_csv_read
 except ImportError:
-    from .csv_tracker import safe_csv_read
+    from .csv_manager import safe_csv_read
 
 
 def organize_files_by_type(mapping_csv: str = 'complete_file_mapping_100_percent.csv',

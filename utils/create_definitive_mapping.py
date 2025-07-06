@@ -26,9 +26,11 @@ import shutil
 try:
     from .comprehensive_file_mapper import FileMapper
     from .clean_file_mapper import CleanFileMapper
+    from .csv_manager import CSVManager, safe_csv_read
 except ImportError:
     from comprehensive_file_mapper import FileMapper
     from clean_file_mapper import CleanFileMapper
+    from csv_manager import CSVManager, safe_csv_read
 
 
 class DefinitiveMapper:
@@ -36,7 +38,7 @@ class DefinitiveMapper:
     
     def __init__(self, csv_path: str = 'outputs/output.csv'):
         self.csv_path = csv_path
-        self.df = pd.read_csv(csv_path)
+        self.df = safe_csv_read(csv_path, 'basic')
         
         # Use CleanFileMapper for robust mapping
         self.clean_mapper = CleanFileMapper(csv_path)
@@ -207,25 +209,29 @@ class DefinitiveMapper:
         
         if flat_mappings:
             df_mapping = pd.DataFrame(flat_mappings)
-            df_mapping.to_csv('definitive_csv_file_mapping.csv', index=False)
+            csv_manager = CSVManager('definitive_csv_file_mapping.csv')
+            csv_manager.safe_csv_write(df_mapping, operation_name="definitive_mapping")
             print(f"  Saved {len(flat_mappings)} mappings to: definitive_csv_file_mapping.csv")
         
         # Save conflicts
         if self.conflicts:
             df_conflicts = pd.DataFrame(self.conflicts)
-            df_conflicts.to_csv('mapping_conflicts.csv', index=False)
+            csv_manager = CSVManager('mapping_conflicts.csv')
+            csv_manager.safe_csv_write(df_conflicts, operation_name="mapping_conflicts")
             print(f"  Saved {len(self.conflicts)} conflicts to: mapping_conflicts.csv")
         
         # Save missing files
         if self.missing_files:
             df_missing = pd.DataFrame(self.missing_files)
-            df_missing.to_csv('definitive_missing_files.csv', index=False)
+            csv_manager = CSVManager('definitive_missing_files.csv')
+            csv_manager.safe_csv_write(df_missing, operation_name="missing_files")
             print(f"  Saved {len(self.missing_files)} missing files to: definitive_missing_files.csv")
         
         # Save unmapped files
         if self.unmapped_files:
             df_unmapped = pd.DataFrame({'file_path': self.unmapped_files})
-            df_unmapped.to_csv('definitive_unmapped_files.csv', index=False)
+            csv_manager = CSVManager('definitive_unmapped_files.csv')
+            csv_manager.safe_csv_write(df_unmapped, operation_name="unmapped_files")
             print(f"  Saved {len(self.unmapped_files)} unmapped files to: definitive_unmapped_files.csv")
         
         # Save complete mapping as JSON

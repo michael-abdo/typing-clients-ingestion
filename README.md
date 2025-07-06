@@ -129,6 +129,113 @@ pending = csv_manager.get_pending_downloads()
 csv_manager.update_download_status(row_index=1, download_type='youtube', result=download_result)
 ```
 
+### Logging Configuration - Unified Logging System
+Consolidates all logging functionality with pipeline support:
+
+```python
+from utils.logging_config import get_logger, pipeline_run, DownloadStats
+
+# Get component-specific logger
+logger = get_logger(__name__)
+
+# Pipeline logging with automatic stats
+with pipeline_run() as pipeline_logger:
+    logger.info("Processing started")
+    # Your processing code here
+    
+# Enhanced logging with statistics
+stats = DownloadStats()
+stats.update_from_result(download_result)
+print(stats.get_summary())
+```
+
+### Validation & URL Processing - Centralized Validation
+Consolidates URL processing and validation functions:
+
+```python
+from utils.validation import (
+    clean_url, validate_url, determine_url_type,
+    extract_youtube_ids, extract_drive_links, filter_meaningful_links
+)
+
+# URL cleaning and validation
+cleaned_url = clean_url(raw_url)
+validated_url = validate_url(cleaned_url, allowed_domains=['youtube.com'])
+
+# URL type detection
+url_type = determine_url_type(url)  # 'youtube_video', 'drive_file', etc.
+
+# Extract IDs and links
+youtube_ids = extract_youtube_ids(links)
+drive_links = extract_drive_links(links, html_content)
+content_links = filter_meaningful_links(all_links, source_url)
+```
+
+### Row Context & Download Results - Enhanced Tracking
+Consolidated download result patterns with comprehensive metadata:
+
+```python
+from utils.row_context import (
+    DownloadResult, DownloadStatus, ErrorCategory, 
+    create_download_result, categorize_error
+)
+
+# Create enhanced download result
+result = create_download_result('youtube', row_context)
+result.mark_complete(['video.mp4'], sizes=[1024000])
+
+# Advanced error categorization
+result.mark_failed("Video unavailable", ErrorCategory.PERMANENT)
+if result.is_retryable():
+    # Retry logic
+    pass
+
+# CSV-compatible output
+csv_fields = result.to_csv_fields()
+```
+
+### Cleanup Manager - Unified Cleanup System
+Consolidates all cleanup operations into a single interface:
+
+```python
+from utils.cleanup_manager import CleanupManager
+
+# Initialize cleanup manager
+cleanup = CleanupManager()
+
+# Basic cleanup operations
+cleanup.cleanup_temporary_files()
+cleanup.cleanup_backup_files(older_than_days=30)
+cleanup.cleanup_empty_directories()
+
+# Enhanced cleanup operations
+cleanup.cleanup_csv_fields('outputs/output.csv', max_field_size=100000)
+cleanup.cleanup_duplicate_transcripts('downloads')
+cleanup.emergency_cleanup(include_system=True)
+
+# Full cleanup with configuration
+stats = cleanup.run_full_cleanup('production')
+```
+
+### Safe Import Patterns - Consolidated Import Management
+Eliminates try/except ImportError patterns across the codebase:
+
+```python
+from utils.config import safe_relative_import, bulk_safe_import
+
+# Single import with fallback
+CSVManager = safe_relative_import('csv_manager', 'CSVManager')
+
+# Bulk imports with single call
+imports = bulk_safe_import([
+    ('csv_manager', 'CSVManager'),
+    ('logging_config', 'get_logger'),
+    ('validation', 'clean_url')
+])
+CSVManager = imports['CSVManager']
+get_logger = imports['get_logger']
+```
+
 ### FileMapper - Unified File Mapping
 Consolidates all file mapping functionality:
 
@@ -189,6 +296,95 @@ csv_manager.atomic_write(data)
 csv_manager.stream_process(process_func)
 ```
 
+### From Legacy Logging to Unified Logging Configuration
+
+**Old approach** (deprecated utils/logger.py):
+```python
+# Old way with separate logging modules
+from utils.logger import get_pipeline_logger, DualLogger
+
+pipeline_logger = get_pipeline_logger()
+dual_logger = DualLogger('MAIN', 'main.log')
+```
+
+**New approach** (consolidated utils/logging_config.py):
+```python
+# New way with unified logging configuration
+from utils.logging_config import get_logger, pipeline_run
+
+logger = get_logger(__name__)
+with pipeline_run() as pipeline_logger:
+    # Your code here
+```
+
+### From Scattered URL Processing to Validation Module
+
+**Old approach** (scattered across extract_links.py):
+```python
+# Old way with functions scattered in extract_links.py
+from utils.extract_links import clean_url, extract_youtube_ids, extract_drive_links
+
+cleaned = clean_url(url)
+youtube_ids = extract_youtube_ids(links)
+drive_links = extract_drive_links(links)
+```
+
+**New approach** (consolidated in utils/validation.py):
+```python
+# New way with unified validation module
+from utils.validation import clean_url, extract_youtube_ids, extract_drive_links, determine_url_type
+
+cleaned = clean_url(url)
+url_type = determine_url_type(url)
+youtube_ids = extract_youtube_ids(links)
+drive_links = extract_drive_links(links, html_content)
+```
+
+### From Scattered Import Patterns to Safe Import Functions
+
+**Old approach** (try/except ImportError everywhere):
+```python
+# Old way with repeated try/except patterns
+try:
+    from csv_manager import CSVManager
+    from logging_config import get_logger
+except ImportError:
+    from .csv_manager import CSVManager
+    from .logging_config import get_logger
+```
+
+**New approach** (consolidated safe import functions):
+```python
+# New way with centralized import management
+from utils.config import bulk_safe_import
+
+imports = bulk_safe_import([
+    ('csv_manager', 'CSVManager'),
+    ('logging_config', 'get_logger')
+])
+CSVManager = imports['CSVManager']
+get_logger = imports['get_logger']
+```
+
+### From Scattered Cleanup Scripts to Cleanup Manager
+
+**Old approach** (multiple cleanup scripts):
+```bash
+# Old way with multiple scripts
+python final_cleanup.py
+python simple_cleanup.py
+python temp_cleanup.py
+python execute_cleanup.py
+```
+
+**New approach** (unified cleanup manager):
+```bash
+# New way with single cleanup interface
+python -m utils.cleanup_manager --full
+python -m utils.cleanup_manager --csv-fields outputs/output.csv
+python -m utils.cleanup_manager --emergency-system
+```
+
 ### From Legacy File Mapping Modules to FileMapper
 
 **Old approach** (deprecated modules):
@@ -216,6 +412,25 @@ mapper.map_files()  # Clean mapping
 mapper.organize_by_type()  # Type organization  
 mapper.fix_orphaned_files()  # Issue fixing
 mapper.recover_unmapped_files()  # Recovery
+```
+
+### From Basic Download Results to Enhanced Row Context
+
+**Old approach** (basic success/failure tracking):
+```python
+# Old way with simple result objects
+result = {'success': True, 'files': ['video.mp4'], 'error': None}
+```
+
+**New approach** (comprehensive download result tracking):
+```python
+# New way with enhanced result objects
+from utils.row_context import create_download_result, DownloadStatus, ErrorCategory
+
+result = create_download_result('youtube', row_context)
+result.mark_complete(['video.mp4'], sizes=[1024000])
+result.error_category = ErrorCategory.PERMANENT
+csv_fields = result.to_csv_fields()
 ```
 
 **Note**: Legacy modules still work but show deprecation warnings. Update your code to use the new consolidated interfaces for better maintainability.

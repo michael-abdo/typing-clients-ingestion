@@ -30,9 +30,11 @@ from typing import Dict, List, Tuple
 try:
     from .comprehensive_file_mapper import FileMapper
     from .clean_file_mapper import CleanFileMapper
+    from .csv_manager import CSVManager
 except ImportError:
     from comprehensive_file_mapper import FileMapper
     from clean_file_mapper import CleanFileMapper
+    from csv_manager import CSVManager
 
 
 class FileTypeMapper:
@@ -40,7 +42,8 @@ class FileTypeMapper:
     
     def __init__(self, csv_path: str = 'outputs/output.csv'):
         self.csv_path = csv_path
-        self.df = pd.read_csv(csv_path)
+        self.csv_manager = CSVManager(csv_path)
+        self.df = self.csv_manager.read(dtype_spec='basic')
         
         # Use CleanFileMapper to eliminate contamination
         self.clean_mapper = CleanFileMapper(csv_path)
@@ -118,7 +121,8 @@ class FileTypeMapper:
         
         # Save mapping summary
         summary_df = pd.DataFrame(summary)
-        summary_df.to_csv(os.path.join(output_dir, 'file_mapping_summary.csv'), index=False)
+        csv_manager = CSVManager(os.path.join(output_dir, 'file_mapping_summary.csv'))
+        csv_manager.safe_csv_write(summary_df, operation_name="type_mapping_summary")
         print(f"Organized {len(summary)} files by type")
         
     def add_type_to_filenames(self, dry_run: bool = True) -> None:
@@ -196,7 +200,8 @@ class FileTypeMapper:
             })
         
         report_df = pd.DataFrame(report_data)
-        report_df.to_csv('file_type_mapping_report.csv', index=False)
+        csv_manager = CSVManager('file_type_mapping_report.csv')
+        csv_manager.safe_csv_write(report_df, operation_name="type_mapping_report")
         print(f"\nDetailed report saved to: file_type_mapping_report.csv")
 
 

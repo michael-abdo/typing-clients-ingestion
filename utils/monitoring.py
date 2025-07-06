@@ -15,11 +15,11 @@ from pathlib import Path
 try:
     import pandas as pd
     from logging_config import get_logger
-    from csv_tracker import get_download_status_summary, get_failed_downloads
+    from csv_manager import CSVManager
     from error_handling import ErrorHandler
 except ImportError:
     from .logging_config import get_logger
-    from .csv_tracker import get_download_status_summary, get_failed_downloads
+    from .csv_manager import CSVManager
     from .error_handling import ErrorHandler
 
 
@@ -75,6 +75,9 @@ class DownloadMonitor:
         self.logger = get_logger(__name__)
         self.error_handler = ErrorHandler(self.logger)
         
+        # Initialize CSVManager for consolidated operations
+        self.csv_manager = CSVManager(csv_path)
+        
         # Default alert conditions
         self.alert_conditions = [
             AlertCondition("high_failure_rate", "threshold", "error_rate", 0.2, "warning"),
@@ -86,8 +89,8 @@ class DownloadMonitor:
     def collect_metrics(self) -> SystemMetrics:
         """Collect comprehensive system metrics"""
         try:
-            # Get download status
-            status_summary = get_download_status_summary(self.csv_path)
+            # Get download status using CSVManager
+            status_summary = self.csv_manager.get_download_status_summary()
             
             # Calculate overall stats
             total_pending = status_summary['youtube']['pending'] + status_summary['drive']['pending']
@@ -132,7 +135,7 @@ class DownloadMonitor:
     def get_download_stats(self) -> DownloadStats:
         """Get detailed download statistics"""
         try:
-            status_summary = get_download_status_summary(self.csv_path)
+            status_summary = self.csv_manager.get_download_status_summary()
             
             # Calculate success rates
             youtube_total = status_summary['youtube']['completed'] + status_summary['youtube']['failed']
@@ -194,7 +197,8 @@ class DownloadMonitor:
         try:
             metrics = self.collect_metrics()
             download_stats = self.get_download_stats()
-            failed_downloads = get_failed_downloads(self.csv_path, 'both') if include_details else []
+            # Get failed downloads using CSVManager
+            failed_downloads = self.csv_manager.get_failed_downloads('both') if include_details else []
             
             # Get historical metrics
             historical_metrics = self._get_historical_metrics(hours=24)

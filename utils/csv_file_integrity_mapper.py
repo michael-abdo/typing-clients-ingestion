@@ -16,8 +16,10 @@ from typing import Dict, List, Set, Tuple
 import argparse
 try:
     from utils.clean_file_mapper import CleanFileMapper
+    from utils.csv_manager import CSVManager
 except ImportError:
     from clean_file_mapper import CleanFileMapper
+    from csv_manager import CSVManager
 
 
 class CSVFileIntegrityMapper:
@@ -25,7 +27,8 @@ class CSVFileIntegrityMapper:
     
     def __init__(self, csv_path: str = 'outputs/output.csv'):
         self.csv_path = csv_path
-        self.df = pd.read_csv(csv_path)
+        self.csv_manager = CSVManager(csv_path)
+        self.df = self.csv_manager.read(dtype_spec='basic')
         
         # Use CleanFileMapper for robust mapping
         self.clean_mapper = CleanFileMapper(csv_path)
@@ -231,7 +234,8 @@ class CSVFileIntegrityMapper:
         
         if mapping_data:
             df_mapping = pd.DataFrame(mapping_data)
-            df_mapping.to_csv('csv_file_integrity_mapping.csv', index=False)
+            csv_manager = CSVManager('csv_file_integrity_mapping.csv')
+            csv_manager.safe_csv_write(df_mapping, operation_name="integrity_mapping")
             print(f"\nMappings saved to: csv_file_integrity_mapping.csv")
         
         # Save unmapped files
@@ -246,13 +250,15 @@ class CSVFileIntegrityMapper:
                 })
             
             df_unmapped = pd.DataFrame(unmapped_data)
-            df_unmapped.to_csv('unmapped_files_integrity.csv', index=False)
+            csv_manager = CSVManager('unmapped_files_integrity.csv')
+            csv_manager.safe_csv_write(df_unmapped, operation_name="unmapped_integrity")
             print(f"Unmapped files saved to: unmapped_files_integrity.csv")
         
         # Save rows without files
         if self.rows_without_files:
             df_missing = pd.DataFrame(self.rows_without_files)
-            df_missing.to_csv('rows_missing_files.csv', index=False)
+            csv_manager = CSVManager('rows_missing_files.csv')
+            csv_manager.safe_csv_write(df_missing, operation_name="missing_files")
             print(f"Rows missing files saved to: rows_missing_files.csv")
         
         # Save summary
