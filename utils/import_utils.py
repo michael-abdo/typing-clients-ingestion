@@ -178,11 +178,10 @@ class CommonImports:
         {'module': 'row_context', 'from_items': ['RowContext', 'DownloadResult'], 'alias': 'context_classes'}
     ]
     
-    # CSV processing imports  
+    # CSV processing imports (updated for consolidated architecture)
     CSV_UTILS = [
-        {'module': 'csv_tracker', 'from_items': ['safe_csv_read', 'safe_csv_write'], 'alias': 'csv_funcs'},
-        {'module': 'atomic_csv', 'from_items': ['AtomicCSVWriter'], 'alias': 'AtomicCSVWriter'},
-        {'module': 'streaming_csv', 'from_items': ['StreamingCSVProcessor'], 'alias': 'StreamingCSVProcessor'}
+        {'module': 'csv_manager', 'from_items': ['CSVManager', 'safe_csv_read', 'safe_csv_write'], 'alias': 'csv_classes'},
+        {'module': 'csv_manager', 'from_items': ['atomic_csv_update', 'streaming_csv_update'], 'alias': 'csv_context_managers'}
     ]
     
     # Error handling imports

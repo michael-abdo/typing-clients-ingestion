@@ -46,8 +46,17 @@ retry:
   download:
     max_attempts: 3
     base_delay: 5.0
+  http:
+    max_retries: 3
+    backoff_factor: 1.0
+    status_forcelist: [500, 502, 503, 504]
+  exponential_backoff:
+    base_delay: 1.0
+    max_delay: 30.0
+    multiplier: 2.0
+    jitter: true
 
-# Timeout Settings (in seconds)
+# Timeout Settings (in seconds)  
 timeouts:
   default: 30.0
   file_lock: 30.0
@@ -55,18 +64,37 @@ timeouts:
   selenium_wait: 20.0
   video_download: 300.0  # 5 minutes for video downloads
   drive_download: 300.0  # 5 minutes for drive downloads
+  selenium_delays:
+    page_load_delay: 5.0    # Wait after page load
+    scroll_delay: 0.1       # Delay between scroll actions
+    render_delay: 1.0       # Wait for page render
+    element_wait: 20.0      # Wait for element to appear
 
 # File Processing
 file_processing:
   csv_chunk_size: 1000
   streaming_threshold: 5242880  # 5MB - use streaming for files larger than this
   max_csv_field_size: 131072    # 128KB max field size
+  csv_field_limits:
+    default: 131072     # 128KB default limit
+    cleanup_safe: 100000  # 100KB safe limit for cleanup operations
+    unlimited: 0        # Use sys.maxsize for unlimited
+  link_extraction:
+    default_limit: 10   # Default links to extract per page
+    single_limit: 1     # Limit for single link extraction
+    sanitization_max_length: 200  # Max length for sanitized fields
 
 # Parallel Processing
 parallel:
   max_workers: 4
   chunk_size: 10
   progress_update_interval: 1.0
+  auto_scale_workers: true
+  cpu_multiplier: 2  # max_workers = cpu_count * multiplier
+  default_thread_counts:
+    download_processing: 4
+    file_operations: 2
+    url_validation: 4
 
 # Logging Configuration
 logging:
@@ -81,12 +109,31 @@ file_locking:
   timeout: 30.0
   check_interval: 0.1
 
-# Web Scraping
+# Web Scraping and Selenium Configuration
 web_scraping:
   user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
   accept_header: "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8"
   accept_language: "en-US,en;q=0.5"
   streaming_chunk_size: 8192
+  chrome_options:
+    headless: true
+    disable_gpu: true 
+    window_size: "1920,1080"
+    disable_dev_shm_usage: true
+    no_sandbox: true
+    disable_web_security: false
+    additional_args: []
+
+# URL Patterns and Validation
+url_patterns:
+  drive:
+    file_regex: 'https?://drive\.google\.com/(?:file/d/|open\?id=)([a-zA-Z0-9_\-]+)'
+    folder_regex: 'https?://drive\.google\.com/drive/folders/([a-zA-Z0-9_\-]+)'
+    usercontent_domains: ['drive.google.com', 'docs.google.com', 'drive.usercontent.google.com']
+  youtube:
+    video_id_regex: '(?:youtube\.com/watch\?v=|youtu\.be/)([a-zA-Z0-9_\-]+)'
+    channel_regex: 'youtube\.com/(?:c/|channel/|user/)([a-zA-Z0-9_\-]+)'
+    playlist_regex: 'youtube\.com/playlist\?list=([a-zA-Z0-9_\-]+)'
 
 # Security
 security:
@@ -99,6 +146,7 @@ security:
     drive:
       - "drive.google.com"
       - "docs.google.com"
+      - "drive.usercontent.google.com"
   
 # Limits
 limits:
