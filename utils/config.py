@@ -418,6 +418,129 @@ def format_error_message(operation: str, error: Exception, context: str = None) 
     return base_msg
 
 
+def load_json_state(filename: str, default: Optional[dict] = None) -> dict:
+    """
+    Load JSON state file with default fallback (DRY state management).
+    Consolidates progress/state loading patterns throughout codebase.
+    
+    Args:
+        filename: Path to JSON file
+        default: Default dict to return if file doesn't exist
+    
+    Returns:
+        Loaded JSON data or default
+    """
+    import json
+    filepath = Path(filename)
+    if filepath.exists():
+        try:
+            with open(filepath, 'r') as f:
+                return json.load(f)
+        except (json.JSONDecodeError, IOError) as e:
+            logging.warning(f"Failed to load JSON state from {filename}: {e}")
+            return default or {}
+    return default or {}
+
+
+def save_json_state(filename: str, data: dict) -> None:
+    """
+    Save state to JSON file (DRY state management).
+    Consolidates progress/state saving patterns throughout codebase.
+    
+    Args:
+        filename: Path to JSON file
+        data: Dict to save as JSON
+    """
+    import json
+    try:
+        with open(filename, 'w') as f:
+            json.dump(data, f, indent=2)
+    except IOError as e:
+        logging.error(f"Failed to save JSON state to {filename}: {e}")
+        raise
+
+
+# === STATUS FORMATTING FUNCTIONS (DRY) ===
+
+class StatusIcons:
+    """Centralized status icons for consistent output formatting"""
+    SUCCESS = "✓"
+    FAILURE = "✗"
+    WARNING = "⚠"
+    ERROR = "❌"
+    COMPLETE = "✅"
+    STATS = "📊"
+    CELEBRATE = "🎉"
+    FILE = "📄"
+    DATABASE = "🗄️"
+    PACKAGE = "📦"
+    ROCKET = "🚀"
+    
+    # Status prefixes
+    SUCCESS_PREFIX = "✓"
+    ERROR_PREFIX = "✗"
+    WARNING_PREFIX = "⚠️"
+    INFO_PREFIX = "📊"
+    
+
+def format_success(message: str, icon: bool = True) -> str:
+    """Format a success message (DRY)"""
+    return f"{StatusIcons.SUCCESS} {message}" if icon else message
+
+
+def format_error(message: str, icon: bool = True) -> str:
+    """Format an error message (DRY)"""
+    return f"{StatusIcons.ERROR} {message}" if icon else message
+
+
+def format_warning(message: str, icon: bool = True) -> str:
+    """Format a warning message (DRY)"""
+    return f"{StatusIcons.WARNING} {message}" if icon else message
+
+
+def format_stats(label: str, value: Any, icon: bool = True) -> str:
+    """Format a statistics message (DRY)"""
+    return f"{StatusIcons.STATS} {label}: {value}" if icon else f"{label}: {value}"
+
+
+def format_status_line(status: str, message: str) -> str:
+    """Format a status line with appropriate icon (DRY)
+    
+    Args:
+        status: Status type ('success', 'error', 'warning', 'info', 'complete')
+        message: The message to format
+        
+    Returns:
+        Formatted status line
+    """
+    status_map = {
+        'success': StatusIcons.SUCCESS,
+        'error': StatusIcons.ERROR,
+        'warning': StatusIcons.WARNING,
+        'info': StatusIcons.STATS,
+        'complete': StatusIcons.COMPLETE,
+        'failure': StatusIcons.FAILURE,
+        'celebrate': StatusIcons.CELEBRATE,
+        'file': StatusIcons.FILE,
+        'database': StatusIcons.DATABASE,
+        'package': StatusIcons.PACKAGE,
+        'rocket': StatusIcons.ROCKET
+    }
+    
+    icon = status_map.get(status.lower(), '')
+    return f"{icon} {message}" if icon else message
+
+
+def format_batch_header(batch_num: int, total_batches: int, batch_size: int) -> str:
+    """Format batch processing header (DRY)"""
+    return f"\n{StatusIcons.PACKAGE} BATCH {batch_num}/{total_batches} ({batch_size} documents)"
+
+
+def format_progress_indicator(current: int, total: int, label: str = "Processing") -> str:
+    """Format progress indicator (DRY)"""
+    return f"[{current}/{total}] {label}"
+
+
 # Example usage
 if __name__ == "__main__":
     # Test configuration loading

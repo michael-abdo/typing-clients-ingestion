@@ -31,6 +31,7 @@ import simple_workflow
 from utils.config import get_config
 from utils.csv_manager import CSVManager
 from utils.patterns import PatternRegistry, extract_youtube_id, extract_drive_id
+from utils.test_helpers import TestDataFactory
 
 class Colors:
     GREEN = '\033[92m'
@@ -41,6 +42,7 @@ class Colors:
     RESET = '\033[0m'
     BOLD = '\033[1m'
 
+
 class E2ESimpleWorkflowTest:
     """Comprehensive E2E test for the 6-step simple workflow"""
     
@@ -50,6 +52,7 @@ class E2ESimpleWorkflowTest:
         self.test_results = {}
         self.test_data = {}
         self.backup_files = []
+        self.test_factory = TestDataFactory()
         
         # Test configuration
         self.test_limit = 3  # Test with 3 records for speed

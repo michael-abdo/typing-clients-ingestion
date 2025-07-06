@@ -490,6 +490,112 @@ class CSVManager:
     # - find_mismatched_mappings() -> mapper.find_mapping_conflicts()
     # - find_orphaned_files() -> mapper.fix_orphaned_files()
     
+    # === RECORD FACTORY OPERATIONS (DRY) ===
+    
+    @staticmethod
+    def create_record(person: Dict[str, Any], mode: str = 'basic', 
+                     doc_text: str = '', links: Optional[Dict[str, List[str]]] = None) -> Dict[str, str]:
+        """
+        Factory function to create CSV records in different modes (DRY).
+        
+        Args:
+            person: Dictionary with basic person info (row_id, name, email, type, link)
+            mode: Record mode - 'basic', 'text', or 'full'
+            doc_text: Document text content (for text/full modes)
+            links: Dictionary of extracted links (for full mode)
+                  Should contain: 'youtube', 'drive_files', 'drive_folders', 'all_links'
+                  
+        Returns:
+            Dictionary with appropriate fields for the specified mode
+        """
+        # Basic record (5 columns)
+        record = {
+            'row_id': person.get('row_id', ''),
+            'name': person.get('name', ''),
+            'email': person.get('email', ''),
+            'type': person.get('type', ''),
+            'link': person.get('doc_link', person.get('link', ''))
+        }
+        
+        if mode == 'basic':
+            return record
+        
+        # Text mode: add document text and processing info
+        if mode == 'text':
+            record.update({
+                'document_text': doc_text,
+                'processed': 'yes',
+                'extraction_date': datetime.now().isoformat()
+            })
+            return record
+        
+        # Full mode: add all columns
+        if mode == 'full':
+            # Handle links data
+            if links:
+                youtube_links = links.get('youtube', [])
+                drive_files = links.get('drive_files', [])
+                drive_folders = links.get('drive_folders', [])
+                all_links = links.get('all_links', [])
+                
+                # Combine drive files and folders
+                google_drive_links = drive_files + drive_folders
+            else:
+                youtube_links = []
+                google_drive_links = []
+                all_links = []
+            
+            record.update({
+                'extracted_links': '|'.join(all_links) if all_links else '',
+                'youtube_playlist': '|'.join(youtube_links) if youtube_links else '',
+                'google_drive': '|'.join(google_drive_links) if google_drive_links else '',
+                'processed': 'yes',
+                'document_text': doc_text,
+                'youtube_status': '',
+                'youtube_files': '',
+                'youtube_media_id': '',
+                'drive_status': '',
+                'drive_files': '',
+                'drive_media_id': '',
+                'last_download_attempt': '',
+                'download_errors': '',
+                'permanent_failure': ''
+            })
+            return record
+        
+        # Default to basic if mode not recognized
+        logger.warning(f"Unknown record mode: {mode}. Defaulting to basic.")
+        return record
+    
+    @staticmethod
+    def create_error_record(person: Dict[str, Any], mode: str = 'text', 
+                           error_message: str = '') -> Dict[str, str]:
+        """
+        Create a record for failed extraction cases (DRY).
+        
+        Args:
+            person: Dictionary with basic person info
+            mode: Record mode - 'text' or 'full'
+            error_message: Error message to include
+            
+        Returns:
+            Dictionary with error information
+        """
+        if mode == 'text':
+            return CSVManager.create_record(
+                person, 
+                mode='text', 
+                doc_text=f"EXTRACTION_FAILED: {error_message}"
+            )
+        else:
+            # For full mode, still include error in document_text
+            return CSVManager.create_record(
+                person,
+                mode='full',
+                doc_text=f"EXTRACTION_FAILED: {error_message}",
+                links=None
+            )
+    
     # === BACKUP & UTILITY OPERATIONS ===
     
     def create_backup(self, operation_name: str = "backup") -> str:

@@ -2,10 +2,16 @@
 """
 Centralized Regex Pattern Registry (DRY)
 Consolidates scattered regex patterns throughout the codebase for consistency
+Also includes Selenium helpers for consistent web automation
 """
 
 import re
+import time
 from typing import Pattern, Dict
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.by import By
 
 
 class PatternRegistry:
@@ -111,6 +117,45 @@ def is_youtube_url(url: str) -> bool:
 def is_drive_url(url: str) -> bool:
     """Check if URL is a Google Drive URL"""
     return any(pattern.search(url) for pattern in DRIVE_PATTERNS.values())
+
+
+# Selenium helper functions (DRY)
+def get_chrome_options() -> Options:
+    """Get standardized Chrome options for Selenium WebDriver (DRY)"""
+    chrome_options = Options()
+    chrome_options.add_argument("--headless")  # Run in headless mode
+    chrome_options.add_argument("--disable-gpu")
+    chrome_options.add_argument("--window-size=1920,1080")
+    chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument("--no-sandbox")
+    return chrome_options
+
+
+def wait_and_scroll_page(driver, wait_timeout: int = 30, scroll_delay: float = 0.1) -> None:
+    """Wait for page load and scroll to ensure all content is loaded (DRY)
+    
+    Args:
+        driver: Selenium WebDriver instance
+        wait_timeout: Timeout in seconds for page load
+        scroll_delay: Delay in seconds between scroll steps
+    """
+    # Wait for page to load
+    WebDriverWait(driver, wait_timeout).until(
+        EC.presence_of_element_located((By.TAG_NAME, "body"))
+    )
+    
+    # Extra wait for dynamic content (e.g., Google Docs)
+    time.sleep(3)
+    
+    # Scroll to ensure all content is loaded
+    height = driver.execute_script("return document.body.scrollHeight")
+    for i in range(0, height, 300):
+        driver.execute_script(f"window.scrollTo(0, {i});")
+        time.sleep(scroll_delay)
+    
+    # Scroll back to top
+    driver.execute_script("window.scrollTo(0, 0);")
+    time.sleep(1)
 
 
 # Example usage

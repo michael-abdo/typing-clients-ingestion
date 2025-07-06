@@ -18,6 +18,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from utils.csv_manager import CSVManager
 from database.models.person import Person, PersonOperations
 from utils.config import get_config
+from utils.test_helpers import TestDataFactory
 
 class PerformanceBenchmark:
     """Benchmark CSV vs Database write performance"""
@@ -32,19 +33,14 @@ class PerformanceBenchmark:
         self.person_ops.create_table()
     
     def generate_test_data(self, num_records=100):
-        """Generate test data for benchmarking"""
+        """Generate test data for benchmarking using centralized factory (DRY)"""
         print(f"📊 Generating {num_records} test records...")
         
-        test_data = []
-        for i in range(num_records):
-            record = {
-                'row_id': f"test_{i:04d}",
-                'name': f"Test Person {i}",
-                'email': f"test{i}@example.com",
-                'type': f"Test-Type-{i % 5}",
-                'link': f"https://example.com/doc_{i}" if i % 3 == 0 else ""
-            }
-            test_data.append(record)
+        # Use centralized test data factory
+        test_data = TestDataFactory.generate_test_batch(
+            num_records=num_records,
+            with_links=False  # Keep it simple for benchmarking
+        )
         
         return test_data
     

@@ -35,6 +35,11 @@ paths:
   html_cache: "html_cache"
   logs_dir: "logs"
   cache_dir: "cache"
+  extraction_progress: "extraction_progress.json"
+  failed_extractions: "failed_extractions.json"
+  text_extraction_output: "text_extraction_output.csv"
+  sheet_cache: "sheet.html"
+  simple_downloads_dir: "simple_downloads"
 
 # Download Settings
 downloads:
@@ -82,11 +87,54 @@ file_processing:
   streaming_threshold: 5242880  # 5MB - use streaming for files larger than this
   max_csv_field_size: 131072    # 128KB max field size
 
+# CSV Column Definitions (DRY refactoring)
+csv_columns:
+  basic:
+    - row_id
+    - name
+    - email
+    - type
+    - link
+  text:
+    - row_id
+    - name
+    - email
+    - type
+    - link
+    - document_text
+    - processed
+    - extraction_date
+  full:
+    - row_id
+    - name
+    - email
+    - type
+    - link
+    - extracted_links
+    - youtube_playlist
+    - google_drive
+    - processed
+    - document_text
+    - youtube_status
+    - youtube_files
+    - youtube_media_id
+    - drive_status
+    - drive_files
+    - drive_media_id
+    - last_download_attempt
+    - download_errors
+    - permanent_failure
+
 # Parallel Processing
 parallel:
   max_workers: 4
   chunk_size: 10
   progress_update_interval: 1.0
+
+# Batch Processing
+batch_processing:
+  default_batch_size: 10
+  text_extraction_batch_size: 10
 
 # Logging Configuration
 logging:
@@ -107,6 +155,11 @@ web_scraping:
   accept_header: "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8"
   accept_language: "en-US,en;q=0.5"
   streaming_chunk_size: 8192
+  selenium:
+    window_size: "1920,1080"
+    scroll_delay: 0.1
+    scroll_step: 300
+    page_load_extra_wait: 3
 
 # Security
 security:

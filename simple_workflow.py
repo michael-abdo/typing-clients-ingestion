@@ -26,8 +26,8 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
 # Import centralized configuration, path utilities, error handling, patterns, and CSV operations (DRY)
-from utils.config import get_config, ensure_parent_dir, ensure_directory, format_error_message
-from utils.patterns import PatternRegistry, extract_youtube_id, extract_drive_id, clean_url, normalize_whitespace
+from utils.config import get_config, ensure_parent_dir, ensure_directory, format_error_message, load_json_state, save_json_state
+from utils.patterns import PatternRegistry, extract_youtube_id, extract_drive_id, clean_url, normalize_whitespace, get_chrome_options, wait_and_scroll_page
 from utils.csv_manager import CSVManager
 
 # Import database operations for dual-write functionality
@@ -41,42 +41,42 @@ config = get_config()
 # Global selenium driver
 _driver = None
 
-# Progress tracking functions
+# Progress tracking functions (DRY: using centralized state management)
 def load_progress():
     """Load extraction progress from file"""
-    if os.path.exists("extraction_progress.json"):
-        with open("extraction_progress.json", 'r') as f:
-            return json.load(f)
-    return {"completed": [], "failed": [], "last_batch": 0, "total_processed": 0}
+    return load_json_state(
+        config.get("paths.extraction_progress", "extraction_progress.json"),
+        {"completed": [], "failed": [], "last_batch": 0, "total_processed": 0}
+    )
 
 def save_progress(progress):
     """Save extraction progress to file"""
-    with open("extraction_progress.json", 'w') as f:
-        json.dump(progress, f, indent=2)
+    save_json_state(
+        config.get("paths.extraction_progress", "extraction_progress.json"),
+        progress
+    )
 
 def load_failed_docs():
     """Load failed document extraction list"""
-    if os.path.exists("failed_extractions.json"):
-        with open("failed_extractions.json", 'r') as f:
-            return json.load(f)
-    return []
+    return load_json_state(
+        config.get("paths.failed_extractions", "failed_extractions.json"),
+        []
+    )
 
 def save_failed_docs(failed_list):
     """Save failed document extraction list"""
-    with open("failed_extractions.json", 'w') as f:
-        json.dump(failed_list, f, indent=2)
+    save_json_state(
+        config.get("paths.failed_extractions", "failed_extractions.json"),
+        failed_list
+    )
 
 def get_selenium_driver():
     """Initialize and return a Selenium WebDriver instance"""
     global _driver
     if _driver is None:
         print("Initializing Selenium Chrome driver...")
-        chrome_options = Options()
-        chrome_options.add_argument("--headless")  # Run in headless mode
-        chrome_options.add_argument("--disable-gpu")
-        chrome_options.add_argument("--window-size=1920,1080")
-        chrome_options.add_argument("--disable-dev-shm-usage")
-        chrome_options.add_argument("--no-sandbox")
+        # Use centralized Chrome options (DRY)
+        chrome_options = get_chrome_options()
         
         try:
             _driver = webdriver.Chrome(options=chrome_options)
@@ -108,23 +108,8 @@ def extract_google_doc_text(url):
         print(f"Loading Google Doc with Selenium: {url}")
         driver.get(url)
         
-        # Wait for page to load
-        WebDriverWait(driver, 30).until(
-            EC.presence_of_element_located((By.TAG_NAME, "body"))
-        )
-        
-        # Extra wait for Google Docs to render
-        time.sleep(3)
-        
-        # Scroll to ensure all content is loaded
-        height = driver.execute_script("return document.body.scrollHeight")
-        for i in range(0, height, 300):
-            driver.execute_script(f"window.scrollTo(0, {i});")
-            time.sleep(0.1)
-        
-        # Scroll back to top
-        driver.execute_script("window.scrollTo(0, 0);")
-        time.sleep(1)
+        # Use centralized wait and scroll function (DRY)
+        wait_and_scroll_page(driver)
         
         # Get the page source and extract text
         html = driver.page_source
@@ -297,60 +282,6 @@ def step3_scrape_doc_contents(doc_url):
             print(f"✗ Failed to scrape doc: {e}")
             return "", ""
 
-def clean_url(url):
-    """Clean up a URL by removing trailing junk and escape sequences"""
-    if not url:
-        return url
-    
-    # Decode unicode escapes
-    try:
-        if '\\u' in url:
-            url = url.encode('utf-8').decode('unicode_escape')
-    except:
-        pass
-    
-    # Remove common escape sequences
-    url = url.replace('\\n', '').replace('\\r', '').replace('\\t', '')
-    
-    # Remove trailing punctuation that's not part of a URL
-    url = re.sub(r'[.,;:!?\)\]\}"\'>]+$', '', url)
-    
-    # Clean YouTube URLs
-    if 'youtube.com' in url or 'youtu.be' in url:
-        # For youtu.be links
-        match = re.search(r'youtu\.be/([a-zA-Z0-9_-]{11})', url)
-        if match:
-            return f'https://youtu.be/{match.group(1)}'
-        
-        # For youtube.com watch links
-        match = re.search(r'youtube\.com/watch\?v=([a-zA-Z0-9_-]{11})', url)
-        if match:
-            video_id = match.group(1)
-            # Check for additional parameters
-            list_match = re.search(r'[&?]list=([a-zA-Z0-9_-]+)', url)
-            if list_match:
-                return f'https://www.youtube.com/watch?v={video_id}&list={list_match.group(1)}'
-            return f'https://www.youtube.com/watch?v={video_id}'
-        
-        # For playlist links
-        match = re.search(r'youtube\.com/playlist\?list=([a-zA-Z0-9_-]+)', url)
-        if match:
-            return f'https://www.youtube.com/playlist?list={match.group(1)}'
-    
-    # Clean Google Drive URLs
-    if 'drive.google.com' in url:
-        # File links
-        match = re.search(r'drive\.google\.com/file/d/([a-zA-Z0-9_-]+)', url)
-        if match:
-            return f'https://drive.google.com/file/d/{match.group(1)}/view'
-        
-        # Folder links
-        match = re.search(r'drive\.google\.com/drive/folders/([a-zA-Z0-9_-]+)', url)
-        if match:
-            return f'https://drive.google.com/drive/folders/{match.group(1)}'
-    
-    return url.strip()
-
 def step4_extract_links(doc_content, doc_text=""):
     """Step 4: Extract links from scraped content and document text"""
     print("Step 4: Extracting links from doc content...")
@@ -471,28 +402,16 @@ def step5_process_extracted_data(person, links, doc_text=""):
     # Remove duplicates
     meaningful_youtube = list(set(meaningful_youtube))
     
-    # Create record matching the main system's CSV structure
-    record = {
-        'row_id': person.get('row_id', ''),
-        'name': person['name'],
-        'email': person['email'],
-        'type': person['type'],
-        'link': person.get('doc_link', ''),
-        'extracted_links': '|'.join(links['all_links']) if links['all_links'] else '',
-        'youtube_playlist': '|'.join(meaningful_youtube) if meaningful_youtube else '',
-        'google_drive': '|'.join(meaningful_drive_files + meaningful_drive_folders) if (meaningful_drive_files or meaningful_drive_folders) else '',
-        'processed': 'yes',
-        'document_text': doc_text,
-        'youtube_status': '',
-        'youtube_files': '',
-        'youtube_media_id': '',
-        'drive_status': '',
-        'drive_files': '',
-        'drive_media_id': '',
-        'last_download_attempt': '',
-        'download_errors': '',
-        'permanent_failure': ''
+    # Create record using centralized factory (DRY)
+    # Prepare links data for factory
+    links_data = {
+        'youtube': meaningful_youtube,
+        'drive_files': meaningful_drive_files,
+        'drive_folders': meaningful_drive_folders,
+        'all_links': links['all_links']
     }
+    
+    record = CSVManager.create_record(person, mode='full', doc_text=doc_text, links=links_data)
     
     print(f"✓ Processed record for {person['name']}")
     print(f"  Meaningful YouTube links: {len(meaningful_youtube)}")
@@ -502,28 +421,6 @@ def step5_process_extracted_data(person, links, doc_text=""):
     
     return record
 
-def create_basic_record(person):
-    """Create a basic record with just the 5 core columns"""
-    return {
-        'row_id': person.get('row_id', ''),
-        'name': person['name'],
-        'email': person['email'],
-        'type': person['type'],
-        'link': person.get('doc_link', '')
-    }
-
-def create_text_record(person, doc_text=""):
-    """Create a record with basic columns + document_text"""
-    return {
-        'row_id': person.get('row_id', ''),
-        'name': person['name'],
-        'email': person['email'],
-        'type': person['type'],
-        'link': person.get('doc_link', ''),
-        'document_text': doc_text,
-        'processed': 'yes',
-        'extraction_date': datetime.now().isoformat()
-    }
 
 def extract_text_with_retry(doc_url, max_attempts=None):
     """Extract text from document with retry logic"""
@@ -553,22 +450,16 @@ def step6_map_data(processed_records, basic_mode=False, text_mode=False, output_
     """Step 6: Map data to CSV and Database (dual-write for migration)"""
     print("Step 6: Mapping data to CSV and Database (dual-write)...")
     
-    # Handle different column sets based on processing mode
+    # Handle different column sets based on processing mode (DRY: use config)
     if basic_mode:
         # Basic mode: only 5 columns
-        required_columns = ['row_id', 'name', 'email', 'type', 'link']
+        required_columns = config.get('csv_columns.basic')
     elif text_mode:
         # Text mode: basic columns + document text + processing info
-        required_columns = ['row_id', 'name', 'email', 'type', 'link', 'document_text', 'processed', 'extraction_date']
+        required_columns = config.get('csv_columns.text')
     else:
         # Full mode: all columns matching main system
-        required_columns = [
-            'row_id', 'name', 'email', 'type', 'link', 'extracted_links', 
-            'youtube_playlist', 'google_drive', 'processed', 'document_text',
-            'youtube_status', 'youtube_files', 'youtube_media_id',
-            'drive_status', 'drive_files', 'drive_media_id',
-            'last_download_attempt', 'download_errors', 'permanent_failure'
-        ]
+        required_columns = config.get('csv_columns.full')
     
     # Ensure all required columns are present in records
     for record in processed_records:
@@ -754,7 +645,7 @@ def main():
             if test_limit and i >= test_limit:
                 print(f"Test limit reached: {test_limit}")
                 break
-            record = create_basic_record(person)
+            record = CSVManager.create_record(person, mode='basic')
             processed_records.append(record)
         print(f"✓ Processed {len(processed_records)} records in basic mode")
     
@@ -768,7 +659,7 @@ def main():
         # Process all people first (add basic records for those without docs)
         for person in all_people:
             if not person.get('doc_link'):
-                record = create_text_record(person)
+                record = CSVManager.create_record(person, mode='text')
                 processed_records.append(record)
         
         # Determine which documents to process
@@ -811,11 +702,11 @@ def main():
                     print(f"  ✗ Failed: {error}")
                     current_failed.append(person['doc_link'])
                     progress['failed'].append(person['doc_link'])
-                    record = create_text_record(person, f"EXTRACTION_FAILED: {error}")
+                    record = CSVManager.create_error_record(person, mode='text', error_message=error)
                 else:
                     print(f"  ✓ Success: {len(doc_text)} characters extracted")
                     progress['completed'].append(person['doc_link'])
-                    record = create_text_record(person, doc_text)
+                    record = CSVManager.create_record(person, mode='text', doc_text=doc_text)
                 
                 processed_records.append(record)
                 progress['total_processed'] += 1
@@ -865,28 +756,8 @@ def main():
                 processed_records.append(record)
             else:
                 print(f"  → No document")
-                # Create record for person without document
-                record = {
-                    'row_id': person.get('row_id', ''),
-                    'name': person['name'],
-                    'email': person['email'],
-                    'type': person['type'],
-                    'link': person.get('doc_link', ''),  # Include link even if empty
-                    'extracted_links': '',
-                    'youtube_playlist': '',
-                    'google_drive': '',
-                    'processed': 'yes',
-                    'document_text': '',
-                    'youtube_status': '',
-                    'youtube_files': '',
-                    'youtube_media_id': '',
-                    'drive_status': '',
-                    'drive_files': '',
-                    'drive_media_id': '',
-                    'last_download_attempt': '',
-                    'download_errors': '',
-                    'permanent_failure': ''
-                }
+                # Create record for person without document using factory (DRY)
+                record = CSVManager.create_record(person, mode='full', doc_text='', links=None)
                 processed_records.append(record)
     
     # Step 6: Map all data
