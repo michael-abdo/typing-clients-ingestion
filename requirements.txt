@@ -6,6 +6,11 @@ webdriver-manager>=3.8.5
 pathlib>=1.0.1
 yt-dlp>=2025.6.9  # For YouTube video downloading
 pyyaml>=6.0.0  # For configuration file parsing
+pandas>=1.5.0  # For data manipulation (currently used but missing)
+
+# Database dependencies  
+psycopg2-binary>=2.9.0  # PostgreSQL adapter
+sqlalchemy>=1.4.0  # ORM for database operations
 
 # Optional dependencies
 python-dotenv>=1.0.0  # For environment variable management
