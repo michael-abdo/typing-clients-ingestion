@@ -14,8 +14,10 @@ from sqlalchemy.exc import SQLAlchemyError
 
 # Import existing config (DRY)
 import os
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
-from utils.config import get_config
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+
+from utils.import_utils import safe_import
+get_config = safe_import("utils.config", ["get_config"])
 
 
 class DatabaseConnectionError(Exception):

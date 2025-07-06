@@ -159,6 +159,83 @@ def create_download_dir(download_dir: str, logger=None) -> Path:
     return downloads_path
 
 
+def ensure_directory(dir_path: Union[str, Path], parents: bool = True, exist_ok: bool = True, logger=None) -> Path:
+    """
+    Ensure directory exists, creating it if necessary (DRY path utility).
+    Consolidates various directory creation patterns throughout codebase.
+    
+    Args:
+        dir_path: Directory path to ensure exists
+        parents: Create parent directories if needed
+        exist_ok: Don't raise error if directory already exists
+        logger: Optional logger instance
+    
+    Returns:
+        Path object for the directory
+    """
+    path = Path(dir_path)
+    if not path.exists():
+        path.mkdir(parents=parents, exist_ok=exist_ok)
+        if logger:
+            logger.info(f"Created directory: {dir_path}")
+    return path
+
+
+def ensure_parent_dir(file_path: Union[str, Path], logger=None) -> Path:
+    """
+    Ensure parent directory of a file exists (DRY path utility).
+    Common pattern for ensuring output files can be written.
+    
+    Args:
+        file_path: File path whose parent directory should exist
+        logger: Optional logger instance
+    
+    Returns:
+        Path object for the parent directory
+    """
+    file_path = Path(file_path)
+    parent_dir = file_path.parent
+    if not parent_dir.exists():
+        parent_dir.mkdir(parents=True, exist_ok=True)
+        if logger:
+            logger.info(f"Created parent directory: {parent_dir}")
+    return parent_dir
+
+
+def get_project_root() -> Path:
+    """
+    Get project root directory (DRY path utility).
+    
+    Returns:
+        Path object for project root
+    """
+    return Path(__file__).parent.parent
+
+
+def get_outputs_dir() -> Path:
+    """
+    Get outputs directory, creating if necessary (DRY path utility).
+    
+    Returns:
+        Path object for outputs directory
+    """
+    config = get_config()
+    outputs_dir = get_project_root() / config.get("paths.output_dir", "outputs")
+    return ensure_directory(outputs_dir)
+
+
+def get_logs_dir() -> Path:
+    """
+    Get logs directory, creating if necessary (DRY path utility).
+    
+    Returns:
+        Path object for logs directory
+    """
+    config = get_config()
+    logs_dir = get_project_root() / config.get("paths.logs_dir", "logs")
+    return ensure_directory(logs_dir)
+
+
 def get_download_chunk_size(file_size: int) -> int:
     """
     Get appropriate chunk size based on file size.
@@ -276,6 +353,69 @@ def safe_import(module_names: Union[str, List[str]], from_items: Optional[Union[
     
     # If all imports fail, raise the last error
     raise last_error
+
+
+# Simple error categorization utilities (DRY)
+def categorize_error(error: Exception) -> str:
+    """
+    Simple error categorization for consistent error handling (DRY).
+    Consolidates scattered error type checking throughout codebase.
+    
+    Args:
+        error: Exception to categorize
+    
+    Returns:
+        Error category string
+    """
+    error_str = str(error).lower()
+    
+    # Network-related errors
+    if any(keyword in error_str for keyword in ['timeout', 'connection', 'network', 'dns', 'ssl']):
+        return 'network'
+    elif any(keyword in error_str for keyword in ['rate limit', 'quota', '429', 'too many requests']):
+        return 'rate_limit'
+    elif any(keyword in error_str for keyword in ['http', '404', '403', '401', '500', '502', '503']):
+        return 'http'
+    
+    # File I/O errors
+    elif any(keyword in error_str for keyword in ['file not found', 'no such file', 'permission denied', 'access denied']):
+        return 'file_io'
+    elif any(keyword in error_str for keyword in ['disk', 'space', 'full']):
+        return 'disk_space'
+    
+    # Data errors
+    elif any(keyword in error_str for keyword in ['csv', 'parsing', 'format', 'decode', 'encode']):
+        return 'data_format'
+    
+    # System errors
+    elif any(keyword in error_str for keyword in ['memory', 'resource', 'system']):
+        return 'system'
+    
+    # Default category
+    else:
+        return 'unknown'
+
+
+def format_error_message(operation: str, error: Exception, context: str = None) -> str:
+    """
+    Format error message consistently (DRY).
+    Consolidates scattered error message formatting patterns.
+    
+    Args:
+        operation: Operation that failed
+        error: Exception that occurred
+        context: Optional context information
+    
+    Returns:
+        Formatted error message
+    """
+    category = categorize_error(error)
+    base_msg = f"✗ {operation} failed ({category}): {str(error)}"
+    
+    if context:
+        base_msg += f" | Context: {context}"
+    
+    return base_msg
 
 
 # Example usage

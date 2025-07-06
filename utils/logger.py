@@ -99,11 +99,23 @@ class PipelineLogger:
         self.current_run = self.runs_dir / timestamp
         self.current_run.mkdir(exist_ok=True)
         
-        # Update latest symlink
+        # Update latest symlink with robust error handling (DRY fix)
         latest_link = self.runs_dir / "latest"
-        if latest_link.exists():
-            latest_link.unlink()
-        latest_link.symlink_to(timestamp)
+        try:
+            if latest_link.exists() or latest_link.is_symlink():
+                latest_link.unlink()
+        except (OSError, FileNotFoundError):
+            pass  # Ignore if already removed or doesn't exist
+        
+        try:
+            latest_link.symlink_to(timestamp)
+        except FileExistsError:
+            # If symlink still exists, force remove and retry once
+            try:
+                latest_link.unlink()
+                latest_link.symlink_to(timestamp)
+            except (OSError, FileExistsError):
+                pass  # If it still fails, continue without symlink
         
         # Initialize run stats
         self.run_stats['start_time'] = datetime.now()
