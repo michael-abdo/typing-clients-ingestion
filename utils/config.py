@@ -127,6 +127,198 @@ def get_retry_config() -> Dict[str, Any]:
     return get_config().get_section("retry")
 
 
+# DRY: CLI Argument Utilities (Phase 5 - consolidates argparse patterns across 33+ files)
+import argparse
+from typing import List, Optional, Callable
+
+
+class StandardCLIArguments:
+    """Standardized CLI argument groups to eliminate duplication across scripts"""
+    
+    @staticmethod
+    def add_file_arguments(parser: argparse.ArgumentParser, 
+                          include_csv: bool = True,
+                          include_output: bool = True, 
+                          include_directory: bool = False) -> None:
+        """Add standardized file path arguments"""
+        if include_csv:
+            parser.add_argument('--csv', '--csv-path', default='outputs/output.csv',
+                              help='Path to CSV file (default: outputs/output.csv)')
+        if include_output:
+            parser.add_argument('--output', '--output-dir',
+                              help='Output directory or file path')
+        if include_directory:
+            parser.add_argument('--directory', 
+                              help='Working directory')
+    
+    @staticmethod 
+    def add_processing_arguments(parser: argparse.ArgumentParser,
+                               include_max_rows: bool = True,
+                               include_batch_size: bool = False,
+                               include_reset: bool = True,
+                               include_dry_run: bool = False) -> None:
+        """Add standardized processing control arguments"""
+        if include_max_rows:
+            parser.add_argument('--max-rows', type=int,
+                              help='Maximum number of rows to process')
+        if include_batch_size:
+            parser.add_argument('--batch-size', type=int, default=10,
+                              help='Process N items per batch (default: 10)')
+        if include_reset:
+            parser.add_argument('--reset', action='store_true',
+                              help='Reset processing status and reprocess')
+        if include_dry_run:
+            parser.add_argument('--dry-run', action='store_true',
+                              help='Test mode without making changes')
+    
+    @staticmethod
+    def add_download_arguments(parser: argparse.ArgumentParser,
+                             include_youtube: bool = True,
+                             include_drive: bool = True,
+                             include_skip_options: bool = True) -> None:
+        """Add standardized download control arguments"""
+        if include_youtube:
+            parser.add_argument('--max-youtube', type=int,
+                              help='Maximum YouTube videos to download')
+        if include_drive:
+            parser.add_argument('--max-drive', type=int,
+                              help='Maximum Drive files to download')
+        if include_skip_options:
+            parser.add_argument('--skip-youtube', action='store_true',
+                              help='Skip YouTube downloads')
+            parser.add_argument('--skip-drive', action='store_true',  
+                              help='Skip Google Drive downloads')
+    
+    @staticmethod
+    def add_workflow_arguments(parser: argparse.ArgumentParser,
+                             include_sheet: bool = True,
+                             include_logging: bool = True,
+                             include_cache: bool = False) -> None:
+        """Add standardized workflow control arguments"""
+        if include_sheet:
+            parser.add_argument('--skip-sheet', action='store_true',
+                              help='Skip Google Sheet scraping')
+        if include_logging:
+            parser.add_argument('--no-logging', action='store_true',
+                              help='Disable logging to files')
+        if include_cache:
+            parser.add_argument('--use-cache', action='store_true',
+                              help='Use cached data instead of downloading')
+    
+    @staticmethod
+    def add_monitoring_arguments(parser: argparse.ArgumentParser,
+                               include_status: bool = True,
+                               include_detailed: bool = True,
+                               include_alerts: bool = False) -> None:
+        """Add standardized monitoring and reporting arguments"""
+        if include_status:
+            parser.add_argument('--status', action='store_true',
+                              help='Show current system status')
+        if include_detailed:
+            parser.add_argument('--detailed', action='store_true',
+                              help='Include detailed information')
+        if include_alerts:
+            parser.add_argument('--alerts', action='store_true',
+                              help='Check alert conditions')
+
+
+def create_standard_parser(description: str, 
+                         argument_groups: Optional[List[str]] = None) -> argparse.ArgumentParser:
+    """
+    Create a parser with standardized argument groups
+    
+    Args:
+        description: Parser description
+        argument_groups: List of argument groups to include:
+            - 'files': File path arguments (--csv, --output, --directory)
+            - 'processing': Processing control (--max-rows, --reset, --dry-run)
+            - 'downloads': Download control (--max-youtube, --max-drive, --skip-*)
+            - 'workflow': Workflow control (--skip-sheet, --no-logging)
+            - 'monitoring': Monitoring/reporting (--status, --detailed, --alerts)
+    
+    Returns:
+        ArgumentParser with requested argument groups
+        
+    Example:
+        parser = create_standard_parser(
+            "Download YouTube videos",
+            ['files', 'processing', 'downloads']
+        )
+    """
+    parser = argparse.ArgumentParser(description=description)
+    
+    if argument_groups:
+        for group in argument_groups:
+            if group == 'files':
+                StandardCLIArguments.add_file_arguments(parser)
+            elif group == 'processing':
+                StandardCLIArguments.add_processing_arguments(parser)
+            elif group == 'downloads':
+                StandardCLIArguments.add_download_arguments(parser)
+            elif group == 'workflow':
+                StandardCLIArguments.add_workflow_arguments(parser)
+            elif group == 'monitoring':
+                StandardCLIArguments.add_monitoring_arguments(parser)
+    
+    return parser
+
+
+def validate_standard_arguments(args: argparse.Namespace) -> bool:
+    """
+    Validate common argument combinations and constraints
+    
+    Args:
+        args: Parsed arguments namespace
+        
+    Returns:
+        True if arguments are valid, False otherwise
+    """
+    # Validate positive integer arguments
+    for attr in ['max_rows', 'max_youtube', 'max_drive', 'batch_size']:
+        value = getattr(args, attr, None)
+        if value is not None and value <= 0:
+            print(f"Error: --{attr.replace('_', '-')} must be positive")
+            return False
+    
+    # Validate file paths exist if specified
+    csv_path = getattr(args, 'csv', None) or getattr(args, 'csv_path', None)
+    if csv_path and not Path(csv_path).exists():
+        print(f"Warning: CSV file not found: {csv_path}")
+    
+    return True
+
+
+def execute_with_standard_args(main_func: Callable, 
+                             parser: argparse.ArgumentParser,
+                             validate_args: bool = True) -> int:
+    """
+    Execute main function with standardized argument handling
+    
+    Args:
+        main_func: Main function to execute, should accept args parameter
+        parser: Configured ArgumentParser
+        validate_args: Whether to validate arguments
+        
+    Returns:
+        Exit code (0 for success, 1 for failure)
+    """
+    try:
+        args = parser.parse_args()
+        
+        if validate_args and not validate_standard_arguments(args):
+            return 1
+        
+        result = main_func(args)
+        return 0 if result is None else result
+        
+    except KeyboardInterrupt:
+        print("\nOperation cancelled by user")
+        return 1
+    except Exception as e:
+        print(f"Error: {e}")
+        return 1
+
+
 def get_timeout(timeout_type: str = "default") -> float:
     """
     Get timeout value.
