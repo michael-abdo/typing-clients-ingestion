@@ -18,7 +18,11 @@ from datetime import datetime
 
 # Import modules to test their availability
 from utils.csv_manager import CSVManager
-from utils.config import get_config, run_subprocess
+from utils.config import get_config
+try:
+    from utils.config import run_subprocess
+except ImportError:
+    run_subprocess = None
 from utils.error_decorators import handle_file_operations, handle_validation_errors
 from utils.path_setup import ensure_directory_exists, get_project_root
 from utils.retry_utils import retry_with_backoff
@@ -188,9 +192,7 @@ class RefactoringTester:
             from utils.config import get_config
             config_module = sys.modules['utils.config']
             
-            if hasattr(config_module, 'run_subprocess'):
-                from utils.config import run_subprocess
-                
+            if run_subprocess is not None:
                 # Test simple command
                 result = run_subprocess(['echo', 'test'], description="Echo test")
                 

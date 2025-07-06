@@ -253,10 +253,15 @@ def main():
     dry_run = not args.apply
     
     if not dry_run:
-        response = input("⚠️  This will modify files in place. Continue? (yes/no): ")
-        if response.lower() != 'yes':
-            print("Aborted.")
-            return
+        # Check if running in CI/automation mode
+        import os
+        if not os.environ.get('CI') and os.isatty(0):
+            response = input("⚠️  This will modify files in place. Continue? (yes/no): ")
+            if response.lower() != 'yes':
+                print("Aborted.")
+                return
+        else:
+            print("⚠️  Running in automation mode - applying changes without confirmation")
     
     refactorer = DRYRefactorer(dry_run=dry_run)
     

@@ -7,7 +7,8 @@ import csv
 from pathlib import Path
 
 # Add parent directory to path to access utils
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from utils.path_setup import init_project_imports
+init_project_imports()
 
 from utils.logger import pipeline_run, get_pipeline_logger
 from utils.logging_config import get_logger
@@ -214,7 +215,7 @@ def main_workflow(args, logger=None):
                     print(f"\n{'=' * 80}\nStep 3: Downloading {len(pending_youtube)} YouTube videos\n{'=' * 80}")
             
             # Create the youtube_downloads directory if it doesn't exist
-            os.makedirs("youtube_downloads", exist_ok=True)
+            ensure_directory_exists(Path("youtube_downloads"))
             
             # Process downloads with row context tracking
             import pandas as pd

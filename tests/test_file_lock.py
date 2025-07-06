@@ -10,7 +10,8 @@ import threading
 import time
 from pathlib import Path
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from utils.path_setup import init_project_imports
+init_project_imports()
 
 from utils.file_lock import FileLock, file_lock, atomic_write_with_lock
 

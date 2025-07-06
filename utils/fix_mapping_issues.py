@@ -6,6 +6,8 @@ This module is deprecated. All functionality has been moved to comprehensive_fil
 for better consolidation and DRY principle adherence.
 
 Use: from utils.comprehensive_file_mapper import FileMapper
+from utils.path_setup import ensure_directory_exists
+from pathlib import Path
 """
 import warnings
 warnings.warn(
@@ -144,8 +146,7 @@ class MappingIssueFixer:
             duplicates = dup_files[dup_files['is_primary'] == False]
             
             for idx, dup in duplicates.iterrows():
-                # Move to duplicates folder instead of deleting
-                dup_dir = 'removed_duplicates'
+                # Move to duplicates folder insteensure_directory_exists(Path(dup_dir))dir = 'removed_duplicates'
                 os.makedirs(dup_dir, exist_ok=True)
                 
                 dest_path = os.path.join(dup_dir, dup['filename'])

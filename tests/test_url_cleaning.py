@@ -2,9 +2,8 @@
 """Test cases for URL cleaning and extraction with control characters"""
 
 import unittest
-import sys
-import os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from utils.path_setup import init_project_imports
+init_project_imports()
 
 from utils.extract_links import clean_url
 

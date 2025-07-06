@@ -10,6 +10,8 @@ import pandas as pd
 from pathlib import Path
 from collections import defaultdict
 import argparse
+from utils.path_setup import ensure_directory_exists
+from pathlib import Path
 
 # Import standardized CSV reading function
 try:
@@ -29,10 +31,10 @@ def organize_files_by_type(mapping_csv: str = 'complete_file_mapping_100_percent
     # Filter out system files
     df_persons = df[df['mapping_status'] != 'system_file']
     
-    print(f"=== ORGANIZING {len(df_persons)} FILES BY PERSONALITY TYPE ===")
+    print(f"=== ORGANIZING {len(df_persons)} FILES BY TYPE ===")
     
     # Create output directory
-    os.makedirs(output_dir, exist_ok=True)
+    ensure_directory_exists(Path(output_dir))
     
     # Track statistics
     type_counts = defaultdict(int)
@@ -72,9 +74,9 @@ def organize_files_by_type(mapping_csv: str = 'complete_file_mapping_100_percent
             
             # Create directory structure
             type_dir = os.path.join(output_dir, type_clean)
-            person_dir = os.path.join(type_dir, f"{row['row_id']}_{person_clean}")
+            person_dir = os.path.join(type_dir, f"{person_clean}")
             
-            os.makedirs(person_dir, exist_ok=True)
+            ensure_directory_exists(Path(person_dir))
             
             # Determine file category
             filename = row['filename']
@@ -91,7 +93,7 @@ def organize_files_by_type(mapping_csv: str = 'complete_file_mapping_100_percent
             
             # Create category subdirectory
             dest_dir = os.path.join(person_dir, subdir)
-            os.makedirs(dest_dir, exist_ok=True)
+            ensure_directory_exists(Path(dest_dir))
             
             # Copy or move file
             dest_path = os.path.join(dest_dir, filename)

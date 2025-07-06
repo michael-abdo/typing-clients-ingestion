@@ -2,10 +2,8 @@
 """
 Download large Drive files with extended timeouts and better progress tracking
 """
-import sys
-import os
-
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from utils.path_setup import init_project_imports
+init_project_imports()
 
 from scripts.download_drive_files_from_html import DriveFileDownloader
 from pathlib import Path

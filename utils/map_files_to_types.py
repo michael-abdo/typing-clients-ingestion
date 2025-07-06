@@ -6,6 +6,8 @@ This module is deprecated. All functionality has been moved to comprehensive_fil
 for better consolidation and DRY principle adherence.
 
 Use: from utils.comprehensive_file_mapper import FileMapper
+from utils.path_setup import ensure_directory_exists
+from pathlib import Path
 """
 import warnings
 warnings.warn(
@@ -81,9 +83,9 @@ class FileTypeMapper:
     
     def create_type_organized_structure(self, output_dir: str = 'organized_by_type') -> None:
         """Create directory structure organized by personality type"""
-        print(f"\nCreating type-organized structure in {output_dir}/")
+        print(f"Creating personality type structure in {output_dir}/")
         
-        os.makedirs(output_dir, exist_ok=True)
+        ensure_directory_exists(Path(output_dir))
         
         # Create summary report
         summary = []
@@ -98,7 +100,7 @@ class FileTypeMapper:
             
             # Create nested directory structure
             dest_dir = os.path.join(output_dir, type_dir, person_dir)
-            os.makedirs(dest_dir, exist_ok=True)
+            ensure_directory_exists(Path(dest_dir))
             
             # Copy file with preserved name
             dest_file = os.path.join(dest_dir, os.path.basename(file_path))

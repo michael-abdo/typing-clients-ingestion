@@ -9,6 +9,8 @@ import json
 from dataclasses import dataclass
 from typing import List, Optional, Dict, Any
 from datetime import datetime
+from utils.path_setup import ensure_directory_exists
+from pathlib import Path
 
 
 @dataclass
@@ -74,9 +76,7 @@ class DownloadResult:
             return ""
             
         metadata_path = os.path.join(downloads_dir, self.metadata_file)
-        
-        # Ensure downloads directory exists
-        os.makedirs(downloads_dir, exist_ok=True)
+        ensure_directory_exists(Path(downloads_dir))
         
         metadata = {
             'download_result': {

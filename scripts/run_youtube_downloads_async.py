@@ -10,7 +10,8 @@ import time
 from datetime import datetime
 
 # Add parent directory to path to access utils
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from utils.path_setup import init_project_imports
+init_project_imports()
 
 from utils.config import get_config
 from utils.validation import validate_youtube_url

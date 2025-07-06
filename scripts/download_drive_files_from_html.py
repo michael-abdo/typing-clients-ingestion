@@ -12,7 +12,8 @@ from pathlib import Path
 from datetime import datetime
 
 # Add parent directory to path to access utils
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from utils.path_setup import init_project_imports
+init_project_imports()
 
 from selenium import webdriver
 from selenium.webdriver.common.by import By

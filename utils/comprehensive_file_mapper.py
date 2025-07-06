@@ -18,6 +18,8 @@ from collections import defaultdict
 from datetime import datetime
 from typing import Dict, List, Set, Tuple, Optional
 import argparse
+from utils.path_setup import ensure_directory_exists
+from pathlib import Path
 try:
     from utils.clean_file_mapper import CleanFileMapper
 except ImportError:
@@ -752,10 +754,8 @@ class FileMapper:
         Returns:
             Dictionary with organization results
         """
-        type_mapping = self._map_by_type()
-        
         # Create output directory
-        os.makedirs(output_dir, exist_ok=True)
+        ensure_directory_exists(Path(output_dir))
         
         organized_count = 0
         type_counts = defaultdict(int)
@@ -764,7 +764,7 @@ class FileMapper:
             # Clean personality type for directory name
             clean_type = str(personality_type).replace('/', '-').replace(' ', '_')
             type_dir = os.path.join(output_dir, clean_type)
-            os.makedirs(type_dir, exist_ok=True)
+            ensure_directory_exists(Path(type_dir))
             
             for file_info in files:
                 file_path = file_info['file_path']
@@ -903,7 +903,7 @@ class FileMapper:
                     if action == 'move':
                         # Move to duplicates directory
                         dup_dir = 'removed_duplicates'
-                        os.makedirs(dup_dir, exist_ok=True)
+                        ensure_directory_exists(Path(dup_dir))
                         dest_path = os.path.join(dup_dir, os.path.basename(dup_file))
                         
                         if os.path.exists(dup_file):

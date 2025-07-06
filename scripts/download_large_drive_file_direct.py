@@ -12,7 +12,8 @@ from pathlib import Path
 from urllib.parse import urlparse, parse_qs
 
 # Add parent directory to path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from utils.path_setup import init_project_imports
+init_project_imports()
 
 from utils.logging_config import get_logger
 from utils.validation import validate_url, ValidationError
@@ -42,7 +43,7 @@ def download_large_drive_file(url, output_dir=DOWNLOADS_DIR):
     """Download a large Google Drive file that requires virus scan confirmation"""
     
     # Create output directory
-    os.makedirs(output_dir, exist_ok=True)
+    ensure_directory_exists(Path(output_dir))
     
     # Extract file information
     file_info = extract_file_info_from_url(url)

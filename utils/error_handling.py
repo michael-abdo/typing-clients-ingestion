@@ -10,6 +10,8 @@ from typing import Optional, Dict, Any, List
 from datetime import datetime
 from enum import Enum
 from dataclasses import dataclass
+from utils.path_setup import ensure_directory_exists
+from pathlib import Path
 
 try:
     from logging_config import get_logger
@@ -315,11 +317,7 @@ def validate_download_environment() -> List[ErrorContext]:
         # Check required directories
         required_dirs = ['youtube_downloads', 'drive_downloads']
         for dir_name in required_dirs:
-            if not os.path.exists(dir_name):
-                try:
-                    os.makedirs(dir_name, exist_ok=True)
-                except Exception as e:
-                    errors.append(error_handler.handle_error(e, {'file_path': dir_name}))
+            ensure_directory_exists(Path(dir_name))
                     
         # Check disk space (at least 1GB free)
         import shutil

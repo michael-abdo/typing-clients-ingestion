@@ -7,7 +7,8 @@ import sys
 import os
 from pathlib import Path
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from utils.path_setup import init_project_imports
+init_project_imports()
 
 from utils.validation import (
     validate_url, validate_youtube_url, validate_google_drive_url,
