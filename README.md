@@ -10,6 +10,7 @@ A production-ready system for downloading and tracking personality typing videos
 - **Bidirectional Mapping**: Links downloaded files back to source CSV rows
 - **Error Resilience**: Intelligent retry system with permanent failure detection
 - **Production Monitoring**: Real-time health checks and alerts
+- **DRY Architecture**: Consolidated workflow with unified configuration management
 
 ## 📋 Prerequisites
 
@@ -41,6 +42,21 @@ pip install -r requirements.txt
 cp config/config.yaml.example config/config.yaml
 # Edit config/config.yaml with your settings
 ```
+
+## 🏗️ Architecture
+
+This project has been refactored to follow DRY (Don't Repeat Yourself) principles:
+
+### Consolidated Structure
+- **Single Workflow**: `simple_workflow.py` is now the unified entry point (previously split across multiple versions)
+- **Centralized Configuration**: All settings in `config/config.yaml`, loaded by `utils/config.py`
+- **Eliminated Duplicates**: Removed redundant file structure and consolidated functionality
+
+### Key Changes (Latest Refactoring)
+1. **File Consolidation**: Merged `minimal/simple_workflow.py` (847 lines, full-featured) into root `simple_workflow.py`, replacing basic prototype (191 lines)
+2. **Configuration Management**: Extracted hardcoded URLs and settings to use existing `config/config.yaml`
+3. **Import Cleanup**: Updated all test files to use consolidated import structure
+4. **Text-Only Processing**: Streamlined to extract raw text without HTML overhead
 
 ## 🎯 Quick Start
 

@@ -25,10 +25,14 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
-# Configuration - centralized settings
+# Import centralized configuration
+from utils.config import get_config
+
+# Configuration - now loaded from config.yaml
 class Config:
-    GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/u/1/d/e/2PACX-1vRqqjqoaj8sEZBfZRw0Og7g8ms_0yTL2MsegTubcjhhBnXr1s1jFBwIVAsbkyj1xD0TMj06LvGTQIHU/pubhtml?pli=1#"
-    TARGET_DIV_ID = "1159146182"
+    _config = get_config()
+    GOOGLE_SHEET_URL = _config.get('google_sheets.url')
+    TARGET_DIV_ID = str(_config.get('google_sheets.target_div_id'))
     OUTPUT_DIR = Path("simple_downloads")
     OUTPUT_CSV_FULL = "simple_output.csv"
     OUTPUT_CSV_BASIC = "simple_output.csv"  # Unified output file
