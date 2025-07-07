@@ -7,7 +7,7 @@ Following DRY principles: All extraction logic in one place
 import re
 import time
 import urllib.parse
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Tuple, Optional, Callable, Any
 from bs4 import BeautifulSoup
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
@@ -20,22 +20,113 @@ from selenium.webdriver.support import expected_conditions as EC
 _driver = None
 
 def get_selenium_driver():
-    """Initialize and return a Selenium WebDriver instance"""
+    """Initialize and return a Selenium WebDriver instance with Google Docs optimization"""
     global _driver
     if _driver is None:
-        print("Initializing Selenium Chrome driver...")
+        print("Initializing Selenium Chrome driver with Google Docs support...")
         chrome_options = Options()
+        
+        # Try headless mode as fallback when GUI fails
         chrome_options.add_argument("--headless")
-        chrome_options.add_argument("--disable-gpu")
+        
+        # Anti-detection measures
+        chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+        chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+        chrome_options.add_experimental_option('useAutomationExtension', False)
+        
+        # Realistic browser behavior
+        chrome_options.add_argument("--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
         chrome_options.add_argument("--window-size=1920,1080")
+        chrome_options.add_argument("--start-maximized")
+        
+        # Performance and stability
+        chrome_options.add_argument("--disable-gpu")
         chrome_options.add_argument("--disable-dev-shm-usage")
         chrome_options.add_argument("--no-sandbox")
+        chrome_options.add_argument("--disable-extensions")
+        chrome_options.add_argument("--disable-plugins")
+        
+        # Minimal options for headless mode
+        chrome_options.add_argument("--remote-debugging-port=0")  # Auto-assign port
+        chrome_options.add_argument("--no-first-run")  # Disable first run experience
+        chrome_options.add_argument("--disable-default-apps")  # Disable default apps
+        chrome_options.add_argument("--disable-background-timer-throttling")
+        chrome_options.add_argument("--disable-renderer-backgrounding")
+        chrome_options.add_argument("--disable-backgrounding-occluded-windows")
+        
+        print("  Using incognito mode to avoid profile conflicts")
+        
+        # JavaScript and content handling
+        chrome_options.add_argument("--enable-javascript")
+        chrome_options.add_argument("--disable-web-security")
+        chrome_options.add_argument("--allow-running-insecure-content")
         
         try:
-            _driver = webdriver.Chrome(options=chrome_options)
+            # Try to clean up any existing Chrome processes first
+            import subprocess
+            try:
+                subprocess.run(['pkill', '-f', 'chrome'], capture_output=True)
+                time.sleep(1)
+            except:
+                pass
+            
+            # Initialize driver with retry logic
+            max_attempts = 3
+            for attempt in range(max_attempts):
+                try:
+                    # Use ChromeDriver service to handle binary location
+                    from selenium.webdriver.chrome.service import Service
+                    service = Service('/usr/bin/chromedriver')
+                    
+                    # Point to Chromium binary
+                    chrome_options.binary_location = '/usr/bin/chromium-browser'
+                    
+                    _driver = webdriver.Chrome(service=service, options=chrome_options)
+                    
+                    # Additional anti-detection measures
+                    _driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+                    _driver.execute_cdp_cmd('Network.setUserAgentOverride', {
+                        "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                    })
+                    
+                    print("✓ Driver initialized with anti-detection measures")
+                    break
+                    
+                except Exception as init_error:
+                    if attempt < max_attempts - 1:
+                        print(f"  Attempt {attempt + 1} failed: {init_error}")
+                        print(f"  Retrying...")
+                        time.sleep(2)
+                    else:
+                        raise init_error
+            
         except Exception as e:
-            print(f"Could not initialize Selenium driver: {str(e)}")
-            return None
+            print(f"Could not initialize Selenium driver after {max_attempts} attempts: {str(e)}")
+            
+            # Try alternative: use Chrome without user data directory
+            print("Attempting alternative Chrome configuration...")
+            try:
+                from selenium.webdriver.chrome.service import Service
+                service = Service('/usr/bin/chromedriver')
+                
+                alt_options = Options()
+                alt_options.binary_location = '/usr/bin/chromium-browser'
+                alt_options.add_argument("--disable-blink-features=AutomationControlled")
+                alt_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+                alt_options.add_experimental_option('useAutomationExtension', False)
+                alt_options.add_argument("--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+                alt_options.add_argument("--window-size=1920,1080")
+                alt_options.add_argument("--disable-gpu")
+                alt_options.add_argument("--disable-dev-shm-usage")
+                alt_options.add_argument("--no-sandbox")
+                alt_options.add_argument("--enable-javascript")
+                
+                _driver = webdriver.Chrome(service=service, options=alt_options)
+                print("✓ Alternative Chrome configuration successful")
+                
+            except Exception as alt_error:
+                print(f"Alternative configuration also failed: {alt_error}")
+                return None
     
     return _driver
 
@@ -131,24 +222,94 @@ def determine_document_type(url: str) -> str:
     else:
         return 'other'
 
-def extract_google_doc_text(url: str) -> str:
-    """Extract text content from a Google Doc using Selenium"""
+def extract_google_doc_text(url: str, auth_cookies: Optional[Dict] = None) -> str:
+    """Extract text content from a Google Doc using requests first, then Selenium fallback"""
+    
+    # First try requests-based approach for Google Docs
+    try:
+        print(f"  Attempting requests-based extraction...")
+        import requests
+        
+        # Convert edit URL to export URL for plain text
+        if 'docs.google.com/document' in url:
+            # Extract document ID
+            if '/d/' in url:
+                doc_id = url.split('/d/')[1].split('/')[0]
+                export_url = f"https://docs.google.com/document/d/{doc_id}/export?format=txt"
+                
+                headers = {
+                    'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                }
+                
+                response = requests.get(export_url, headers=headers, timeout=30)
+                if response.status_code == 200:
+                    doc_text = response.text.strip()
+                    if doc_text and len(doc_text) > 20:  # Minimum content check
+                        print(f"  ✓ Extracted {len(doc_text)} characters via requests")
+                        return doc_text
+                    else:
+                        print(f"  ⚠️ Export returned minimal content ({len(doc_text)} chars), trying Selenium...")
+                else:
+                    print(f"  ⚠️ Export failed (status {response.status_code}), trying Selenium...")
+        
+    except Exception as e:
+        print(f"  ⚠️ Requests extraction failed: {e}, trying Selenium...")
+    
+    # Fallback to Selenium 
+    print(f"  Falling back to Selenium extraction...")
     driver = get_selenium_driver()
     if not driver:
         print("Failed to initialize Selenium driver")
         return ""
     
     try:
+        # Add authentication cookies if provided
+        if auth_cookies:
+            driver.get("https://accounts.google.com")
+            for name, value in auth_cookies.items():
+                driver.add_cookie({'name': name, 'value': value})
+        
         print(f"Loading Google Doc with Selenium: {url}")
         driver.get(url)
+        
+        # Check for access denied or login required
+        time.sleep(2)
+        page_text = driver.find_element(By.TAG_NAME, "body").text.lower()
+        if any(phrase in page_text for phrase in ["access denied", "sign in", "request access", "you need permission"]):
+            print("  ⚠ Document requires authentication or permission")
+            return "[AUTHENTICATION_REQUIRED]"
         
         # Wait for page to load
         WebDriverWait(driver, 30).until(
             EC.presence_of_element_located((By.TAG_NAME, "body"))
         )
         
+        # Wait specifically for Google Docs content to load
+        try:
+            # Wait for any of the Google Docs content containers
+            WebDriverWait(driver, 15).until(
+                lambda d: any([
+                    d.find_elements(By.CSS_SELECTOR, '.kix-page'),
+                    d.find_elements(By.CSS_SELECTOR, '.kix-page-content'),
+                    d.find_elements(By.CSS_SELECTOR, '.kix-lineview'),
+                    d.find_elements(By.CSS_SELECTOR, '[data-kix-canvas]')
+                ])
+            )
+            print("  ✓ Google Docs content containers loaded")
+        except:
+            print("  ⚠ Google Docs content containers not found - continuing anyway")
+        
         # Extra wait for Google Docs to render
         time.sleep(3)
+        
+        # Wait for content to be non-empty
+        for attempt in range(5):
+            current_text = driver.find_element(By.TAG_NAME, "body").text
+            if current_text and len(current_text.strip()) > 100:  # Meaningful content
+                print("  ✓ Meaningful content detected")
+                break
+            print(f"  ⏳ Waiting for content... attempt {attempt + 1}")
+            time.sleep(2)
         
         # Scroll to ensure all content is loaded
         height = driver.execute_script("return document.body.scrollHeight")
@@ -164,23 +325,36 @@ def extract_google_doc_text(url: str) -> str:
         html = driver.page_source
         soup = BeautifulSoup(html, 'html.parser')
         
+        # Check if we're getting the blocked message
+        if "JavaScript isn't enabled" in html or "blocked" in html.lower():
+            print("  ⚠ Detected JavaScript blocking - may need different approach")
+        
         # Extract text from the document content
         text_content = ""
         
-        # Try different selectors for Google Docs content
+        # Try different selectors for Google Docs content (ordered by specificity)
         content_selectors = [
-            '.kix-pagesettings-protected-text',
+            '.kix-page-content-wrap',
+            '.kix-page-content', 
+            '.kix-lineview-content',
+            '.kix-lineview',
             '.kix-page',
+            '.kix-pagesettings-protected-text',
             '.doc-content',
+            '[data-kix-canvas]',
             '.google-docs-content'
         ]
         
         for selector in content_selectors:
             elements = soup.select(selector)
             if elements:
+                print(f"  Found {len(elements)} elements with selector: {selector}")
                 for element in elements:
-                    text_content += element.get_text(separator=' ', strip=True) + " "
-                break
+                    element_text = element.get_text(separator=' ', strip=True)
+                    if element_text:  # Only add non-empty text
+                        text_content += element_text + " "
+                if text_content.strip():  # If we got content, break
+                    break
         
         # Fallback: extract all text from body
         if not text_content.strip():
@@ -197,6 +371,174 @@ def extract_google_doc_text(url: str) -> str:
     except Exception as e:
         print(f"✗ Error extracting text from {url}: {e}")
         return ""
+
+def extract_google_doc_content_and_links(url: str, auth_cookies: Optional[Dict] = None) -> tuple[str, str, Dict[str, List[str]]]:
+    """Extract both text content and links from a Google Doc using requests first, Selenium fallback"""
+    
+    # First try requests-based extraction for the text content
+    doc_text = ""
+    html_content = ""
+    
+    try:
+        print(f"  Attempting requests-based extraction...")
+        import requests
+        
+        # Convert edit URL to export URL for plain text
+        if 'docs.google.com/document' in url:
+            # Extract document ID
+            if '/d/' in url:
+                doc_id = url.split('/d/')[1].split('/')[0]
+                export_url = f"https://docs.google.com/document/d/{doc_id}/export?format=txt"
+                
+                headers = {
+                    'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+                }
+                
+                response = requests.get(export_url, headers=headers, timeout=30)
+                if response.status_code == 200:
+                    doc_text = response.text.strip()
+                    if doc_text and len(doc_text) > 20:  # Minimum content check
+                        print(f"  ✓ Extracted {len(doc_text)} characters via requests")
+                        
+                        # Also try to get HTML content for link extraction
+                        try:
+                            html_response = requests.get(url, headers=headers, timeout=30)
+                            if html_response.status_code == 200:
+                                html_content = html_response.text
+                                print(f"  ✓ Also extracted HTML content ({len(html_content)} chars)")
+                        except:
+                            print(f"  ⚠️ Could not get HTML, will extract links from text only")
+                        
+                        # Extract links from the content we have
+                        links = extract_links_from_content(html_content, doc_text)
+                        return doc_text, html_content, links
+                    else:
+                        print(f"  ⚠️ Export returned minimal content ({len(doc_text)} chars), trying Selenium...")
+                else:
+                    print(f"  ⚠️ Export failed (status {response.status_code}), trying Selenium...")
+        
+    except Exception as e:
+        print(f"  ⚠️ Requests extraction failed: {e}, trying Selenium...")
+    
+    # Fallback to Selenium if requests fails
+    print(f"  Falling back to Selenium extraction...")
+    driver = get_selenium_driver()
+    if not driver:
+        print("Failed to initialize Selenium driver")
+        return "", "", {'youtube': [], 'drive_files': [], 'drive_folders': [], 'all_links': []}
+    
+    try:
+        # Add authentication cookies if provided
+        if auth_cookies:
+            driver.get("https://accounts.google.com")
+            for name, value in auth_cookies.items():
+                driver.add_cookie({'name': name, 'value': value})
+        
+        print(f"Loading Google Doc with Selenium: {url}")
+        driver.get(url)
+        
+        # Check for access denied or login required
+        time.sleep(2)
+        page_text = driver.find_element(By.TAG_NAME, "body").text.lower()
+        if any(phrase in page_text for phrase in ["access denied", "sign in", "request access", "you need permission"]):
+            print("  ⚠ Document requires authentication or permission")
+            return "[AUTHENTICATION_REQUIRED]", "", {'youtube': [], 'drive_files': [], 'drive_folders': [], 'all_links': []}
+        
+        # Wait for page to load
+        WebDriverWait(driver, 30).until(
+            EC.presence_of_element_located((By.TAG_NAME, "body"))
+        )
+        
+        # Wait specifically for Google Docs content to load
+        try:
+            # Wait for any of the Google Docs content containers
+            WebDriverWait(driver, 15).until(
+                lambda d: any([
+                    d.find_elements(By.CSS_SELECTOR, '.kix-page'),
+                    d.find_elements(By.CSS_SELECTOR, '.kix-page-content'),
+                    d.find_elements(By.CSS_SELECTOR, '.kix-lineview'),
+                    d.find_elements(By.CSS_SELECTOR, '[data-kix-canvas]')
+                ])
+            )
+            print("  ✓ Google Docs content containers loaded")
+        except:
+            print("  ⚠ Google Docs content containers not found - continuing anyway")
+        
+        # Extra wait for Google Docs to render
+        time.sleep(3)
+        
+        # Wait for content to be non-empty
+        for attempt in range(5):
+            current_text = driver.find_element(By.TAG_NAME, "body").text
+            if current_text and len(current_text.strip()) > 100:  # Meaningful content
+                print("  ✓ Meaningful content detected")
+                break
+            print(f"  ⏳ Waiting for content... attempt {attempt + 1}")
+            time.sleep(2)
+        
+        # Scroll to ensure all content is loaded
+        height = driver.execute_script("return document.body.scrollHeight")
+        for i in range(0, height, 300):
+            driver.execute_script(f"window.scrollTo(0, {i});")
+            time.sleep(0.1)
+        
+        # Scroll back to top
+        driver.execute_script("window.scrollTo(0, 0);")
+        time.sleep(1)
+        
+        # Get the page source
+        html = driver.page_source
+        soup = BeautifulSoup(html, 'html.parser')
+        
+        # Check if we're getting the blocked message
+        if "JavaScript isn't enabled" in html or "blocked" in html.lower():
+            print("  ⚠ Detected JavaScript blocking - may need different approach")
+        
+        # Extract text from the document content
+        text_content = ""
+        
+        # Try different selectors for Google Docs content (ordered by specificity)
+        content_selectors = [
+            '.kix-page-content-wrap',
+            '.kix-page-content', 
+            '.kix-lineview-content',
+            '.kix-lineview',
+            '.kix-page',
+            '.kix-pagesettings-protected-text',
+            '.doc-content',
+            '[data-kix-canvas]',
+            '.google-docs-content'
+        ]
+        
+        for selector in content_selectors:
+            elements = soup.select(selector)
+            if elements:
+                print(f"  Found {len(elements)} elements with selector: {selector}")
+                for element in elements:
+                    element_text = element.get_text(separator=' ', strip=True)
+                    if element_text:  # Only add non-empty text
+                        text_content += element_text + " "
+                if text_content.strip():  # If we got content, break
+                    break
+        
+        # Fallback: extract all text from body
+        if not text_content.strip():
+            body = soup.find('body')
+            if body:
+                text_content = body.get_text(separator=' ', strip=True)
+        
+        # Clean up the text
+        text_content = re.sub(r'\s+', ' ', text_content).strip()
+        
+        # Extract links from the rendered HTML
+        links = extract_links_from_content(html, text_content)
+        
+        print(f"✓ Extracted {len(text_content)} characters of text and {sum(len(v) for v in links.values() if isinstance(v, list))} links")
+        return text_content, html, links
+        
+    except Exception as e:
+        print(f"✗ Error extracting content from {url}: {e}")
+        return "", "", {'youtube': [], 'drive_files': [], 'drive_folders': [], 'all_links': []}
 
 def extract_links_from_content(doc_content: str, doc_text: str = "") -> Dict[str, List[str]]:
     """Extract links from document content and text"""
@@ -448,3 +790,160 @@ def extract_text_with_retry(doc_url: str, max_attempts: int = 3, delay: int = 2)
                 time.sleep(delay)
     
     return "", f"Failed after {max_attempts} attempts"
+
+
+# ============================================================================
+# Test Utilities Section (DRY: Consolidate test file duplications)
+# ============================================================================
+
+def categorize_link(url: str) -> str:
+    """Categorize a link by its type (DRY: consolidate from test files)"""
+    if not url:
+        return 'other'
+    
+    url_lower = url.lower()
+    
+    if 'youtube.com/watch' in url_lower or 'youtu.be' in url_lower:
+        return 'youtube_video'
+    elif 'youtube.com/playlist' in url_lower:
+        return 'youtube_playlist'
+    elif 'docs.google.com/document' in url_lower or 'docs.google.com/open?id=' in url_lower:
+        return 'google_doc'
+    elif 'drive.google.com/file' in url_lower:
+        return 'google_drive_file'
+    elif 'drive.google.com/drive/folders' in url_lower:
+        return 'google_drive_folder'
+    else:
+        return 'other'
+
+
+def extract_people_with_all_links(sheet_html: str, target_div_id: str = "1159146182", 
+                                   row_filter: Optional[Callable] = None) -> List[Dict]:
+    """Extract people and ALL their links from any column with optional row filtering"""
+    soup = BeautifulSoup(sheet_html, "html.parser")
+    
+    target_div = soup.find("div", {"id": target_div_id})
+    if not target_div:
+        return []
+    
+    table = target_div.find("table")
+    if not table:
+        return []
+    
+    rows = table.find_all("tr")
+    people_data = []
+    
+    for row_index in range(1, len(rows)):  # Skip header
+        row = rows[row_index]
+        cells = row.find_all("td")
+        
+        if len(cells) < 5:
+            continue
+        
+        # Extract basic data
+        row_id = cells[0].get_text(strip=True)
+        
+        # Apply row filter if provided
+        if row_filter and not row_filter(row_id):
+            continue
+            
+        name = cells[2].get_text(strip=True)
+        email = cells[3].get_text(strip=True)
+        type_info = cells[4].get_text(strip=True)
+        
+        # Extract ALL links from ALL cells (excluding column 4)
+        all_links = []
+        for cell_idx, cell in enumerate(cells):
+            # Skip column 4 (index 4) per user requirement
+            if cell_idx == 4:
+                continue
+                
+            cell_links = cell.find_all('a', href=True)
+            for link in cell_links:
+                actual_url = extract_actual_url(link['href'])
+                if actual_url and actual_url != '#':
+                    all_links.append({
+                        'url': actual_url,
+                        'column': cell_idx,
+                        'type': categorize_link(actual_url)
+                    })
+        
+        people_data.append({
+            'row_id': row_id,
+            'name': name,
+            'email': email,
+            'type': type_info,
+            'links': all_links
+        })
+    
+    return people_data
+
+
+def create_row_range_filter(start_row: int, end_row: int) -> Callable:
+    """Create a filter function for row ranges"""
+    def filter_func(row_id: str) -> bool:
+        try:
+            row_num = int(row_id)
+            return start_row <= row_num <= end_row
+        except:
+            return False
+    return filter_func
+
+
+def create_row_list_filter(row_ids: List[str]) -> Callable:
+    """Create a filter function for specific row IDs"""
+    row_id_set = set(str(id) for id in row_ids)
+    def filter_func(row_id: str) -> bool:
+        return str(row_id) in row_id_set
+    return filter_func
+
+
+def setup_test_database(db_path: str = 'test.db') -> Any:
+    """Setup a test database with schema (returns DatabaseManager if available)"""
+    # Try to use DatabaseManager if available
+    try:
+        from database_manager import DatabaseManager
+        db = DatabaseManager(db_path)
+        db.connect()
+        db.create_tables()  # Use full schema
+        return db
+    except ImportError:
+        # Fallback to basic sqlite3 for simple tests
+        import sqlite3
+        conn = sqlite3.connect(db_path)
+        conn.row_factory = sqlite3.Row
+        
+        # Create minimal test schema
+        conn.executescript('''
+            CREATE TABLE IF NOT EXISTS people (
+                id INTEGER PRIMARY KEY,
+                row_id INTEGER,
+                name TEXT,
+                email TEXT,
+                type TEXT
+            );
+            
+            CREATE TABLE IF NOT EXISTS documents (
+                id INTEGER PRIMARY KEY,
+                person_id INTEGER,
+                url TEXT,
+                document_text TEXT,
+                document_type TEXT,
+                processed BOOLEAN DEFAULT 0,
+                extraction_date TEXT,
+                FOREIGN KEY (person_id) REFERENCES people(id)
+            );
+            
+            CREATE TABLE IF NOT EXISTS extracted_links (
+                id INTEGER PRIMARY KEY,
+                document_id INTEGER,
+                person_id INTEGER,
+                url TEXT,
+                link_type TEXT,
+                source TEXT,
+                FOREIGN KEY (document_id) REFERENCES documents(id),
+                FOREIGN KEY (person_id) REFERENCES people(id)
+            );
+        ''')
+        conn.commit()
+        return conn

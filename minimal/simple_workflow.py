@@ -4,30 +4,32 @@ SIMPLE 6-STEP WORKFLOW - MINIMAL IMPLEMENTATION
 Keep it simple. No over-engineering.
 """
 
-import requests
 import pandas as pd
-import re
 import argparse
 import sys
 import json
-import pickle
 from datetime import datetime
 from pathlib import Path
-from urllib.parse import urlparse
 import os
-import urllib.parse
 import time
-from bs4 import BeautifulSoup
-from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.common.by import By
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-
-from extraction_utils import download_google_sheet, scrape_document_content, extract_text_with_retry
+from extraction_utils import (
+    get_selenium_driver, cleanup_driver, extract_actual_url, clean_url,
+    download_google_sheet, extract_google_doc_content_and_links,
+    extract_people_from_sheet_html, extract_text_with_retry
+)
 
 # Graceful handling for database dependencies (DRY: unified approach)
+import sys
+import os
+
+# Import centralized configuration
+sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
+from utils.config import (
+    get_google_sheets_url, get_target_div_id, get_database_path, 
+    get_output_csv_path, get_batch_size, get_max_retries,
+    get_progress_file, get_failed_docs_file, StandardCLIArguments
+)
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from utils.config import bulk_safe_import
 
 try:
@@ -90,148 +92,106 @@ class Config:
     PROGRESS_FILE = "extraction_progress.json"
     FAILED_DOCS_FILE = "failed_extractions.json"
 
-# Global selenium driver
-_driver = None
 
-# Progress tracking functions
-def load_progress():
-    """Load extraction progress from file"""
-    if os.path.exists(Config.PROGRESS_FILE):
-        with open(Config.PROGRESS_FILE, 'r') as f:
-            return json.load(f)
-    return {"completed": [], "failed": [], "last_batch": 0, "total_processed": 0}
-
-def save_progress(progress):
-    """Save extraction progress to file"""
-    with open(Config.PROGRESS_FILE, 'w') as f:
-        json.dump(progress, f, indent=2)
-
-def load_failed_docs():
-    """Load failed document extraction list"""
-    if os.path.exists(Config.FAILED_DOCS_FILE):
-        with open(Config.FAILED_DOCS_FILE, 'r') as f:
-            return json.load(f)
-    return []
-
-def save_failed_docs(failed_list):
-    """Save failed document extraction list"""
-    with open(Config.FAILED_DOCS_FILE, 'w') as f:
-        json.dump(failed_list, f, indent=2)
-
-def get_selenium_driver():
-    """Initialize and return a Selenium WebDriver instance"""
-    global _driver
-    if _driver is None:
-        print("Initializing Selenium Chrome driver...")
-        chrome_options = Options()
-        chrome_options.add_argument("--headless")  # Run in headless mode
-        chrome_options.add_argument("--disable-gpu")
-        chrome_options.add_argument("--window-size=1920,1080")
-        chrome_options.add_argument("--disable-dev-shm-usage")
-        chrome_options.add_argument("--no-sandbox")
-        
-        try:
-            _driver = webdriver.Chrome(options=chrome_options)
-        except Exception as e:
-            print(f"Could not initialize Selenium driver: {str(e)}")
-            return None
+# Enhanced progress tracking functions
+class ProgressTracker:
+    """Centralized progress tracking for all modes"""
+    def __init__(self, progress_file=None, failed_file=None):
+        self.progress_file = progress_file or Config.PROGRESS_FILE
+        self.failed_file = failed_file or Config.FAILED_DOCS_FILE
+        self.progress = self.load_progress()
+        self.failed_docs = self.load_failed_docs()
+        self.start_time = datetime.now()
     
-    return _driver
-
-def cleanup_driver():
-    """Clean up the Selenium driver"""
-    global _driver
-    if _driver is not None:
-        try:
-            _driver.quit()
-            _driver = None
-            print("Selenium driver cleaned up")
-        except Exception as e:
-            print(f"Error cleaning up Selenium driver: {e}")
-
-def extract_google_doc_text(url):
-    """Extract text content from a Google Doc using Selenium"""
-    driver = get_selenium_driver()
-    if not driver:
-        print("Failed to initialize Selenium driver")
-        return ""
+    def load_progress(self):
+        """Load extraction progress from file"""
+        if os.path.exists(self.progress_file):
+            try:
+                with open(self.progress_file, 'r') as f:
+                    return json.load(f)
+            except:
+                pass
+        return {
+            "completed": [],
+            "failed": [],
+            "last_batch": 0,
+            "total_processed": 0,
+            "mode": None,
+            "last_run": None
+        }
     
-    try:
-        print(f"Loading Google Doc with Selenium: {url}")
-        driver.get(url)
+    def save_progress(self):
+        """Save extraction progress to file"""
+        self.progress["last_run"] = datetime.now().isoformat()
+        with open(self.progress_file, 'w') as f:
+            json.dump(self.progress, f, indent=2)
+    
+    def load_failed_docs(self):
+        """Load failed document extraction list"""
+        if os.path.exists(self.failed_file):
+            try:
+                with open(self.failed_file, 'r') as f:
+                    return json.load(f)
+            except:
+                pass
+        return []
+    
+    def save_failed_docs(self):
+        """Save failed document extraction list"""
+        with open(self.failed_file, 'w') as f:
+            json.dump(self.failed_docs, f, indent=2)
+    
+    def mark_completed(self, doc_url):
+        """Mark a document as completed"""
+        if doc_url not in self.progress["completed"]:
+            self.progress["completed"].append(doc_url)
+        if doc_url in self.progress["failed"]:
+            self.progress["failed"].remove(doc_url)
+        self.progress["total_processed"] += 1
+    
+    def mark_failed(self, doc_url, error=None):
+        """Mark a document as failed"""
+        if doc_url not in self.progress["failed"]:
+            self.progress["failed"].append(doc_url)
+        if doc_url not in self.failed_docs:
+            self.failed_docs.append(doc_url)
+        self.progress["total_processed"] += 1
+    
+    def should_process(self, doc_url, skip_processed=True):
+        """Check if a document should be processed"""
+        if not skip_processed:
+            return True
+        return doc_url not in self.progress["completed"]
+    
+    def get_stats(self):
+        """Get current progress statistics"""
+        elapsed = (datetime.now() - self.start_time).total_seconds()
+        rate = self.progress["total_processed"] / elapsed if elapsed > 0 else 0
         
-        # Wait for page to load
-        WebDriverWait(driver, 30).until(
-            EC.presence_of_element_located((By.TAG_NAME, "body"))
-        )
+        return {
+            "completed": len(self.progress["completed"]),
+            "failed": len(self.progress["failed"]),
+            "total": self.progress["total_processed"],
+            "elapsed_seconds": elapsed,
+            "rate_per_minute": rate * 60
+        }
+    
+    def display_progress(self, current, total, message=""):
+        """Display progress bar and statistics"""
+        percentage = (current / total * 100) if total > 0 else 0
+        bar_length = 40
+        filled_length = int(bar_length * current // total) if total > 0 else 0
+        bar = '█' * filled_length + '░' * (bar_length - filled_length)
         
-        # Extra wait for Google Docs to render
-        time.sleep(3)
+        stats = self.get_stats()
+        eta = ((total - current) / stats["rate_per_minute"] if stats["rate_per_minute"] > 0 else 0)
         
-        # Scroll to ensure all content is loaded
-        height = driver.execute_script("return document.body.scrollHeight")
-        for i in range(0, height, 300):
-            driver.execute_script(f"window.scrollTo(0, {i});")
-            time.sleep(0.1)
-        
-        # Scroll back to top
-        driver.execute_script("window.scrollTo(0, 0);")
-        time.sleep(1)
-        
-        # Get the page source and extract text
-        html = driver.page_source
-        soup = BeautifulSoup(html, 'html.parser')
-        
-        # Extract text from the document content
-        # Google Docs puts content in divs with specific classes
-        text_content = ""
-        
-        # Try different selectors for Google Docs content
-        content_selectors = [
-            '.kix-pagesettings-protected-text',
-            '.kix-page',
-            '.doc-content',
-            '.google-docs-content'
-        ]
-        
-        for selector in content_selectors:
-            elements = soup.select(selector)
-            if elements:
-                for element in elements:
-                    text_content += element.get_text(separator=' ', strip=True) + " "
-                break
-        
-        # Fallback: extract all text from body
-        if not text_content.strip():
-            body = soup.find('body')
-            if body:
-                text_content = body.get_text(separator=' ', strip=True)
-        
-        # Clean up the text
-        text_content = re.sub(r'\s+', ' ', text_content).strip()
-        
-        print(f"✓ Extracted {len(text_content)} characters of text")
-        return text_content
-        
-    except Exception as e:
-        print(f"✗ Error extracting text from {url}: {e}")
-        return ""
+        print(f"\r[{bar}] {percentage:.1f}% ({current}/{total}) {message}", end="")
+        if current == total:
+            print()  # New line at completion
 
-def extract_actual_url(google_url):
-    """Extract the actual URL from a Google redirect URL"""
-    if not google_url.startswith("https://www.google.com/url?q="):
-        return google_url
-    
-    # Extract the 'q' parameter which contains the actual URL
-    start_idx = google_url.find("q=") + 2
-    end_idx = google_url.find("&", start_idx)
-    if end_idx == -1:
-        actual_url = google_url[start_idx:]
-    else:
-        actual_url = google_url[start_idx:end_idx]
-    
-    # URL decode
-    return urllib.parse.unquote(actual_url)
+
+
 
 
 def filter_people_by_row_range(people_data):
@@ -259,253 +219,32 @@ def filter_people_by_row_range(people_data):
     
     return filtered_people
 
-def step2_extract_people_and_docs(html_content):
-    """Step 2: Extract people data and Google Doc links from the sheet"""
+def extract_and_filter_people(html_content):
+    """Extract people data and filter those with documents"""
     print("Step 2: Extracting people data and Google Doc links...")
     
-    soup = BeautifulSoup(html_content, "html.parser")
-    
-    # Look for the specific div with target ID
-    target_div = soup.find("div", {"id": Config.TARGET_DIV_ID})
-    if target_div:
-        table = target_div.find("table")
-    else:
-        # Fallback to any table
-        table = soup.find("table", {"class": "waffle"})
-        if not table:
-            tables = soup.find_all("table")
-            table = tables[0] if tables else None
-    
-    people_data = []
-    if table:
-        rows = table.find_all("tr")
-        print(f"Found {len(rows)} rows in the table")
-        
-        # Process rows starting from row 1 (skip header)
-        for row_index in range(1, len(rows)):
-            row = rows[row_index]
-            cells = row.find_all("td")
-            
-            # Need at least 5 cells (row_id, name, email, type)
-            if len(cells) < 5:
-                continue
-            
-            # Extract data using the correct column indices from the working code
-            row_id = cells[0].get_text(strip=True)
-            name = cells[2].get_text(strip=True)  # Name in column 2
-            email = cells[3].get_text(strip=True)  # Email in column 3  
-            type_val = cells[4].get_text(strip=True)  # Type in column 4
-            
-            # Skip header rows and invalid data
-            if not name or name.lower() == "name" or row_id == "#" or "name" in name.lower() and "email" in email.lower():
-                continue
-            
-            # Skip any row that looks like a header (contains "Name", "Email", "Type" pattern)
-            if any(["Name" in str(cell.get_text(strip=True)) and "Email" in str(cells[3].get_text(strip=True)) and "Type" in str(cells[4].get_text(strip=True)) for cell in cells]):
-                continue
-            
-            # Look for Google Doc link in the name cell
-            doc_link = None
-            name_cell = cells[2]
-            a_tags = name_cell.find_all("a")
-            if a_tags:
-                a_tag = a_tags[0]
-                if a_tag.has_attr("href"):
-                    href = a_tag["href"]
-                    if href.startswith("https://www.google.com/url?q="):
-                        doc_link = extract_actual_url(href)
-            
-            people_data.append({
-                "row_id": row_id,
-                "name": name,
-                "email": email,
-                "type": type_val,
-                "doc_link": doc_link if doc_link else ""
-            })
-    
+    # Use DRY: extraction_utils function
+    people_data = extract_people_from_sheet_html(html_content)
     print(f"✓ Found {len(people_data)} people records")
     
     # Filter to only those with Google Doc links
-    people_with_docs = [person for person in people_data if person["doc_link"]]
+    people_with_docs = [person for person in people_data if person.get("doc_link")]
     print(f"✓ Found {len(people_with_docs)} people with Google Doc links")
     
     return people_data, people_with_docs
 
 
-def clean_url(url):
-    """Clean up a URL by removing trailing junk and escape sequences"""
-    if not url:
-        return url
-    
-    # Decode unicode escapes
-    try:
-        if '\\u' in url:
-            url = url.encode('utf-8').decode('unicode_escape')
-    except:
-        pass
-    
-    # Remove common escape sequences
-    url = url.replace('\\n', '').replace('\\r', '').replace('\\t', '')
-    
-    # Remove trailing punctuation that's not part of a URL
-    url = re.sub(r'[.,;:!?\)\]\}"\'>]+$', '', url)
-    
-    # Clean YouTube URLs
-    if 'youtube.com' in url or 'youtu.be' in url:
-        # For youtu.be links
-        match = re.search(r'youtu\.be/([a-zA-Z0-9_-]{11})', url)
-        if match:
-            return f'https://youtu.be/{match.group(1)}'
-        
-        # For youtube.com watch links
-        match = re.search(r'youtube\.com/watch\?v=([a-zA-Z0-9_-]{11})', url)
-        if match:
-            video_id = match.group(1)
-            # Check for additional parameters
-            list_match = re.search(r'[&?]list=([a-zA-Z0-9_-]+)', url)
-            if list_match:
-                return f'https://www.youtube.com/watch?v={video_id}&list={list_match.group(1)}'
-            return f'https://www.youtube.com/watch?v={video_id}'
-        
-        # For playlist links
-        match = re.search(r'youtube\.com/playlist\?list=([a-zA-Z0-9_-]+)', url)
-        if match:
-            return f'https://www.youtube.com/playlist?list={match.group(1)}'
-    
-    # Clean Google Drive URLs
-    if 'drive.google.com' in url:
-        # File links
-        match = re.search(r'drive\.google\.com/file/d/([a-zA-Z0-9_-]+)', url)
-        if match:
-            return f'https://drive.google.com/file/d/{match.group(1)}/view'
-        
-        # Folder links
-        match = re.search(r'drive\.google\.com/drive/folders/([a-zA-Z0-9_-]+)', url)
-        if match:
-            return f'https://drive.google.com/drive/folders/{match.group(1)}'
-    
-    return url.strip()
 
-def step4_extract_links(doc_content, doc_text=""):
-    """Step 4: Extract links from scraped content and document text"""
-    print("Step 4: Extracting links from doc content...")
-    
-    # Combine HTML content and plain text for comprehensive link extraction
-    combined_content = doc_content + " " + doc_text
-    
-    links = {
-        'youtube': [],
-        'drive_files': [],
-        'drive_folders': [],
-        'all_links': []
-    }
-    
-    # Enhanced YouTube patterns
-    youtube_patterns = [
-        r'https?://(?:www\.)?youtube\.com/watch\?v=([a-zA-Z0-9_-]{11})[^\s<>"]*',
-        r'https?://youtu\.be/([a-zA-Z0-9_-]{11})[^\s<>"]*',
-        r'https?://(?:www\.)?youtube\.com/playlist\?list=([a-zA-Z0-9_-]+)[^\s<>"]*'
-    ]
-    
-    for pattern in youtube_patterns:
-        matches = re.findall(pattern, combined_content, re.IGNORECASE)
-        for match in matches:
-            if 'playlist' in pattern:
-                clean_link = f'https://www.youtube.com/playlist?list={match}'
-            else:
-                clean_link = f'https://www.youtube.com/watch?v={match}'
-            
-            if clean_link not in links['youtube']:
-                links['youtube'].append(clean_link)
-    
-    # Enhanced Google Drive patterns
-    drive_patterns = [
-        r'https://drive\.google\.com/file/d/([a-zA-Z0-9_-]+)[^\s<>"]*',
-        r'https://drive\.google\.com/open\?id=([a-zA-Z0-9_-]+)[^\s<>"]*',
-        r'https://drive\.google\.com/drive/folders/([a-zA-Z0-9_-]+)[^\s<>"]*'
-    ]
-    
-    for pattern in drive_patterns:
-        matches = re.findall(pattern, combined_content, re.IGNORECASE)
-        for match in matches:
-            if 'folders' in pattern:
-                clean_link = f'https://drive.google.com/drive/folders/{match}'
-                if clean_link not in links['drive_folders']:
-                    links['drive_folders'].append(clean_link)
-            else:
-                clean_link = f'https://drive.google.com/file/d/{match}/view'
-                if clean_link not in links['drive_files']:
-                    links['drive_files'].append(clean_link)
-    
-    # Extract all HTTP(S) links for comprehensive coverage
-    all_link_pattern = r'https?://[^\s<>"{}\\|\^\[\]`]+[^\s<>"{}\\|\^\[\]`.,;:!?\)\]]'
-    all_found_links = re.findall(all_link_pattern, combined_content, re.IGNORECASE)
-    
-    # Clean and categorize all links
-    for link in all_found_links:
-        clean_link = clean_url(link)
-        if clean_link and clean_link not in links['all_links']:
-            links['all_links'].append(clean_link)
-            
-            # Additional categorization for missed links
-            if ('youtube.com' in clean_link or 'youtu.be' in clean_link) and clean_link not in links['youtube']:
-                links['youtube'].append(clean_link)
-            elif 'drive.google.com/file' in clean_link and clean_link not in links['drive_files']:
-                links['drive_files'].append(clean_link)
-            elif 'drive.google.com/drive/folders' in clean_link and clean_link not in links['drive_folders']:
-                links['drive_folders'].append(clean_link)
-    
-    # Remove duplicates
-    links['youtube'] = list(set(links['youtube']))
-    links['drive_files'] = list(set(links['drive_files']))
-    links['drive_folders'] = list(set(links['drive_folders']))
-    links['all_links'] = list(set(links['all_links']))
-    
-    total_links = len(links['youtube']) + len(links['drive_files']) + len(links['drive_folders'])
-    print(f"✓ Found {total_links} targeted links (YT: {len(links['youtube'])}, Files: {len(links['drive_files'])}, Folders: {len(links['drive_folders'])})")
-    print(f"✓ Found {len(links['all_links'])} total links")
-    
-    return links
 
-def step5_process_extracted_data(person, links, doc_text=""):
-    """Step 5: Process extracted data and format for CSV matching main system"""
-    print("Step 5: Processing extracted data...")
+def create_full_record(person, links, doc_text=""):
+    """Create a full record with all extracted data for CSV"""
+    # Categorize YouTube links
+    youtube_playlists = [link for link in links.get('youtube', []) if 'playlist' in link]
+    youtube_videos = [link for link in links.get('youtube', []) if 'watch' in link or 'youtu.be' in link]
+    all_youtube = list(set(youtube_playlists + youtube_videos))
     
-    # Create output directory
-    Config.OUTPUT_DIR.mkdir(exist_ok=True)
-    
-    # Filter links to get only meaningful content links, not infrastructure
-    meaningful_youtube = []
-    meaningful_drive_files = []
-    meaningful_drive_folders = []
-    
-    # Filter YouTube links - only keep actual video/playlist content
-    for link in links['youtube']:
-        if any([
-            '/watch?v=' in link and len(re.findall(r'v=([a-zA-Z0-9_-]{11})', link)) > 0,
-            '/playlist?list=' in link,
-            'youtu.be/' in link and len(link.split('/')[-1]) == 11
-        ]):
-            # Clean the link to get just the essential content
-            if '/watch?v=' in link:
-                match = re.search(r'v=([a-zA-Z0-9_-]{11})', link)
-                if match:
-                    meaningful_youtube.append(f"https://www.youtube.com/watch?v={match.group(1)}")
-            elif '/playlist?list=' in link:
-                match = re.search(r'list=([a-zA-Z0-9_-]+)', link)
-                if match:
-                    meaningful_youtube.append(f"https://www.youtube.com/playlist?list={match.group(1)}")
-            elif 'youtu.be/' in link:
-                video_id = link.split('/')[-1]
-                if len(video_id) == 11:
-                    meaningful_youtube.append(f"https://www.youtube.com/watch?v={video_id}")
-    
-    # Keep all Drive links as they're likely meaningful
-    meaningful_drive_files = links['drive_files']
-    meaningful_drive_folders = links['drive_folders']
-    
-    # Remove duplicates
-    meaningful_youtube = list(set(meaningful_youtube))
+    # Combine Drive links
+    all_drive = links.get('drive_files', []) + links.get('drive_folders', [])
     
     # Create record matching the main system's CSV structure
     record = {
@@ -514,11 +253,11 @@ def step5_process_extracted_data(person, links, doc_text=""):
         'email': person['email'],
         'type': person['type'],
         'link': person.get('doc_link', ''),
-        'extracted_links': '|'.join(links['all_links']) if links['all_links'] else '',
-        'youtube_playlist': '|'.join(meaningful_youtube) if meaningful_youtube else '',
-        'google_drive': '|'.join(meaningful_drive_files + meaningful_drive_folders) if (meaningful_drive_files or meaningful_drive_folders) else '',
+        'extracted_links': '|'.join(links.get('all_links', [])),
+        'youtube_playlist': '|'.join(all_youtube),
+        'google_drive': '|'.join(all_drive),
         'processed': 'yes',
-        'document_text': doc_text,
+        'document_text': doc_text[:10000],  # Limit text length
         'youtube_status': '',
         'youtube_files': '',
         'youtube_media_id': '',
@@ -530,55 +269,106 @@ def step5_process_extracted_data(person, links, doc_text=""):
         'permanent_failure': ''
     }
     
-    print(f"✓ Processed record for {person['name']}")
-    print(f"  Meaningful YouTube links: {len(meaningful_youtube)}")
-    print(f"  Drive Files: {len(meaningful_drive_files)}")
-    print(f"  Drive Folders: {len(meaningful_drive_folders)}")
-    print(f"  Total links extracted: {len(links['all_links'])}")
-    
     return record
 
-def create_basic_record(person):
-    """Create a basic record with just the 5 core columns"""
-    return {
+def create_record(person, mode="basic", doc_text="", links=None):
+    """Create a record based on mode (DRY principle)"""
+    # Base record - always included
+    record = {
         'row_id': person.get('row_id', ''),
         'name': person['name'],
         'email': person['email'],
         'type': person['type'],
         'link': person.get('doc_link', '')
     }
-
-def create_text_record(person, doc_text=""):
-    """Create a record with basic columns + document_text"""
-    return {
-        'row_id': person.get('row_id', ''),
-        'name': person['name'],
-        'email': person['email'],
-        'type': person['type'],
-        'link': person.get('doc_link', ''),
-        'document_text': doc_text,
-        'processed': 'yes',
-        'extraction_date': datetime.now().isoformat()
-    }
+    
+    # Add fields based on mode
+    if mode == "text":
+        record.update({
+            'document_text': doc_text,
+            'processed': 'yes' if doc_text and not doc_text.startswith('[') else 'no',
+            'extraction_date': datetime.now().isoformat()
+        })
+    elif mode == "full":
+        # Full mode with all fields
+        if links:
+            record = create_full_record(person, links, doc_text)
+        else:
+            # No links - create empty full record
+            record.update({
+                'extracted_links': '',
+                'youtube_playlist': '',
+                'google_drive': '',
+                'processed': 'yes',
+                'document_text': doc_text[:10000],
+                'youtube_status': '',
+                'youtube_files': '',
+                'youtube_media_id': '',
+                'drive_status': '',
+                'drive_files': '',
+                'drive_media_id': '',
+                'last_download_attempt': '',
+                'download_errors': '',
+                'permanent_failure': ''
+            })
+    
+    return record
 
 
 def step6_map_data(processed_records):
-    """Step 6: Map data to CSV matching main system structure"""
-    print("Step 6: Mapping data to CSV format...")
+    """Step 6: Map data to CSV and/or database based on configuration"""
+    print("Step 6: Mapping data for output...")
     
     # Create DataFrame with proper column order matching main system
     df = pd.DataFrame(processed_records)
     
-    # Handle different column sets based on processing mode
-    if Config.BASIC_ONLY:
-        # Basic mode: only 5 columns
-        required_columns = ['row_id', 'name', 'email', 'type', 'link']
-    elif Config.TEXT_ONLY:
-        # Text mode: basic columns + document text + processing info
-        required_columns = ['row_id', 'name', 'email', 'type', 'link', 'document_text', 'processed', 'extraction_date']
-    else:
-        # Full mode: all columns matching main system
-        required_columns = [
+    # DRY: Handle database output if enabled
+    if Config.USE_DATABASE and DATABASE_AVAILABLE:
+        print("  → Saving to database...")
+        db_manager = DatabaseManager(Config.DATABASE_PATH)
+        db_manager.connect()
+        
+        # Use database-specific processing for the records
+        if Config.OUTPUT_FORMAT in ["db", "both"]:
+            try:
+                # Process records through database
+                for record in processed_records:
+                    # Insert person if not exists
+                    person = Person(
+                        row_id=record.get('row_id', ''),
+                        name=record.get('name', ''),
+                        email=record.get('email', ''),
+                        type=record.get('type', '')
+                    )
+                    db_manager.insert_person(person)
+                
+                print(f"  ✓ Database saved: {len(processed_records)} records")
+                
+                # Export to CSV if requested
+                if Config.OUTPUT_FORMAT == "both":
+                    mode = "basic" if Config.BASIC_ONLY else "full"
+                    export_database_to_csv(db_manager, mode)
+                    
+            except Exception as e:
+                print(f"  ✗ Database error: {e}")
+                print("  → Falling back to CSV only")
+            finally:
+                db_manager.disconnect()
+    
+    # Always handle CSV output (either primary or fallback)  
+    if not Config.USE_DATABASE or Config.OUTPUT_FORMAT in ["csv", "both"]:
+        print("  → Saving to CSV...")
+        
+        # Handle different column sets based on processing mode
+        if Config.BASIC_ONLY:
+            # Basic mode: only 5 columns
+            required_columns = ['row_id', 'name', 'email', 'type', 'link']
+        elif Config.TEXT_ONLY:
+            # Text mode: basic columns + document text + processing info
+            required_columns = ['row_id', 'name', 'email', 'type', 'link', 'document_text', 'processed', 'extraction_date']
+        else:
+            # Full mode: all columns matching main system
+            required_columns = [
             'row_id', 'name', 'email', 'type', 'link', 'extracted_links', 
             'youtube_playlist', 'google_drive', 'processed', 'document_text',
             'youtube_status', 'youtube_files', 'youtube_media_id',
@@ -624,7 +414,7 @@ def step6_map_data(processed_records):
     return df
 
 def parse_arguments():
-    """Parse command line arguments"""
+    """Parse command line arguments using StandardCLIArguments (DRY)"""
     parser = argparse.ArgumentParser(description='Simple 6-Step Workflow - Unified Processing')
     
     # Processing mode options (mutually exclusive)
@@ -633,47 +423,227 @@ def parse_arguments():
                            help='Extract only basic columns (row_id, name, email, type, link)')
     mode_group.add_argument('--text', action='store_true',
                            help='Extract basic columns + document text (batch processing)')
+    mode_group.add_argument('--test', action='store_true',
+                           help='Run validation tests on extraction system')
+    mode_group.add_argument('--validate', action='store_true',
+                           help='Validate extraction against known test cases')
     
-    # Processing options
+    # Use StandardCLIArguments for common patterns
+    StandardCLIArguments.add_processing_arguments(parser, 
+                                                include_max_rows=True,
+                                                include_batch_size=True,
+                                                include_reset=True,
+                                                include_dry_run=False)
+    
+    StandardCLIArguments.add_file_arguments(parser,
+                                          include_csv=False,  # We use --output instead
+                                          include_output=True,
+                                          include_directory=False)
+    
+    # Additional processing options not covered by standard arguments
     parser.add_argument('--test-limit', type=int, metavar='N',
                        help='Limit processing to N records for testing')
-    parser.add_argument('--batch-size', type=int, metavar='N', default=10,
-                       help='Process N documents per batch (default: 10)')
     parser.add_argument('--resume', action='store_true',
                        help='Resume from previous extraction progress')
     parser.add_argument("--retry-failed", action="store_true",
                        help="Retry previously failed extractions")
-    parser.add_argument("--output", type=str, metavar="FILE",
-                       help="Override output CSV filename")
     
-    # Database options (DRY: added from simple_workflow_db.py)
-    parser.add_argument("--db", action="store_true", default=False,
-                       help="Use database mode")
-    parser.add_argument("--no-db", dest="db", action="store_false",
-                       help="Disable database, use CSV only")
-    parser.add_argument("--db-path", type=str, default="xenodx.db",
-                       help="Database file path (default: xenodx.db)")
+    # Database options (workflow specific)
+    db_group = parser.add_argument_group('database options')
+    db_group.add_argument("--db", action="store_true", default=False,
+                         help="Use database mode")
+    db_group.add_argument("--no-db", dest="db", action="store_false",
+                         help="Disable database, use CSV only")
+    db_group.add_argument("--db-path", type=str, default=get_database_path(),
+                         help=f"Database file path (default: {get_database_path()})")
     
-    # Output options (DRY: added from simple_workflow_db.py)
-    parser.add_argument("--output-format", choices=["csv", "db", "both"],
-                       default="csv", help="Output format (default: csv)")
-    parser.add_argument("--skip-processed", action="store_true", default=True,
-                       help="Skip already processed documents (default)")
-    parser.add_argument("--reprocess-all", dest="skip_processed", action="store_false",
-                       help="Reprocess all documents")
+    # Output options (workflow specific)
+    output_group = parser.add_argument_group('output options')
+    output_group.add_argument("--output-format", choices=["csv", "db", "both"],
+                            default="csv", help="Output format (default: csv)")
+    output_group.add_argument("--skip-processed", action="store_true", default=True,
+                            help="Skip already processed documents (default)")
+    output_group.add_argument("--reprocess-all", dest="skip_processed", action="store_false",
+                            help="Reprocess all documents")
     
     # Row range options
-    parser.add_argument("--start-row", type=int, metavar="N",
-                       help="Start processing from row N (inclusive)")
-    parser.add_argument("--end-row", type=int, metavar="N",
-                       help="End processing at row N (inclusive)")
+    range_group = parser.add_argument_group('row range options')
+    range_group.add_argument("--start-row", type=int, metavar="N",
+                           help="Start processing from row N (inclusive)")
+    range_group.add_argument("--end-row", type=int, metavar="N",
+                           help="End processing at row N (inclusive)")
+    range_group.add_argument("--find-person", type=str, metavar="NAME",
+                           help="Find and process specific person by name")
     
     return parser.parse_args()
 
+# DRY: Database-specific functions absorbed from simple_workflow_db.py
+def process_people_database_mode(html_content, db_manager):
+    """Database-specific people processing with transactions"""
+    people_data = extract_people_from_sheet_html(html_content, Config.TARGET_DIV_ID)
+    
+    with db_manager:
+        for person in people_data:
+            person_obj = Person(
+                row_id=person['row_id'],
+                name=person['name'],
+                email=person['email'],
+                type=person['type'],
+                doc_link=person.get('doc_link', '')
+            )
+            db_manager.insert_person(person_obj)
+            db_manager.log_processing(person_obj.id, "person_imported", "completed")
+    
+    return people_data
+
+def process_documents_database_batch(db_manager, docs_to_process, mode="full"):
+    """Database batch processing with transaction safety"""
+    with db_manager:
+        for person in docs_to_process:
+            try:
+                # Extract document content
+                doc_text, error = extract_text_with_retry(person["doc_link"], Config.RETRY_ATTEMPTS)
+                
+                # Create document record
+                document = Document(
+                    person_id=person['row_id'],
+                    url=person['doc_link'],
+                    document_text=doc_text if not error else f"EXTRACTION_FAILED: {error}",
+                    processed=not bool(error),
+                    extraction_date=datetime.now().isoformat()
+                )
+                doc_id = db_manager.insert_document(document)
+                
+                # Extract and insert links if successful
+                if not error and mode == "full":
+                    doc_content, _ = scrape_document_content(person['doc_link'])
+                    links = extract_links_from_content(doc_content, doc_text)
+                    db_manager.insert_links_batch(doc_id, links)
+                
+                db_manager.log_processing(person['row_id'], "document_processed", "completed")
+                
+            except Exception as e:
+                db_manager.log_processing(person['row_id'], "document_processed", "failed", str(e))
+                db_manager.rollback()
+
+def export_database_to_csv(db_manager, mode="full", output_file=None):
+    """Export database data to CSV format"""
+    data = db_manager.export_to_dataframe(mode)
+    
+    if not output_file:
+        output_file = Config.OUTPUT_CSV_BASIC if mode == "basic" else Config.OUTPUT_CSV_FULL
+    
+    df = pd.DataFrame(data)
+    df.to_csv(output_file, index=False)
+    
+    print(f"✓ Database exported to {output_file}")
+    print(f"  Total records: {len(df)}")
+    
+    return df
+
+def run_validation_tests():
+    """Run comprehensive validation tests"""
+    print("🧪 RUNNING VALIDATION TESTS")
+    print("=" * 80)
+    
+    # Test key people from user's verification data
+    test_cases = [
+        ("James Kirton", "YouTube playlists"),
+        ("John Williams", "Multiple videos"),
+        ("Olivia Tomlinson", "7 videos"),
+        ("Carlos Arthur", "YouTube video")
+    ]
+    
+    # Download sheet and extract people
+    html_content = download_google_sheet(Config.GOOGLE_SHEET_URL)
+    people_data = extract_people_from_sheet_html(html_content)
+    
+    results = []
+    for name, expected in test_cases:
+        print(f"\nTesting: {name} (expected: {expected})")
+        
+        # Find person
+        person = None
+        for p in people_data:
+            if name.lower() in p['name'].lower():
+                person = p
+                break
+        
+        if not person:
+            print(f"  ❌ Person not found")
+            results.append(False)
+            continue
+            
+        print(f"  ✓ Found: {person['name']} at Row {person['row_id']}")
+        
+        if not person.get('doc_link'):
+            print(f"  ⚠️  No document link")
+            results.append(None)
+            continue
+            
+        try:
+            # Extract content
+            doc_text, _, links = extract_google_doc_content_and_links(person['doc_link'])
+            
+            if doc_text == "[AUTHENTICATION_REQUIRED]":
+                print(f"  ⚠️  Authentication required")
+                results.append(None)
+            else:
+                youtube_count = len(links.get('youtube', []))
+                playlist_count = sum(1 for link in links.get('youtube', []) if 'playlist' in link)
+                
+                print(f"  ✓ Extracted: {len(doc_text)} chars, {youtube_count} YouTube links ({playlist_count} playlists)")
+                
+                # Basic validation
+                if "playlist" in expected and playlist_count > 0:
+                    results.append(True)
+                elif "video" in expected and youtube_count > 0:
+                    results.append(True)
+                else:
+                    results.append(False)
+                    
+        except Exception as e:
+            print(f"  ❌ Error: {e}")
+            results.append(False)
+    
+    # Summary
+    passed = sum(1 for r in results if r is True)
+    total = len([r for r in results if r is not None])
+    
+    print(f"\n📊 VALIDATION SUMMARY: {passed}/{total} tests passed")
+    return passed == total
+
+def find_person_by_name(people_data, search_name):
+    """Find person by name (case insensitive partial match)"""
+    search_lower = search_name.lower()
+    matches = []
+    
+    for person in people_data:
+        if search_lower in person['name'].lower():
+            matches.append(person)
+    
+    return matches
+
 def main():
-    """Run the complete 6-step workflow"""
-    # Parse command line arguments
-    args = parse_arguments()
+    """Run the complete 6-step workflow with comprehensive error handling"""
+    try:
+        # Parse command line arguments
+        args = parse_arguments()
+    except Exception as e:
+        print(f"Error parsing arguments: {e}")
+        sys.exit(1)
+    
+    # Handle test mode
+    if args.test:
+        success = run_validation_tests()
+        cleanup_driver()
+        sys.exit(0 if success else 1)
+    
+    # Handle validation mode (same as test for now, can be extended)
+    if args.validate:
+        success = run_validation_tests()
+        cleanup_driver()
+        sys.exit(0 if success else 1)
     
     # Configure based on arguments
     Config.BASIC_ONLY = args.basic
@@ -726,11 +696,40 @@ def main():
     
     processed_records = []
     
-    # Step 1: Download sheet
-    html_content = download_google_sheet(Config.GOOGLE_SHEET_URL)
+    # Step 1: Download sheet with error handling
+    try:
+        html_content = download_google_sheet(Config.GOOGLE_SHEET_URL)
+    except Exception as e:
+        print(f"\n❌ ERROR: Failed to download Google Sheet: {e}")
+        sys.exit(1)
     
-    # Step 2: Extract people data and Google Doc links
-    all_people, people_with_docs = step2_extract_people_and_docs(html_content)
+    # Step 2: Extract people data with error handling
+    try:
+        all_people, people_with_docs = extract_and_filter_people(html_content)
+    except Exception as e:
+        print(f"\n❌ ERROR: Failed to extract people data: {e}")
+        sys.exit(1)
+    
+    # Handle find-person mode
+    if args.find_person:
+        matches = find_person_by_name(all_people, args.find_person)
+        if not matches:
+            print(f"No person found matching '{args.find_person}'")
+            sys.exit(1)
+        
+        print(f"Found {len(matches)} matches for '{args.find_person}':")
+        for person in matches:
+            print(f"  Row {person['row_id']}: {person['name']} ({person['email']})")
+            if person.get('doc_link'):
+                print(f"    Document: {person['doc_link'][:60]}...")
+        
+        # If single match, process just that person
+        if len(matches) == 1:
+            print(f"\nProcessing {matches[0]['name']}...")
+            Config.START_ROW = int(matches[0]['row_id'])
+            Config.END_ROW = int(matches[0]['row_id'])
+        else:
+            sys.exit(0)
     
     # Apply row range filtering if specified
     all_people = filter_people_by_row_range(all_people)
@@ -751,29 +750,32 @@ def main():
             if Config.TEST_LIMIT and i >= Config.TEST_LIMIT:
                 print(f"Test limit reached: {Config.TEST_LIMIT}")
                 break
-            record = create_basic_record(person)
+            record = create_record(person, mode="basic")
             processed_records.append(record)
         print(f"✓ Processed {len(processed_records)} records in basic mode")
     
     elif Config.TEXT_ONLY:
         print(f"\n🚀 TEXT EXTRACTION MODE: Processing {len(people_with_docs)} documents...")
         
-        # Load previous progress if resuming
-        progress = load_progress() if args.resume else {"completed": [], "failed": [], "last_batch": 0, "total_processed": 0}
-        failed_docs = load_failed_docs() if args.retry_failed else []
+        # Initialize progress tracker
+        tracker = ProgressTracker()
+        if not args.resume:
+            # Reset progress if not resuming
+            tracker.progress = {"completed": [], "failed": [], "last_batch": 0, "total_processed": 0, "mode": "text"}
+        tracker.progress["mode"] = "text"
         
         # Process all people first (add basic records for those without docs)
         for person in all_people:
             if not person.get('doc_link'):
-                record = create_text_record(person)
+                record = create_record(person, mode="text")
                 processed_records.append(record)
         
         # Determine which documents to process
-        if args.retry_failed and failed_docs:
-            docs_to_process = [person for person in people_with_docs if person['doc_link'] in failed_docs]
+        if args.retry_failed and tracker.failed_docs:
+            docs_to_process = [person for person in people_with_docs if person['doc_link'] in tracker.failed_docs]
             print(f"  Retrying {len(docs_to_process)} previously failed documents...")
         elif args.resume:
-            docs_to_process = [person for person in people_with_docs if person['doc_link'] not in progress['completed']]
+            docs_to_process = [person for person in people_with_docs if tracker.should_process(person['doc_link'])]
             print(f"  Resuming: {len(docs_to_process)} remaining documents...")
         else:
             docs_to_process = people_with_docs
@@ -785,8 +787,7 @@ def main():
             print(f"  Limited to {len(docs_to_process)} documents for testing")
         
         # Process documents in batches
-        current_failed = []
-        batch_start = progress.get('last_batch', 0) if args.resume else 0
+        batch_start = tracker.progress.get('last_batch', 0) if args.resume else 0
         
         for i in range(batch_start, len(docs_to_process), Config.BATCH_SIZE):
             batch = docs_to_process[i:i + Config.BATCH_SIZE]
@@ -801,30 +802,55 @@ def main():
                 print(f"\n[{doc_index}/{len(docs_to_process)}] Processing: {person['name']}")
                 print(f"  Document: {person['doc_link']}")
                 
-                # Extract text with retry logic
-                doc_text, error = extract_text_with_retry(person["doc_link"], Config.RETRY_ATTEMPTS, Config.DELAY_BETWEEN_DOCS)
-                
-                if error:
-                    print(f"  ✗ Failed: {error}")
-                    current_failed.append(person['doc_link'])
-                    progress['failed'].append(person['doc_link'])
-                    record = create_text_record(person, f"EXTRACTION_FAILED: {error}")
-                else:
-                    print(f"  ✓ Success: {len(doc_text)} characters extracted")
-                    progress['completed'].append(person['doc_link'])
-                    record = create_text_record(person, doc_text)
+                try:
+                    # DRY: Use enhanced extraction with retry capability
+                    attempts = 0
+                    max_attempts = Config.RETRY_ATTEMPTS
+                    doc_text = None
+                    
+                    while attempts < max_attempts:
+                        try:
+                            doc_text, _, _ = extract_google_doc_content_and_links(person["doc_link"])
+                            break  # Success, exit retry loop
+                        except Exception as e:
+                            attempts += 1
+                            if attempts < max_attempts:
+                                print(f"    Retry {attempts}/{max_attempts} after error: {e}")
+                                time.sleep(Config.DELAY_BETWEEN_DOCS * attempts)  # Exponential backoff
+                            else:
+                                raise e
+                    
+                    if doc_text == "[AUTHENTICATION_REQUIRED]":
+                        print(f"  ⚠️  Authentication required")
+                        tracker.mark_failed(person['doc_link'], "Authentication required")
+                        record = create_record(person, mode="text", doc_text=doc_text)
+                    elif not doc_text or doc_text.startswith("[ERROR"):
+                        print(f"  ✗ Failed: Extraction error")
+                        tracker.mark_failed(person['doc_link'], "Extraction error")
+                        record = create_record(person, mode="text", doc_text=f"[EXTRACTION_FAILED]")
+                    else:
+                        print(f"  ✓ Success: {len(doc_text)} characters extracted")
+                        tracker.mark_completed(person['doc_link'])
+                        record = create_record(person, mode="text", doc_text=doc_text)
+                        
+                except Exception as e:
+                    print(f"  ✗ Failed after {max_attempts} attempts: {e}")
+                    tracker.mark_failed(person['doc_link'], str(e))
+                    record = create_record(person, mode="text", doc_text=f"[EXTRACTION_FAILED] {str(e)}")
                 
                 processed_records.append(record)
-                progress['total_processed'] += 1
+                
+                # Display progress
+                tracker.display_progress(doc_index, len(docs_to_process), person['name'])
                 
                 # Add delay between documents
                 if j < len(batch) - 1:  # Don't delay after last document in batch
                     time.sleep(Config.DELAY_BETWEEN_DOCS)
             
             # Save progress after each batch
-            progress['last_batch'] = i + Config.BATCH_SIZE
-            save_progress(progress)
-            save_failed_docs(current_failed)
+            tracker.progress['last_batch'] = i + Config.BATCH_SIZE
+            tracker.save_progress()
+            tracker.save_failed_docs()
             
             print(f"\n✓ Batch {batch_num} complete")
             batch_records = processed_records[-len(batch):]
@@ -833,10 +859,14 @@ def main():
             print(f"  Successful: {successful_in_batch}")
             print(f"  Failed: {failed_in_batch}")
         
+        # Final statistics
+        stats = tracker.get_stats()
         print(f"\n🎉 TEXT EXTRACTION COMPLETE")
-        print(f"  Total processed: {progress['total_processed']}")
-        print(f"  Successful extractions: {len(progress['completed'])}")
-        print(f"  Failed extractions: {len(current_failed)}")
+        print(f"  Total processed: {stats['total']}")
+        print(f"  Successful extractions: {stats['completed']}")
+        print(f"  Failed extractions: {stats['failed']}")
+        print(f"  Time elapsed: {stats['elapsed_seconds']/60:.1f} minutes")
+        print(f"  Average rate: {stats['rate_per_minute']:.1f} docs/minute")
     
     else:
         print(f"\n🚀 FULL MODE: Processing {len(all_people)} people (with document processing)...")
@@ -850,49 +880,65 @@ def main():
             if person.get('row_id') in people_with_docs_dict and person.get('doc_link'):
                 print(f"  → Has document: {person['doc_link']}")
                 
-                # Step 3: Scrape doc content and text
-                doc_content, doc_text = scrape_document_content(person['doc_link'])
-                
-                # Step 4: Extract links from HTML content and document text
-                links = step4_extract_links(doc_content, doc_text)
-                
-                # Step 5: Process extracted data
-                record = step5_process_extracted_data(person, links, doc_text)
-                processed_records.append(record)
+                try:
+                    # DRY: Use enhanced extraction function that handles everything
+                    doc_text, html_content, links = extract_google_doc_content_and_links(person['doc_link'])
+                    
+                    # Handle authentication required
+                    if doc_text == "[AUTHENTICATION_REQUIRED]":
+                        print(f"  ⚠️  Authentication required")
+                        doc_text = "[AUTHENTICATION_REQUIRED]"
+                        links = {'youtube': [], 'drive_files': [], 'drive_folders': [], 'all_links': []}
+                    elif not doc_text:
+                        print(f"  ⚠️  No content extracted")
+                        doc_text = "[NO_CONTENT]"
+                        links = {'youtube': [], 'drive_files': [], 'drive_folders': [], 'all_links': []}
+                    else:
+                        print(f"  ✓ Extracted {len(doc_text)} characters")
+                        print(f"  ✓ Found {sum(len(v) for v in links.values() if isinstance(v, list))} links")
+                    
+                    # Create full record with all data
+                    record = create_record(person, mode="full", doc_text=doc_text, links=links)
+                    processed_records.append(record)
+                    
+                except Exception as e:
+                    print(f"  ✗ Error extracting document: {e}")
+                    # Create error record
+                    record = create_record(person, mode="full", 
+                                         doc_text=f"[EXTRACTION_ERROR] {str(e)}", 
+                                         links={'youtube': [], 'drive_files': [], 'drive_folders': [], 'all_links': []})
+                    processed_records.append(record)
             else:
                 print(f"  → No document")
-                # Create record for person without document
-                record = {
-                    'row_id': person.get('row_id', ''),
-                    'name': person['name'],
-                    'email': person['email'],
-                    'type': person['type'],
-                    'link': person.get('doc_link', ''),  # Include link even if empty
-                    'extracted_links': '',
-                    'youtube_playlist': '',
-                    'google_drive': '',
-                    'processed': 'yes',
-                    'document_text': '',
-                    'youtube_status': '',
-                    'youtube_files': '',
-                    'youtube_media_id': '',
-                    'drive_status': '',
-                    'drive_files': '',
-                    'drive_media_id': '',
-                    'last_download_attempt': '',
-                    'download_errors': '',
-                    'permanent_failure': ''
-                }
+                # Create empty full record for person without document
+                record = create_record(person, mode="full")
                 processed_records.append(record)
     
-    # Step 6: Map all data
-    if processed_records:
-        step6_map_data(processed_records)
-    else:
-        print("No records to map")
-    
-    # Cleanup Selenium driver
-    cleanup_driver()
+    # Step 6: Map all data with error handling
+    try:
+        if processed_records:
+            df = step6_map_data(processed_records)
+            
+            # Display extraction summary
+            if Config.TEXT_ONLY or not Config.BASIC_ONLY:
+                successful = len([r for r in processed_records if not any(err in r.get('document_text', '') for err in ['[AUTHENTICATION_REQUIRED]', '[EXTRACTION_FAILED]', '[ERROR'])])
+                failed = len(processed_records) - successful
+                print(f"\n📊 Extraction Summary:")
+                print(f"  Successful: {successful}")
+                print(f"  Failed: {failed}")
+                if failed > 0:
+                    print(f"  Success rate: {successful/len(processed_records)*100:.1f}%")
+        else:
+            print("No records to map")
+    except Exception as e:
+        print(f"\n❌ ERROR: Failed to save data: {e}")
+        sys.exit(1)
+    finally:
+        # Always cleanup Selenium driver
+        try:
+            cleanup_driver()
+        except:
+            pass
     
     print("\n" + "=" * 50)
     print("WORKFLOW COMPLETE")

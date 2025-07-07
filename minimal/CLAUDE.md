@@ -1,102 +1,88 @@
-# CORE WORKFLOW - DATABASE EDITION
+# CORE WORKFLOW - UNIFIED EDITION
 
 ## The Simple 6-Step Process:
 
-1. **Download a local copy** of the Google Sheet:
-   `https://docs.google.com/spreadsheets/u/1/d/e/2PACX-1vRqqjqoaj8sEZBfZRw0Og7g8ms_0yTL2MsegTubcjhhBnXr1s1jFBwIVAsbkyj1xD0TMj06LvGTQIHU/pubhtml?pli=1#`
-
+1. **Download a local copy** of the Google Sheet
 2. **Extract the Google Doc link** from the "name" column (if the link exists)
-
 3. **Scrape the contents** of that Google Doc (if we have access to it)
-
 4. **Extract links** from the scraped contents (if they exist)
-
 5. **Download the links** (YouTube videos, Drive folders, Drive files)
-
 6. **Correctly map** the downloaded content to the Name/Email/Type columns so that the data isn't lost
 
 ## CRITICAL PRINCIPLE:
-This is a SIMPLE workflow. We overcomplicated it. Strip everything down to JUST these core minimal parts. Add complexity back only as absolutely necessary.
+This is a SIMPLE workflow. Everything is consolidated into ONE script with multiple modes. No duplicate files, no temporary scripts, complete DRY implementation.
 
-## 🔥 NEW: DATABASE SUPPORT
-- **SQLite Database**: All data is stored in a normalized SQLite database (`xenodex.db`)
+## 🔥 UNIFIED ARCHITECTURE
+- **Single Script**: `simple_workflow.py` handles all modes
+- **SQLite Database**: Optional database mode for enhanced features
 - **Incremental Processing**: Skip already processed documents
-- **Progress Tracking**: Full audit trail in `processing_log` table  
-- **Retry Failed**: Easily retry documents that failed extraction
-- **Export Options**: Export to CSV, database, or both
-- **DRY Architecture**: Modular code with `DatabaseManager`, `extraction_utils`
+- **Progress Tracking**: Enhanced progress tracking with visual feedback
+- **Validation Built-in**: Integrated testing and validation
+- **Error Handling**: Comprehensive retry logic and graceful degradation
 
-## Usage Options:
-
-### 📁 Legacy CSV Script (simple_workflow.py)
-Original script - CSV-based processing, still available
-
-### 🔥 Database Script (simple_workflow_db.py) - RECOMMENDED
-New database-powered version with enhanced features
-
-## Database Script Usage:
+## Unified Script Usage:
 
 ### Basic Mode (Fast - Just 5 columns):
 ```bash
-python3 simple_workflow_db.py --basic
+python3 simple_workflow.py --basic
 ```
 Extracts: `row_id, name, email, type, link` for all 496 people (~2 seconds)
 
 ### Text Extraction Mode (Basic + Document Text):
 ```bash
-python3 simple_workflow_db.py --text
+python3 simple_workflow.py --text
 ```
 Extracts: `row_id, name, email, type, link, document_text, processed, extraction_date` with batch processing (~30-60 minutes)
 
-**Enhanced Database Features:**
-- **Incremental Processing**: Automatically skips already processed documents
-- **Transaction Safety**: All operations are atomic with proper rollback
-- **Retry Logic**: Built-in retry for failed extractions with progress tracking
-- **Audit Trail**: Complete processing history in `processing_log` table
-- **Export Flexibility**: Choose CSV, database, or both outputs
-
 ### Full Mode (Complete processing):
 ```bash
-python3 simple_workflow_db.py
+python3 simple_workflow.py
 ```
 Extracts all data with document processing and link extraction (~1+ hours)
 
-### Database-Specific Options:
+### Database Mode (Enhanced Features):
 ```bash
-# Use database (default)
-python3 simple_workflow_db.py --basic --db
+# Enable database mode with all features
+python3 simple_workflow.py --db --create-tables
 
-# CSV-only mode (disable database)
-python3 simple_workflow_db.py --basic --no-db
+# Database mode with custom path
+python3 simple_workflow.py --db --db-path my_data.db
 
-# Custom database file
-python3 simple_workflow_db.py --basic --db-path my_data.db
-
-# Output format options
-python3 simple_workflow_db.py --basic --output-format csv
-python3 simple_workflow_db.py --basic --output-format db  
-python3 simple_workflow_db.py --basic --output-format both
-
-# Skip already processed documents (default)
-python3 simple_workflow_db.py --text --skip-processed
+# Skip already processed documents
+python3 simple_workflow.py --text --skip-processed
 
 # Reprocess all documents
-python3 simple_workflow_db.py --text --reprocess-all
+python3 simple_workflow.py --text --reprocess-all
 
 # Retry previously failed extractions
-python3 simple_workflow_db.py --text --retry-failed
+python3 simple_workflow.py --text --retry-failed
 ```
 
-### Testing and Batch Options:
+### Testing and Validation:
+```bash
+# Run built-in validation tests
+python3 simple_workflow.py --test
+
+# Validate against known test cases
+python3 simple_workflow.py --validate
+
+# Find specific person by name
+python3 simple_workflow.py --find-person "James Kirton"
+
+# Process specific row range
+python3 simple_workflow.py --start-row 499 --end-row 499
+```
+
+### Batch and Testing Options:
 ```bash
 # Test with limited documents
-python3 simple_workflow_db.py --text --test-limit 5
+python3 simple_workflow.py --text --test-limit 5
 
 # Custom batch size
-python3 simple_workflow_db.py --text --batch-size 20
+python3 simple_workflow.py --text --batch-size 20
 
 # Custom output file
-python3 simple_workflow_db.py --text --output my_text_data.csv
+python3 simple_workflow.py --text --output my_text_data.csv
 ```
 
 ## Database Migration
@@ -118,9 +104,10 @@ python3 csv_to_sqlite_migration.py --database my_data.db --create-tables
 - **processing_log**: Complete audit trail
 
 ### 🏗️ Architecture (DRY Principles Applied):
+- **simple_workflow.py**: Single unified script with all modes
+- **extraction_utils.py**: Reusable extraction functions with Google Docs improvements
 - **database_manager.py**: All database operations centralized
-- **extraction_utils.py**: Reusable extraction functions
-- **simple_workflow_db.py**: Main workflow orchestration
+- **utils/config.py**: Centralized configuration management
 - **Person/Document/Link**: Data models for type safety
 
 ## Success Criteria:

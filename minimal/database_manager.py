@@ -10,6 +10,7 @@ from datetime import datetime
 import json
 from pathlib import Path
 from dataclasses import dataclass, field
+import csv
 
 @dataclass
 class Person:
@@ -78,6 +79,10 @@ class DatabaseManager:
     def rollback(self):
         """Rollback the current transaction"""
         self.connection.rollback()
+    
+    def get_connection(self):
+        """Get the current database connection"""
+        return self.connection
         
     # Person operations
     def get_person_by_row_id_email(self, row_id: str, email: str) -> Optional[Dict]:
@@ -367,3 +372,138 @@ class DatabaseManager:
         stats['total_links'] = cursor.fetchone()['count']
         
         return stats
+    
+    # CSV Migration functionality (DRY: consolidates duplicate migration classes)
+    def migrate_from_csv(self, csv_file: str = 'simple_output.csv') -> Dict[str, Any]:
+        """Migrate data from CSV file to database - database-agnostic implementation"""
+        if not Path(csv_file).exists():
+            raise FileNotFoundError(f"CSV file not found: {csv_file}")
+            
+        stats = {
+            'people': 0,
+            'documents': 0,
+            'links': 0,
+            'errors': [],
+            'skipped': 0,
+            'total_rows': 0
+        }
+        
+        print(f"\nStarting CSV migration from: {csv_file}")
+        print("=" * 50)
+        
+        with open(csv_file, 'r', encoding='utf-8') as f:
+            reader = csv.DictReader(f)
+            
+            for row in reader:
+                stats['total_rows'] += 1
+                
+                try:
+                    # Extract person data
+                    person = Person(
+                        row_id=row.get('row_id', ''),
+                        name=row.get('name', ''),
+                        email=row.get('email', ''),
+                        type=row.get('type', ''),
+                        doc_link=row.get('link', '')
+                    )
+                    
+                    # Insert person
+                    person_id = self.insert_person(person)
+                    if person_id:
+                        stats['people'] += 1
+                    else:
+                        # Person might already exist
+                        existing = self.get_person_by_row_id(person.row_id)
+                        if existing:
+                            person_id = existing['id']
+                            stats['skipped'] += 1
+                        else:
+                            raise Exception("Failed to insert person")
+                    
+                    # Insert document if link exists
+                    if row.get('link'):
+                        doc = Document(
+                            person_id=person_id,
+                            url=row['link'],
+                            document_type=self._determine_document_type(row['link']),
+                            document_text=row.get('document_text', ''),
+                            processed=row.get('processed') == 'yes',
+                            extraction_date=datetime.now().isoformat() if row.get('processed') == 'yes' else None
+                        )
+                        
+                        doc_id = self.insert_document(doc)
+                        if doc_id:
+                            stats['documents'] += 1
+                            
+                            # Parse and insert links
+                            links = self._parse_csv_links(row)
+                            link_count = self.insert_links_batch(doc_id, links)
+                            stats['links'] += link_count
+                    
+                    self.commit()
+                    
+                except Exception as e:
+                    self.rollback()
+                    error_msg = f"Error processing row {row.get('row_id')}: {str(e)}"
+                    stats['errors'].append(error_msg)
+                    print(f"  ✗ {error_msg}")
+        
+        # Print migration summary
+        print("\nMigration Summary:")
+        print("=" * 50)
+        print(f"Total rows processed: {stats['total_rows']}")
+        print(f"People inserted: {stats['people']}")
+        print(f"Documents inserted: {stats['documents']}")
+        print(f"Links inserted: {stats['links']}")
+        print(f"Skipped (already exists): {stats['skipped']}")
+        print(f"Errors: {len(stats['errors'])}")
+        
+        if stats['errors']:
+            print("\nErrors encountered:")
+            for error in stats['errors'][:5]:  # Show first 5 errors
+                print(f"  - {error}")
+            if len(stats['errors']) > 5:
+                print(f"  ... and {len(stats['errors']) - 5} more errors")
+        
+        return stats
+    
+    def _determine_document_type(self, url: str) -> str:
+        """Determine document type from URL"""
+        if not url:
+            return 'other'
+        
+        url_lower = url.lower()
+        if 'docs.google.com' in url_lower:
+            return 'google_doc'
+        elif 'youtube.com' in url_lower or 'youtu.be' in url_lower:
+            return 'youtube'
+        elif 'drive.google.com' in url_lower:
+            return 'google_drive'
+        return 'other'
+    
+    def _parse_csv_links(self, row: Dict) -> Dict[str, List[str]]:
+        """Parse links from CSV row into categorized dict"""
+        links = {'youtube': [], 'drive_files': [], 'drive_folders': [], 'all_links': []}
+        
+        # Process YouTube links
+        if row.get('youtube_playlist'):
+            youtube_links = row['youtube_playlist'].split('|')
+            links['youtube'] = [link.strip() for link in youtube_links if link.strip()]
+        
+        # Process Drive links
+        if row.get('google_drive'):
+            drive_links = row['google_drive'].split('|')
+            for link in drive_links:
+                link = link.strip()
+                if link:
+                    if '/folders/' in link:
+                        links['drive_folders'].append(link)
+                    else:
+                        links['drive_files'].append(link)
+        
+        # Process all extracted links
+        if row.get('extracted_links'):
+            all_links = row['extracted_links'].split('|')
+            links['all_links'] = [link.strip() for link in all_links if link.strip()]
+        
+        return links
