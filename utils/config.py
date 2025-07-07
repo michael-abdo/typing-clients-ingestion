@@ -278,6 +278,63 @@ def setup_csv_environment():
     config = get_config()
     csv.field_size_limit(config.get('file_processing.max_csv_field_size', sys.maxsize))
 
+def read_csv_rows(csv_file_path: str, encoding: str = 'utf-8', start_row: int = 1):
+    """
+    Read CSV file rows with standardized error handling and encoding
+    DRY: Consolidates duplicate CSV reading patterns across 10+ files
+    
+    Args:
+        csv_file_path: Path to CSV file
+        encoding: File encoding (default: utf-8)
+        start_row: Row number to start enumeration from (default: 1)
+        
+    Yields:
+        tuple: (row_number, row_dict) for each row in CSV
+        
+    Example:
+        for row_num, row in read_csv_rows('output.csv', start_row=2):
+            print(f"Row {row_num}: {row['name']}")
+    """
+    import csv
+    import os
+    
+    if not os.path.exists(csv_file_path):
+        raise FileNotFoundError(f"CSV file not found: {csv_file_path}")
+    
+    try:
+        with open(csv_file_path, 'r', encoding=encoding) as f:
+            reader = csv.DictReader(f)
+            for row_num, row in enumerate(reader, start=start_row):
+                yield row_num, row
+    except Exception as e:
+        raise Exception(f"Error reading CSV file {csv_file_path}: {str(e)}")
+
+def read_csv_mapping(csv_file_path: str, key_field: str, encoding: str = 'utf-8'):
+    """
+    Read CSV file and create a mapping dictionary
+    DRY: Consolidates duplicate CSV mapping patterns
+    
+    Args:
+        csv_file_path: Path to CSV file
+        key_field: Field to use as dictionary key
+        encoding: File encoding (default: utf-8)
+        
+    Returns:
+        dict: Mapping of key_field values to row dictionaries
+        
+    Example:
+        mapping = read_csv_mapping('output.csv', 'row_id')
+        person = mapping.get('496')  # Get row by row_id
+    """
+    mapping = {}
+    for row_num, row in read_csv_rows(csv_file_path, encoding):
+        key = row.get(key_field)
+        if key:
+            if key not in mapping:
+                mapping[key] = []
+            mapping[key].append(row)
+    return mapping
+
 def parse_file_size_from_html(html_content: str, target_unit: str = 'GB') -> float:
     """
     Parse file size from Google Drive HTML content (e.g., '4.8G', '100M', '2K')
@@ -447,6 +504,503 @@ def create_download_dir(download_dir: str, logger=None) -> Path:
             logger.info(f"Created downloads directory: {download_dir}")
     return downloads_path
 
+def ensure_directory_exists(directory_path: Union[str, Path], logger=None) -> Path:
+    """
+    Ensure directory exists, creating it if necessary
+    DRY: Consolidates duplicate directory creation patterns from multiple files
+    
+    Args:
+        directory_path: Path to directory (string or Path object)
+        logger: Optional logger instance
+        
+    Returns:
+        Path object for the directory
+        
+    Example:
+        data_dir = ensure_directory_exists('data/downloads')
+        cache_dir = ensure_directory_exists(Path('cache'))
+    """
+    dir_path = Path(directory_path)
+    if not dir_path.exists():
+        dir_path.mkdir(parents=True, exist_ok=True)
+        if logger:
+            logger.info(f"Created directory: {directory_path}")
+    return dir_path
+
+def validate_file_exists(file_path: Union[str, Path], error_message: str = None) -> Path:
+    """
+    Validate that a file exists, raising FileNotFoundError if not
+    DRY: Consolidates duplicate file existence validation patterns
+    
+    Args:
+        file_path: Path to file (string or Path object)  
+        error_message: Custom error message (optional)
+        
+    Returns:
+        Path object for the file
+        
+    Raises:
+        FileNotFoundError: If file does not exist
+        
+    Example:
+        csv_file = validate_file_exists('data.csv', 'Input CSV file not found')
+    """
+    path = Path(file_path)
+    if not path.exists():
+        if error_message:
+            raise FileNotFoundError(error_message)
+        else:
+            raise FileNotFoundError(f"File not found: {file_path}")
+    return path
+
+def safe_file_check(file_path: Union[str, Path]) -> bool:
+    """
+    Safely check if file exists without raising exceptions
+    DRY: Consolidates duplicate file existence check patterns
+    
+    Args:
+        file_path: Path to file (string or Path object)
+        
+    Returns:
+        bool: True if file exists, False otherwise
+        
+    Example:
+        if safe_file_check('optional_config.json'):
+            load_config()
+    """
+    try:
+        return Path(file_path).exists()
+    except (OSError, ValueError):
+        return False
+
+def safe_execute(func: Callable, default_return: Any = None, log_errors: bool = True, 
+                operation_name: str = "operation") -> Any:
+    """
+    Safely execute a function with standardized error handling
+    DRY: Consolidates duplicate try/except patterns across files
+    
+    Args:
+        func: Function to execute
+        default_return: Value to return on error (default: None)
+        log_errors: Whether to log errors (default: True)
+        operation_name: Name for logging (default: 'operation')
+        
+    Returns:
+        Function result or default_return on error
+        
+    Example:
+        result = safe_execute(lambda: risky_operation(), 
+                            default_return=[], 
+                            operation_name="data loading")
+    """
+    try:
+        return func()
+    except Exception as e:
+        if log_errors:
+            print(f"Error in {operation_name}: {str(e)}")
+        return default_return
+
+def retry_operation(func: Callable, max_attempts: int = 3, delay: float = 1.0, 
+                   operation_name: str = "operation") -> Any:
+    """
+    Retry an operation with simple exponential backoff
+    DRY: Consolidates duplicate retry logic patterns
+    
+    Args:
+        func: Function to retry
+        max_attempts: Maximum number of attempts (default: 3)
+        delay: Base delay between attempts (default: 1.0 seconds)
+        operation_name: Name for logging
+        
+    Returns:
+        Function result
+        
+    Raises:
+        Exception: Last exception if all attempts fail
+        
+    Example:
+        result = retry_operation(lambda: api_call(), 
+                               max_attempts=5, 
+                               operation_name="API request")
+    """
+    import time
+    last_exception = None
+    
+    for attempt in range(max_attempts):
+        try:
+            return func()
+        except Exception as e:
+            last_exception = e
+            if attempt < max_attempts - 1:
+                wait_time = delay * (2 ** attempt)  # Exponential backoff
+                print(f"{operation_name} attempt {attempt + 1} failed: {str(e)}")
+                print(f"Retrying in {wait_time:.1f} seconds...")
+                time.sleep(wait_time)
+            else:
+                print(f"{operation_name} failed after {max_attempts} attempts")
+                raise last_exception
+
+def extract_actual_url(google_url: str) -> str:
+    """
+    Extract the actual URL from a Google redirect URL
+    DRY: Consolidates duplicate URL extraction from validation.py and scrape_google_sheets.py
+    
+    Args:
+        google_url: Google redirect URL or regular URL
+        
+    Returns:
+        str: Actual URL without redirect wrapper
+        
+    Example:
+        actual = extract_actual_url('https://www.google.com/url?q=https://example.com&sa=U')
+        # Returns: 'https://example.com'
+    """
+    from urllib.parse import urlparse, parse_qs, unquote
+    
+    if 'google.com/url?' in google_url:
+        try:
+            parsed = urlparse(google_url)
+            params = parse_qs(parsed.query)
+            if 'q' in params and params['q']:
+                actual_url = params['q'][0]
+                # URL decode and return
+                return unquote(actual_url)
+        except Exception:
+            pass
+    return google_url
+
+def extract_file_id(url: str) -> Optional[str]:
+    """
+    Extract Google Drive file ID from various URL formats
+    DRY: Consolidates file ID extraction logic from download_drive.py
+    
+    Args:
+        url: Google Drive URL in any format
+        
+    Returns:
+        str: File ID if found, None otherwise
+        
+    Example:
+        file_id = extract_file_id('https://drive.google.com/file/d/ABC123/view')
+        # Returns: 'ABC123'
+    """
+    import re
+    from urllib.parse import urlparse, parse_qs
+    
+    # Pattern for different Google Drive URL formats
+    patterns = [
+        r'/file/d/([a-zA-Z0-9_-]+)',  # /file/d/{fileId}
+        r'id=([a-zA-Z0-9_-]+)',       # id={fileId}
+        r'drive.google.com/open\?id=([a-zA-Z0-9_-]+)'  # open?id={fileId}
+    ]
+    
+    for pattern in patterns:
+        match = re.search(pattern, url)
+        if match:
+            return match.group(1)
+    
+    # Try parsing the URL query parameters
+    try:
+        parsed_url = urlparse(url)
+        query_params = parse_qs(parsed_url.query)
+        
+        # Check various possible parameter names
+        for param in ['id', 'file_id', 'fileId', 'docid']:
+            if param in query_params:
+                return query_params[param][0]
+    except Exception:
+        pass
+    
+    return None
+
+def extract_youtube_id(url: str) -> Optional[str]:
+    """
+    Extract YouTube video ID from various URL formats
+    DRY: Consolidates YouTube ID extraction patterns
+    
+    Args:
+        url: YouTube URL in any format
+        
+    Returns:
+        str: Video ID if found, None otherwise
+        
+    Example:
+        video_id = extract_youtube_id('https://www.youtube.com/watch?v=ABC123')
+        # Returns: 'ABC123'
+    """
+    import re
+    
+    # YouTube URL patterns
+    patterns = [
+        r'(?:youtube\.com/watch\?v=|youtu\.be/)([a-zA-Z0-9_-]{11})',
+        r'youtube\.com/embed/([a-zA-Z0-9_-]{11})',
+        r'youtube\.com/v/([a-zA-Z0-9_-]{11})'
+    ]
+    
+    for pattern in patterns:
+        match = re.search(pattern, url)
+        if match:
+            return match.group(1)
+    
+    return None
+
+def log_progress(current: int, total: int, item_name: str = "item", operation: str = "Processing", logger=None):
+    """
+    Log progress information in standardized format
+    DRY: Consolidates duplicate progress logging patterns
+    
+    Args:
+        current: Current item number (1-based)
+        total: Total number of items
+        item_name: Name of item being processed (default: 'item')
+        operation: Operation being performed (default: 'Processing')
+        logger: Logger instance (optional, prints if None)
+        
+    Example:
+        log_progress(5, 100, "file", "Processing", logger)
+        # Logs: "Processing file 5/100"
+    """
+    progress_msg = f"{operation} {item_name} {current}/{total}"
+    if logger:
+        logger.info(progress_msg)
+    else:
+        print(progress_msg)
+
+def log_completion_summary(total: int, successful: int, operation: str = "Processed", 
+                          item_name: str = "items", logger=None):
+    """
+    Log completion summary in standardized format
+    DRY: Consolidates duplicate completion logging patterns
+    
+    Args:
+        total: Total number of items processed
+        successful: Number of successful operations
+        operation: Past tense operation name (default: 'Processed')
+        item_name: Name of items (default: 'items')
+        logger: Logger instance (optional, prints if None)
+        
+    Example:
+        log_completion_summary(100, 95, "Downloaded", "files", logger)
+        # Logs: "Downloaded 100 files, 95 successful downloads"
+    """
+    if successful == total:
+        summary_msg = f"{operation} {total} {item_name}, all successful"
+    else:
+        failed = total - successful
+        summary_msg = f"{operation} {total} {item_name}, {successful} successful, {failed} failed"
+    
+    if logger:
+        logger.info(summary_msg)
+    else:
+        print(summary_msg)
+
+def create_progress_tracker(total_items: int, operation: str = "Processing", 
+                           item_name: str = "item", logger=None):
+    """
+    Create a progress tracking function for iterative operations
+    DRY: Consolidates duplicate progress tracking patterns
+    
+    Args:
+        total_items: Total number of items to process
+        operation: Operation being performed
+        item_name: Name of item type
+        logger: Logger instance
+        
+    Returns:
+        tuple: (progress_function, completion_function)
+        
+    Example:
+        track_progress, log_completion = create_progress_tracker(100, "Downloading", "file", logger)
+        for i, file in enumerate(files, 1):
+            track_progress(i)
+            process_file(file)
+        log_completion(successful_count)
+    """
+    def track_progress(current: int):
+        log_progress(current, total_items, item_name, operation, logger)
+    
+    def log_completion(successful: int):
+        log_completion_summary(total_items, successful, operation.replace("ing", "ed"), 
+                             item_name + "s" if not item_name.endswith("s") else item_name, 
+                             logger)
+    
+    return track_progress, log_completion
+
+def setup_download_directories(base_dir: str, subdirs: List[str] = None, logger=None) -> Dict[str, Path]:
+    """
+    Set up download directory structure with standardized subdirectories
+    DRY: Consolidates duplicate download directory setup patterns
+    
+    Args:
+        base_dir: Base download directory path
+        subdirs: List of subdirectory names (default: ['files', 'metadata', 'temp'])
+        logger: Logger instance
+        
+    Returns:
+        dict: Mapping of subdirectory names to Path objects
+        
+    Example:
+        dirs = setup_download_directories('downloads', ['files', 'logs'])
+        files_dir = dirs['files']
+        logs_dir = dirs['logs']
+    """
+    if subdirs is None:
+        subdirs = ['files', 'metadata', 'temp']
+    
+    base_path = ensure_directory_exists(base_dir, logger)
+    
+    dir_mapping = {'base': base_path}
+    for subdir in subdirs:
+        subdir_path = ensure_directory_exists(base_path / subdir, logger)
+        dir_mapping[subdir] = subdir_path
+    
+    return dir_mapping
+
+def safe_file_move(source: Union[str, Path], destination: Union[str, Path], 
+                  backup_suffix: str = ".bak", logger=None) -> bool:
+    """
+    Safely move a file with backup and error handling
+    DRY: Consolidates duplicate file move patterns with error handling
+    
+    Args:
+        source: Source file path
+        destination: Destination file path
+        backup_suffix: Suffix for backup file (default: '.bak')
+        logger: Logger instance
+        
+    Returns:
+        bool: True if successful, False otherwise
+        
+    Example:
+        success = safe_file_move('temp.csv', 'output.csv', logger=logger)
+    """
+    import shutil
+    import os
+    
+    source_path = Path(source)
+    dest_path = Path(destination)
+    
+    try:
+        # Create destination directory if needed
+        ensure_directory_exists(dest_path.parent, logger)
+        
+        # Create backup if destination exists
+        if dest_path.exists():
+            backup_path = dest_path.with_suffix(dest_path.suffix + backup_suffix)
+            shutil.copy2(dest_path, backup_path)
+            if logger:
+                logger.info(f"Created backup: {backup_path}")
+        
+        # Move the file
+        shutil.move(str(source_path), str(dest_path))
+        if logger:
+            logger.info(f"Moved {source_path} to {dest_path}")
+        
+        return True
+        
+    except Exception as e:
+        if logger:
+            logger.error(f"Failed to move {source_path} to {dest_path}: {str(e)}")
+        return False
+
+def safe_file_rename(file_path: Union[str, Path], new_name: str, logger=None) -> Optional[Path]:
+    """
+    Safely rename a file with error handling
+    DRY: Consolidates duplicate file rename patterns
+    
+    Args:
+        file_path: Current file path
+        new_name: New filename (not full path)
+        logger: Logger instance
+        
+    Returns:
+        Path: New file path if successful, None otherwise
+        
+    Example:
+        new_path = safe_file_rename('old_name.txt', 'new_name.txt', logger)
+    """
+    import os
+    
+    try:
+        current_path = Path(file_path)
+        new_path = current_path.parent / new_name
+        
+        # Avoid overwriting existing files
+        if new_path.exists() and new_path != current_path:
+            counter = 1
+            base_name = Path(new_name).stem
+            extension = Path(new_name).suffix
+            while new_path.exists():
+                new_name = f"{base_name}_{counter}{extension}"
+                new_path = current_path.parent / new_name
+                counter += 1
+            
+            if logger:
+                logger.warning(f"File exists, renamed to: {new_name}")
+        
+        os.rename(str(current_path), str(new_path))
+        if logger:
+            logger.info(f"Renamed {current_path.name} to {new_path.name}")
+        
+        return new_path
+        
+    except Exception as e:
+        if logger:
+            logger.error(f"Failed to rename {file_path}: {str(e)}")
+        return None
+
+def cleanup_temp_files(directory: Union[str, Path], patterns: List[str] = None, 
+                      age_hours: int = 24, logger=None) -> int:
+    """
+    Clean up temporary files based on patterns and age
+    DRY: Consolidates duplicate temp file cleanup patterns
+    
+    Args:
+        directory: Directory to clean
+        patterns: File patterns to match (default: ['*.tmp', '*.temp', '*.crdownload'])
+        age_hours: Delete files older than this many hours
+        logger: Logger instance
+        
+    Returns:
+        int: Number of files deleted
+        
+    Example:
+        deleted = cleanup_temp_files('downloads', ['*.tmp', '*.log'], age_hours=1)
+    """
+    import glob
+    import time
+    import os
+    
+    if patterns is None:
+        patterns = ['*.tmp', '*.temp', '*.crdownload', '*.part']
+    
+    dir_path = Path(directory)
+    if not dir_path.exists():
+        return 0
+    
+    deleted_count = 0
+    current_time = time.time()
+    age_seconds = age_hours * 3600
+    
+    for pattern in patterns:
+        for file_path in dir_path.glob(pattern):
+            try:
+                if file_path.is_file():
+                    file_age = current_time - file_path.stat().st_mtime
+                    if file_age > age_seconds:
+                        file_path.unlink()
+                        deleted_count += 1
+                        if logger:
+                            logger.debug(f"Deleted temp file: {file_path}")
+            except Exception as e:
+                if logger:
+                    logger.warning(f"Failed to delete {file_path}: {str(e)}")
+    
+    if deleted_count > 0 and logger:
+        logger.info(f"Cleaned up {deleted_count} temporary files from {directory}")
+    
+    return deleted_count
+
 
 def get_download_chunk_size(file_size: int) -> int:
     """
@@ -578,40 +1132,36 @@ def create_chrome_driver(config_type: str = "extraction", download_dir: Optional
     except:
         pass
     
-    # Initialize driver with retry logic
-    max_attempts = 3
-    for attempt in range(max_attempts):
-        try:
-            # Use ChromeDriver service
-            service = Service('/usr/bin/chromedriver')
-            chrome_options.binary_location = '/usr/bin/chromium-browser'
-            
-            driver = webdriver.Chrome(service=service, options=chrome_options)
-            
-            # Additional anti-detection measures for extraction
-            if config_type == "extraction":
-                driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
-                driver.execute_cdp_cmd('Network.setUserAgentOverride', {
-                    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-                })
-            
-            # Enable automatic downloads for download configuration
-            elif config_type == "download":
-                driver.implicitly_wait(10)
-                driver.execute_cdp_cmd("Page.setDownloadBehavior", {
-                    "behavior": "allow",
-                    "downloadPath": str(Path(download_dir).absolute())
-                })
-            
-            return driver
-            
-        except Exception as init_error:
-            if attempt < max_attempts - 1:
-                print(f"Chrome driver init attempt {attempt + 1} failed: {init_error}")
-                print(f"Retrying...")
-                time.sleep(2)
-            else:
-                raise init_error
+    # DRY: Use consolidated retry logic with decorator pattern
+    # Import retry decorator at function level to avoid circular imports
+    from .retry_utils import retry_with_backoff
+    
+    @retry_with_backoff(max_attempts=3, base_delay=2.0, logger=None)
+    def _create_driver():
+        # Use ChromeDriver service
+        service = Service('/usr/bin/chromedriver')
+        chrome_options.binary_location = '/usr/bin/chromium-browser'
+        
+        driver = webdriver.Chrome(service=service, options=chrome_options)
+        
+        # Additional anti-detection measures for extraction
+        if config_type == "extraction":
+            driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+            driver.execute_cdp_cmd('Network.setUserAgentOverride', {
+                "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            })
+        
+        # Enable automatic downloads for download configuration
+        elif config_type == "download":
+            driver.implicitly_wait(10)
+            driver.execute_cdp_cmd("Page.setDownloadBehavior", {
+                "behavior": "allow",
+                "downloadPath": str(Path(download_dir).absolute())
+            })
+        
+        return driver
+    
+    return _create_driver()
 
 
 def get_minimal_config():

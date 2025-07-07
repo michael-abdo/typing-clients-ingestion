@@ -45,10 +45,14 @@ class DriveFileDownloader:
         self.driver = None
         
         # Create directories if they don't exist
-        self.files_dir.mkdir(parents=True, exist_ok=True)
+        # DRY: Use consolidated directory creation from utils/config.py
+        from utils.config import ensure_directory_exists
+        ensure_directory_exists(self.files_dir, logger)
         
         # Load existing mapping if it exists
-        if self.mapping_file.exists():
+        # DRY: Use consolidated file existence check
+        from utils.config import safe_file_check
+        if safe_file_check(self.mapping_file):
             with open(self.mapping_file, 'r') as f:
                 self.mapping = json.load(f)
     
@@ -60,33 +64,33 @@ class DriveFileDownloader:
         
         file_to_rows = {}  # file_id -> list of row info
         
-        with open(self.output_csv, 'r', encoding='utf-8') as f:
-            reader = csv.DictReader(f)
+        # DRY: Use consolidated CSV reading from utils/config.py
+        from utils.config import read_csv_rows
+        
+        for row_num, row in read_csv_rows(self.output_csv, start_row=2):
+            google_drive_links = row.get('google_drive', '')
             
-            for row_num, row in enumerate(reader, start=2):  # Start at 2 to account for header
-                google_drive_links = row.get('google_drive', '')
+            if google_drive_links and google_drive_links != '-':
+                # Split multiple links by pipe
+                links = google_drive_links.split('|')
                 
-                if google_drive_links and google_drive_links != '-':
-                    # Split multiple links by pipe
-                    links = google_drive_links.split('|')
-                    
-                    for link in links:
-                        link = link.strip()
-                        if link and link.startswith('http'):
-                            file_id = extract_file_id(link)
+                for link in links:
+                    link = link.strip()
+                    if link and link.startswith('http'):
+                        file_id = extract_file_id(link)
+                        
+                        if file_id:
+                            if file_id not in file_to_rows:
+                                file_to_rows[file_id] = []
                             
-                            if file_id:
-                                if file_id not in file_to_rows:
-                                    file_to_rows[file_id] = []
-                                
-                                file_to_rows[file_id].append({
-                                    'row_id': row.get('row_id', str(row_num)),
-                                    'row_num': row_num,
-                                    'name': row.get('name', 'Unknown'),
-                                    'email': row.get('email', ''),
-                                    'type': row.get('type', ''),
-                                    'original_url': link
-                                })
+                            file_to_rows[file_id].append({
+                                'row_id': row.get('row_id', str(row_num)),
+                                'row_num': row_num,
+                                'name': row.get('name', 'Unknown'),
+                                'email': row.get('email', ''),
+                                'type': row.get('type', ''),
+                                'original_url': link
+                            })
         
         logger.info(f"Found {len(file_to_rows)} unique Drive files referenced in CSV")
         
@@ -398,9 +402,15 @@ class DriveFileDownloader:
             self.setup_chrome_driver()
             
             # Phase 4: Process each HTML file
+            # DRY: Use consolidated progress tracking from utils/config.py
+            from utils.config import create_progress_tracker
+            track_progress, log_completion = create_progress_tracker(
+                len(html_files), "Processing", "file", logger
+            )
+            
             success_count = 0
             for i, html_file in enumerate(html_files, 1):
-                logger.info(f"\nProcessing file {i}/{len(html_files)}")
+                track_progress(i)
                 
                 if self.process_html_file(html_file):
                     success_count += 1
@@ -411,7 +421,7 @@ class DriveFileDownloader:
                 # Small delay between downloads
                 time.sleep(2)
             
-            logger.info(f"\nProcessed {len(html_files)} files, {success_count} successful downloads")
+            log_completion(success_count)
             
         finally:
             # Cleanup

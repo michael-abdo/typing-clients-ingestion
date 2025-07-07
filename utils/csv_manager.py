@@ -22,27 +22,21 @@ from dataclasses import dataclass
 try:
     from file_lock import file_lock
     from sanitization import sanitize_error_message, sanitize_csv_field
-    from config import get_config
     from row_context import RowContext, DownloadResult
     from error_handling import validate_csv_integrity
     from error_decorators import handle_file_operations, handle_validation_errors
     from error_messages import csv_error, file_error, validation_error
-    from logging_config import get_logger
 except ImportError:
     from .file_lock import file_lock
     from .sanitization import sanitize_error_message, sanitize_csv_field
-    from .config import get_config
     from .row_context import RowContext, DownloadResult
     from .error_handling import validate_csv_integrity
     from .error_decorators import handle_file_operations, handle_validation_errors
     from .error_messages import csv_error, file_error, validation_error
-    from .logging_config import get_logger
 
-# Setup module logger
-logger = get_logger(__name__)
-
-# Get configuration
-config = get_config()
+# DRY: Use consolidated logger and config initialization
+from .config import get_standard_components
+logger, config = get_standard_components(__name__)
 
 
 def safe_get_na_value(column_name: str = None, dtype: str = 'string') -> Any:
@@ -555,7 +549,9 @@ class CSVManager:
         """Create a compressed backup of the CSV file"""
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         backup_dir = self.csv_path.parent / 'backups' / 'output'
-        backup_dir.mkdir(parents=True, exist_ok=True)
+        # DRY: Use consolidated directory creation from utils/config.py
+        from .config import ensure_directory_exists
+        ensure_directory_exists(backup_dir, logger)
         
         backup_filename = f"output_{timestamp}_{operation_name}.csv.gz"
         backup_path = backup_dir / backup_filename

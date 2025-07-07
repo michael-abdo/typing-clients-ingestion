@@ -376,8 +376,12 @@ class DatabaseManager:
     # CSV Migration functionality (DRY: consolidates duplicate migration classes)
     def migrate_from_csv(self, csv_file: str = 'simple_output.csv') -> Dict[str, Any]:
         """Migrate data from CSV file to database - database-agnostic implementation"""
-        if not Path(csv_file).exists():
-            raise FileNotFoundError(f"CSV file not found: {csv_file}")
+        # DRY: Use consolidated file validation from utils/config.py
+        import sys
+        import os
+        sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        from utils.config import validate_file_exists
+        validate_file_exists(csv_file, f"CSV file not found: {csv_file}")
             
         stats = {
             'people': 0,
@@ -391,13 +395,16 @@ class DatabaseManager:
         print(f"\nStarting CSV migration from: {csv_file}")
         print("=" * 50)
         
-        with open(csv_file, 'r', encoding='utf-8') as f:
-            reader = csv.DictReader(f)
+        # DRY: Use consolidated CSV reading from utils/config.py
+        import sys
+        import os
+        sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        from utils.config import read_csv_rows
+        
+        for row_num, row in read_csv_rows(csv_file):
+            stats['total_rows'] += 1
             
-            for row in reader:
-                stats['total_rows'] += 1
-                
-                try:
+            try:
                     # Extract person data
                     person = Person(
                         row_id=row.get('row_id', ''),

@@ -6,33 +6,29 @@ import subprocess
 import time
 from pathlib import Path
 try:
-    from logging_config import get_logger
     from validation import validate_youtube_url, validate_file_path, ValidationError
     from retry_utils import retry_subprocess, retry_with_backoff
     from file_lock import file_lock, safe_file_operation
-    from config import get_config, get_youtube_downloads_dir, get_timeout, create_download_dir
+    from config import get_youtube_downloads_dir, get_timeout, create_download_dir
     from rate_limiter import rate_limit, wait_for_rate_limit
     from row_context import RowContext, DownloadResult
     from sanitization import sanitize_error_message, SafeDownloadError
     from error_decorators import handle_download_operations, handle_validation_errors
     from error_messages import download_error, validation_error
 except ImportError:
-    from .logging_config import get_logger
     from .validation import validate_youtube_url, validate_file_path, ValidationError
     from .retry_utils import retry_subprocess, retry_with_backoff
     from .file_lock import file_lock, safe_file_operation
-    from .config import get_config, get_youtube_downloads_dir, get_timeout, create_download_dir
+    from .config import get_youtube_downloads_dir, get_timeout, create_download_dir
     from .rate_limiter import rate_limit, wait_for_rate_limit
     from .row_context import RowContext, DownloadResult
     from .sanitization import sanitize_error_message, SafeDownloadError
     from .error_decorators import handle_download_operations, handle_validation_errors
     from .error_messages import download_error, validation_error
 
-# Setup module logger
-logger = get_logger(__name__)
-
-# Get configuration
-config = get_config()
+# DRY: Use consolidated logger and config initialization
+from .config import get_standard_components
+logger, config = get_standard_components(__name__)
 
 # Directory to save downloaded videos and transcripts (from config)
 DOWNLOADS_DIR = get_youtube_downloads_dir()

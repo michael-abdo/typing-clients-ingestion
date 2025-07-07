@@ -27,9 +27,10 @@ def get_drive_urls_from_csv():
     drive_urls = []
     
     # Read the CSV and extract Drive links
-    with open(csv_path, 'r', encoding='utf-8') as f:
-        reader = csv.DictReader(f)
-        for row in reader:
+    # DRY: Use consolidated CSV reading from utils/config.py
+    from utils.config import read_csv_rows
+    
+    for row_num, row in read_csv_rows(csv_path):
             # Check if google_drive column exists and has a value
             if 'google_drive' in row and row['google_drive']:
                 drive_links_str = row['google_drive'].strip()
