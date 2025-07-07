@@ -12,7 +12,7 @@ from datetime import datetime
 from pathlib import Path
 import os
 import time
-from extraction_utils import (
+from .extraction_utils import (
     get_selenium_driver, cleanup_driver, extract_actual_url, clean_url,
     download_google_sheet, extract_google_doc_content_and_links,
     extract_people_from_sheet_html, extract_text_with_retry
@@ -22,15 +22,33 @@ from extraction_utils import (
 import sys
 import os
 
-# Import centralized configuration
-sys.path.append(os.path.join(os.path.dirname(__file__), '..'))
-from utils.config import (
-    get_google_sheets_url, get_target_div_id, get_database_path, 
-    get_output_csv_path, get_batch_size, get_max_retries,
-    get_progress_file, get_failed_docs_file, StandardCLIArguments
-)
+# DRY: Use consolidated import utilities to eliminate duplicate sys.path.append calls
+import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-from utils.config import bulk_safe_import
+from utils.import_utils import setup_project_path, safe_import_multiple
+setup_project_path()
+
+# Import centralized configuration using consolidated utilities
+config_imports = safe_import_multiple([
+    {'module': 'utils.config', 'from_items': ['get_google_sheets_url', 'get_target_div_id', 'get_database_path'], 'alias': 'config_funcs'},
+    {'module': 'utils.config', 'from_items': ['get_output_csv_path', 'get_batch_size', 'get_max_retries'], 'alias': 'config_funcs2'},
+    {'module': 'utils.config', 'from_items': ['get_progress_file', 'get_failed_docs_file', 'StandardCLIArguments'], 'alias': 'config_funcs3'},
+    {'module': 'utils.config', 'from_items': ['bulk_safe_import'], 'alias': 'bulk_safe_import'},
+    {'module': 'utils.config', 'from_items': ['format_error'], 'alias': 'format_error'}
+])
+
+# Extract config functions
+get_google_sheets_url = config_imports['config_funcs'][0] if isinstance(config_imports['config_funcs'], tuple) else None
+get_target_div_id = config_imports['config_funcs'][1] if isinstance(config_imports['config_funcs'], tuple) else None
+get_database_path = config_imports['config_funcs'][2] if isinstance(config_imports['config_funcs'], tuple) else None
+get_output_csv_path = config_imports['config_funcs2'][0] if isinstance(config_imports['config_funcs2'], tuple) else None
+get_batch_size = config_imports['config_funcs2'][1] if isinstance(config_imports['config_funcs2'], tuple) else None
+get_max_retries = config_imports['config_funcs2'][2] if isinstance(config_imports['config_funcs2'], tuple) else None
+get_progress_file = config_imports['config_funcs3'][0] if isinstance(config_imports['config_funcs3'], tuple) else None
+get_failed_docs_file = config_imports['config_funcs3'][1] if isinstance(config_imports['config_funcs3'], tuple) else None
+StandardCLIArguments = config_imports['config_funcs3'][2] if isinstance(config_imports['config_funcs3'], tuple) else None
+bulk_safe_import = config_imports['bulk_safe_import'] if not isinstance(config_imports['bulk_safe_import'], ImportError) else None
+format_error = config_imports['format_error'] if not isinstance(config_imports['format_error'], ImportError) else None
 
 try:
     imports = bulk_safe_import([
@@ -105,12 +123,14 @@ class ProgressTracker:
     
     def load_progress(self):
         """Load extraction progress from file"""
-        if os.path.exists(self.progress_file):
-            try:
-                with open(self.progress_file, 'r') as f:
-                    return json.load(f)
-            except:
-                pass
+        # DRY: Use consolidated JSON load from utils/config.py
+        # Path already setup at module level
+        safe_json_load = safe_import('utils.config', ['safe_json_load'])
+        
+        progress = safe_json_load(self.progress_file)
+        if progress:
+            return progress
+            
         return {
             "completed": [],
             "failed": [],
@@ -123,23 +143,26 @@ class ProgressTracker:
     def save_progress(self):
         """Save extraction progress to file"""
         self.progress["last_run"] = datetime.now().isoformat()
-        with open(self.progress_file, 'w') as f:
-            json.dump(self.progress, f, indent=2)
+        # DRY: Use consolidated JSON save from utils/config.py
+        # Path already setup at module level
+        safe_json_save = safe_import('utils.config', ['safe_json_save'])
+        safe_json_save(self.progress, self.progress_file)
     
     def load_failed_docs(self):
         """Load failed document extraction list"""
-        if os.path.exists(self.failed_file):
-            try:
-                with open(self.failed_file, 'r') as f:
-                    return json.load(f)
-            except:
-                pass
-        return []
+        # DRY: Use consolidated JSON load from utils/config.py
+        # Path already setup at module level
+        safe_json_load = safe_import('utils.config', ['safe_json_load'])
+        
+        failed_docs = safe_json_load(self.failed_file)
+        return failed_docs if failed_docs is not None else []
     
     def save_failed_docs(self):
         """Save failed document extraction list"""
-        with open(self.failed_file, 'w') as f:
-            json.dump(self.failed_docs, f, indent=2)
+        # DRY: Use consolidated JSON save from utils/config.py
+        # Path already setup at module level
+        safe_json_save = safe_import('utils.config', ['safe_json_save'])
+        safe_json_save(self.failed_docs, self.failed_file)
     
     def mark_completed(self, doc_url):
         """Mark a document as completed"""
@@ -902,7 +925,12 @@ def main():
                     processed_records.append(record)
                     
                 except Exception as e:
-                    print(f"  ✗ Error extracting document: {e}")
+                    # DRY: Use consolidated error formatting from utils/config.py
+                    if format_error:
+                        error_msg = format_error("extracting document", person.get('doc_link', 'unknown'), e)
+                        print(f"  ✗ {error_msg}")
+                    else:
+                        print(f"  ✗ Error extracting document: {e}")
                     # Create error record
                     record = create_record(person, mode="full", 
                                          doc_text=f"[EXTRACTION_ERROR] {str(e)}", 

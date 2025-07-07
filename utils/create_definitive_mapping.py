@@ -23,14 +23,19 @@ from typing import Dict, List, Set, Tuple
 import shutil
 
 # Import consolidated functionality
-try:
-    from .comprehensive_file_mapper import FileMapper
-    from .clean_file_mapper import CleanFileMapper
-    from .csv_manager import CSVManager, safe_csv_read
-except ImportError:
-    from comprehensive_file_mapper import FileMapper
-    from clean_file_mapper import CleanFileMapper
-    from csv_manager import CSVManager, safe_csv_read
+from import_utils import safe_import_multiple
+
+# Setup imports using consolidated utilities
+imports = safe_import_multiple([
+    {'module': 'comprehensive_file_mapper', 'from_items': ['FileMapper'], 'alias': 'FileMapper'},
+    {'module': 'clean_file_mapper', 'from_items': ['CleanFileMapper'], 'alias': 'CleanFileMapper'},
+    {'module': 'csv_manager', 'from_items': ['CSVManager', 'safe_csv_read'], 'alias': 'csv_funcs'}
+])
+
+# Extract imports
+FileMapper = imports['FileMapper']
+CleanFileMapper = imports['CleanFileMapper']
+CSVManager, safe_csv_read = imports['csv_funcs']
 
 
 class DefinitiveMapper:
@@ -235,8 +240,10 @@ class DefinitiveMapper:
             print(f"  Saved {len(self.unmapped_files)} unmapped files to: definitive_unmapped_files.csv")
         
         # Save complete mapping as JSON
-        with open('definitive_mapping_complete.json', 'w') as f:
-            json.dump(self.definitive_mapping, f, indent=2)
+        # DRY: Use consolidated JSON save from utils/config.py
+        from .import_utils import safe_import
+        safe_json_save = safe_import('utils.config', ['safe_json_save'])
+        safe_json_save(self.definitive_mapping, 'definitive_mapping_complete.json')
         print(f"  Saved complete mapping to: definitive_mapping_complete.json")
         
         # Summary statistics
@@ -250,8 +257,8 @@ class DefinitiveMapper:
             'success_rate': f"{len(self.mapped_files) / (len(self.mapped_files) + len(self.missing_files)) * 100:.1f}%"
         }
         
-        with open('definitive_mapping_summary.json', 'w') as f:
-            json.dump(summary, f, indent=2)
+        # DRY: Use consolidated JSON save from utils/config.py
+        safe_json_save(summary, 'definitive_mapping_summary.json')
         print(f"\n  Summary saved to: definitive_mapping_summary.json")
 
 

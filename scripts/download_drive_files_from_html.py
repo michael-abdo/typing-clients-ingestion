@@ -50,11 +50,10 @@ class DriveFileDownloader:
         ensure_directory_exists(self.files_dir, logger)
         
         # Load existing mapping if it exists
-        # DRY: Use consolidated file existence check
-        from utils.config import safe_file_check
+        # DRY: Use consolidated file existence check and JSON load
+        from utils.config import safe_file_check, safe_json_load
         if safe_file_check(self.mapping_file):
-            with open(self.mapping_file, 'r') as f:
-                self.mapping = json.load(f)
+            self.mapping = safe_json_load(self.mapping_file) or {}
     
     # File ID extraction moved to utils.download_drive.extract_file_id for consistency
     
@@ -337,8 +336,9 @@ class DriveFileDownloader:
     
     def save_mapping(self):
         """Save mapping to JSON file"""
-        with open(self.mapping_file, 'w') as f:
-            json.dump(self.mapping, f, indent=2)
+        # DRY: Use consolidated JSON save from utils/config.py
+        from utils.config import safe_json_save
+        safe_json_save(self.mapping, self.mapping_file)
     
     def generate_report(self):
         """Generate summary report of downloads"""

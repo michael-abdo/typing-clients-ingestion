@@ -6,22 +6,24 @@ import sys
 # Add utils directory to the Python path
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'utils'))
 
+# DRY: Use consolidated error formatting and file reading from utils/config.py
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
+from utils.config import format_error, read_csv_rows
+
 from extract_links import process_url
 
 # Get the first N rows from CSV file
 def process_first_n_rows(csv_path, n=5):
     results = []
     
-    with open(csv_path, 'r', newline='', encoding='utf-8') as csvfile:
-        reader = csv.DictReader(csvfile)
-        
-        for i, row in enumerate(reader):
+    # DRY: Use consolidated CSV reading from utils/config.py
+    for row_num, row in read_csv_rows(csv_path):
             if i >= n:
                 break
                 
             link = row.get('link', '')
             if link:
-                print(f"\nProcessing {i+1}: {row['name']} - {link}")
+                print(f"\nProcessing {row_num}: {row['name']} - {link}")
                 try:
                     # Process URL with limit=10 to get more links
                     links, yt_playlist, drive_links = process_url(link, limit=10, debug=False)
@@ -44,7 +46,9 @@ def process_first_n_rows(csv_path, n=5):
                             print(f"    - {dl}")
                     
                 except Exception as e:
-                    print(f"  Error processing {link}: {str(e)}")
+                    # DRY: Use consolidated error formatting from utils/config.py
+                    error_msg = format_error("processing", link, e)
+                    print(f"  {error_msg}")
     
     return results
 

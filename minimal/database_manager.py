@@ -11,6 +11,12 @@ import json
 from pathlib import Path
 from dataclasses import dataclass, field
 import csv
+import sys
+import os
+
+# DRY: Setup consolidated imports once at module level to eliminate multiple sys.path.append calls
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from utils.config import validate_file_exists, read_csv_rows, parse_pipe_separated, format_error
 
 @dataclass
 class Person:
@@ -376,11 +382,7 @@ class DatabaseManager:
     # CSV Migration functionality (DRY: consolidates duplicate migration classes)
     def migrate_from_csv(self, csv_file: str = 'simple_output.csv') -> Dict[str, Any]:
         """Migrate data from CSV file to database - database-agnostic implementation"""
-        # DRY: Use consolidated file validation from utils/config.py
-        import sys
-        import os
-        sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        from utils.config import validate_file_exists
+        # DRY: Use consolidated file validation from utils/config.py (imported at module level)
         validate_file_exists(csv_file, f"CSV file not found: {csv_file}")
             
         stats = {
@@ -395,65 +397,62 @@ class DatabaseManager:
         print(f"\nStarting CSV migration from: {csv_file}")
         print("=" * 50)
         
-        # DRY: Use consolidated CSV reading from utils/config.py
-        import sys
-        import os
-        sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        from utils.config import read_csv_rows
+        # DRY: Use consolidated CSV reading from utils/config.py (imported at module level)
         
         for row_num, row in read_csv_rows(csv_file):
             stats['total_rows'] += 1
             
             try:
-                    # Extract person data
-                    person = Person(
-                        row_id=row.get('row_id', ''),
-                        name=row.get('name', ''),
-                        email=row.get('email', ''),
-                        type=row.get('type', ''),
-                        doc_link=row.get('link', '')
+                # Extract person data
+                person = Person(
+                    row_id=row.get('row_id', ''),
+                    name=row.get('name', ''),
+                    email=row.get('email', ''),
+                    type=row.get('type', ''),
+                    doc_link=row.get('link', '')
+                )
+                
+                # Insert person
+                person_id = self.insert_person(person)
+                if person_id:
+                    stats['people'] += 1
+                else:
+                    # Person might already exist
+                    existing = self.get_person_by_row_id(person.row_id)
+                    if existing:
+                        person_id = existing['id']
+                        stats['skipped'] += 1
+                    else:
+                        raise Exception("Failed to insert person")
+                
+                # Insert document if link exists
+                if row.get('link'):
+                    doc = Document(
+                        person_id=person_id,
+                        url=row['link'],
+                        document_type=self._determine_document_type(row['link']),
+                        document_text=row.get('document_text', ''),
+                        processed=row.get('processed') == 'yes',
+                        extraction_date=datetime.now().isoformat() if row.get('processed') == 'yes' else None
                     )
                     
-                    # Insert person
-                    person_id = self.insert_person(person)
-                    if person_id:
-                        stats['people'] += 1
-                    else:
-                        # Person might already exist
-                        existing = self.get_person_by_row_id(person.row_id)
-                        if existing:
-                            person_id = existing['id']
-                            stats['skipped'] += 1
-                        else:
-                            raise Exception("Failed to insert person")
-                    
-                    # Insert document if link exists
-                    if row.get('link'):
-                        doc = Document(
-                            person_id=person_id,
-                            url=row['link'],
-                            document_type=self._determine_document_type(row['link']),
-                            document_text=row.get('document_text', ''),
-                            processed=row.get('processed') == 'yes',
-                            extraction_date=datetime.now().isoformat() if row.get('processed') == 'yes' else None
-                        )
+                    doc_id = self.insert_document(doc)
+                    if doc_id:
+                        stats['documents'] += 1
                         
-                        doc_id = self.insert_document(doc)
-                        if doc_id:
-                            stats['documents'] += 1
-                            
-                            # Parse and insert links
-                            links = self._parse_csv_links(row)
-                            link_count = self.insert_links_batch(doc_id, links)
-                            stats['links'] += link_count
-                    
-                    self.commit()
-                    
-                except Exception as e:
-                    self.rollback()
-                    error_msg = f"Error processing row {row.get('row_id')}: {str(e)}"
-                    stats['errors'].append(error_msg)
-                    print(f"  ✗ {error_msg}")
+                        # Parse and insert links
+                        links = self._parse_csv_links(row)
+                        link_count = self.insert_links_batch(doc_id, links)
+                        stats['links'] += link_count
+                
+                self.commit()
+                
+            except Exception as e:
+                self.rollback()
+                # DRY: Use consolidated error formatting from utils/config.py
+                error_msg = format_error("processing row", row.get('row_id', 'unknown'), e)
+                stats['errors'].append(error_msg)
+                print(f"  ✗ {error_msg}")
         
         # Print migration summary
         print("\nMigration Summary:")
@@ -494,23 +493,23 @@ class DatabaseManager:
         
         # Process YouTube links
         if row.get('youtube_playlist'):
-            youtube_links = row['youtube_playlist'].split('|')
-            links['youtube'] = [link.strip() for link in youtube_links if link.strip()]
+            # DRY: Use consolidated pipe-separated parsing from utils/config.py (imported at module level)
+            
+            links['youtube'] = parse_pipe_separated(row['youtube_playlist'])
         
         # Process Drive links
         if row.get('google_drive'):
-            drive_links = row['google_drive'].split('|')
+            # DRY: Use consolidated pipe-separated parsing from utils/config.py
+            drive_links = parse_pipe_separated(row['google_drive'])
             for link in drive_links:
-                link = link.strip()
-                if link:
-                    if '/folders/' in link:
-                        links['drive_folders'].append(link)
-                    else:
-                        links['drive_files'].append(link)
+                if '/folders/' in link:
+                    links['drive_folders'].append(link)
+                else:
+                    links['drive_files'].append(link)
         
         # Process all extracted links
         if row.get('extracted_links'):
-            all_links = row['extracted_links'].split('|')
-            links['all_links'] = [link.strip() for link in all_links if link.strip()]
+            # DRY: Use consolidated pipe-separated parsing from utils/config.py
+            links['all_links'] = parse_pipe_separated(row['extracted_links'])
         
         return links

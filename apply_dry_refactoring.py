@@ -13,6 +13,10 @@ import argparse
 import shutil
 from datetime import datetime
 
+# DRY: Use consolidated file reading utilities from utils/config.py
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+from utils.config import read_file_with_fallback
+
 
 class DRYRefactorer:
     """Handles automated DRY refactoring operations."""
@@ -45,8 +49,8 @@ class DRYRefactorer:
     
     def refactor_path_setup(self, filepath: Path) -> bool:
         """Replace sys.path.insert patterns with init_project_imports()."""
-        with open(filepath, 'r') as f:
-            content = f.read()
+        # DRY: Use consolidated file reading from utils/config.py
+        content = read_file_with_fallback(filepath)
         
         # Pattern to match sys.path.insert
         pattern = r'(import sys\s*\n\s*import os\s*\n\s*)?sys\.path\.insert\(0,\s*os\.path\.dirname\(os\.path\.dirname\(os\.path\.abspath\(__file__\)\)\)\)'
@@ -71,8 +75,8 @@ class DRYRefactorer:
     
     def refactor_makedirs(self, filepath: Path) -> bool:
         """Replace os.makedirs patterns with ensure_directory_exists()."""
-        with open(filepath, 'r') as f:
-            content = f.read()
+        # DRY: Use consolidated file reading from utils/config.py
+        content = read_file_with_fallback(filepath)
         
         # Pattern to match os.makedirs
         pattern = r'os\.makedirs\(([^,\)]+),\s*exist_ok=True\)'
@@ -131,8 +135,8 @@ class DRYRefactorer:
         """Analyze file for direct CSV operations that should use CSVManager."""
         issues = []
         
-        with open(filepath, 'r') as f:
-            content = f.read()
+        # DRY: Use consolidated file reading from utils/config.py
+        content = read_file_with_fallback(filepath)
         
         # Check for direct CSV usage without CSVManager
         if 'import csv' in content and 'CSVManager' not in content:
@@ -150,8 +154,8 @@ class DRYRefactorer:
         """Analyze file for error handling that should use decorators."""
         issues = []
         
-        with open(filepath, 'r') as f:
-            content = f.read()
+        # DRY: Use consolidated file reading from utils/config.py
+        content = read_file_with_fallback(filepath)
         
         # Check for generic try/except patterns
         try_except_pattern = r'try:\s*\n.*?except\s+(?:Exception|FileNotFoundError|IOError)'

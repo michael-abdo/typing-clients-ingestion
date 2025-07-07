@@ -13,6 +13,12 @@ from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.options import Options
+import sys
+import os
+
+# DRY: Setup consolidated imports once at module level to eliminate multiple sys.path.append calls
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from utils.config import create_chrome_driver, safe_file_write, format_error
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
@@ -24,11 +30,7 @@ def get_selenium_driver():
     global _driver
     if _driver is None:
         print("Initializing Selenium Chrome driver with Google Docs support...")
-        # DRY: Use consolidated Chrome driver creation from utils/config.py
-        import sys
-        import os
-        sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        from utils.config import create_chrome_driver
+        # DRY: Use consolidated Chrome driver creation from utils/config.py (imported at module level)
         
         try:
             _driver = create_chrome_driver(config_type="extraction", headless=True)
@@ -278,7 +280,9 @@ def extract_google_doc_text(url: str, auth_cookies: Optional[Dict] = None) -> st
         return text_content
         
     except Exception as e:
-        print(f"✗ Error extracting text from {url}: {e}")
+        # DRY: Use consolidated error formatting from utils/config.py
+        error_msg = format_error("extracting text from", url, e)
+        print(f"✗ {error_msg}")
         return ""
 
 def extract_google_doc_content_and_links(url: str, auth_cookies: Optional[Dict] = None) -> tuple[str, str, Dict[str, List[str]]]:
@@ -446,7 +450,9 @@ def extract_google_doc_content_and_links(url: str, auth_cookies: Optional[Dict] 
         return text_content, html, links
         
     except Exception as e:
-        print(f"✗ Error extracting content from {url}: {e}")
+        # DRY: Use consolidated error formatting from utils/config.py
+        error_msg = format_error("extracting content from", url, e)
+        print(f"✗ {error_msg}")
         return "", "", {'youtube': [], 'drive_files': [], 'drive_folders': [], 'all_links': []}
 
 def extract_links_from_content(doc_content: str, doc_text: str = "") -> Dict[str, List[str]]:
@@ -642,8 +648,8 @@ def download_google_sheet(sheet_url: str) -> str:
     response.raise_for_status()
     
     # Save the HTML
-    with open("sheet.html", "w", encoding="utf-8") as f:
-        f.write(response.text)
+    # DRY: Use consolidated file writing from utils/config.py (imported at module level)
+    safe_file_write("sheet.html", response.text, encoding="utf-8")
     
     print("✓ Sheet downloaded")
     return response.text

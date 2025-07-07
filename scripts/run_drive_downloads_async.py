@@ -16,7 +16,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from utils.path_setup import init_project_imports
 init_project_imports()
 
-from utils.config import get_config
+from utils.config import get_config, format_error
 from utils.validation import validate_google_drive_url
 
 def get_drive_urls_from_csv():
@@ -87,7 +87,9 @@ def download_drive_async(urls, max_downloads=None):
                     log.write(f"✗ Failed: {result.stderr}\n")
                     
             except Exception as e:
-                print(f"✗ Error processing {item['name']}: {str(e)}")
+                # DRY: Use consolidated error formatting from utils/config.py
+                error_msg = format_error("processing", item['name'], e)
+                print(f"✗ {error_msg}")
                 log.write(f"✗ Error: {str(e)}\n")
             
             # Small delay between downloads to be respectful

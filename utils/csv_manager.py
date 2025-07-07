@@ -18,21 +18,31 @@ from datetime import datetime
 from contextlib import contextmanager
 from dataclasses import dataclass
 
-# DRY: Consolidated import management (temporarily using try/except for testing)
-try:
-    from file_lock import file_lock
-    from sanitization import sanitize_error_message, sanitize_csv_field
-    from row_context import RowContext, DownloadResult
-    from error_handling import validate_csv_integrity
-    from error_decorators import handle_file_operations, handle_validation_errors
-    from error_messages import csv_error, file_error, validation_error
-except ImportError:
-    from .file_lock import file_lock
-    from .sanitization import sanitize_error_message, sanitize_csv_field
-    from .row_context import RowContext, DownloadResult
-    from .error_handling import validate_csv_integrity
-    from .error_decorators import handle_file_operations, handle_validation_errors
-    from .error_messages import csv_error, file_error, validation_error
+# DRY: Use consolidated import utilities to eliminate 14-line try/except ImportError block
+from .import_utils import safe_import_multiple
+
+# Consolidated imports using safe_import_multiple
+imports = safe_import_multiple([
+    {'module': 'file_lock', 'from_items': ['file_lock'], 'alias': 'file_lock'},
+    {'module': 'sanitization', 'from_items': ['sanitize_error_message', 'sanitize_csv_field'], 'alias': 'sanitization_funcs'},
+    {'module': 'row_context', 'from_items': ['RowContext', 'DownloadResult'], 'alias': 'context_classes'},
+    {'module': 'error_handling', 'from_items': ['validate_csv_integrity'], 'alias': 'error_handling_funcs'},
+    {'module': 'error_decorators', 'from_items': ['handle_file_operations', 'handle_validation_errors'], 'alias': 'error_decorators'},
+    {'module': 'error_messages', 'from_items': ['csv_error', 'file_error', 'validation_error'], 'alias': 'error_messages'}
+])
+
+# Extract imports (with error handling for failed imports)
+file_lock = imports['file_lock'] if not isinstance(imports['file_lock'], ImportError) else None
+sanitize_error_message = imports['sanitization_funcs'][0] if isinstance(imports['sanitization_funcs'], tuple) else None
+sanitize_csv_field = imports['sanitization_funcs'][1] if isinstance(imports['sanitization_funcs'], tuple) else None
+RowContext = imports['context_classes'][0] if isinstance(imports['context_classes'], tuple) else None
+DownloadResult = imports['context_classes'][1] if isinstance(imports['context_classes'], tuple) else None
+validate_csv_integrity = imports['error_handling_funcs'] if not isinstance(imports['error_handling_funcs'], ImportError) else None
+handle_file_operations = imports['error_decorators'][0] if isinstance(imports['error_decorators'], tuple) else None
+handle_validation_errors = imports['error_decorators'][1] if isinstance(imports['error_decorators'], tuple) else None
+csv_error = imports['error_messages'][0] if isinstance(imports['error_messages'], tuple) else None
+file_error = imports['error_messages'][1] if isinstance(imports['error_messages'], tuple) else None
+validation_error = imports['error_messages'][2] if isinstance(imports['error_messages'], tuple) else None
 
 # DRY: Use consolidated logger and config initialization
 from .config import get_standard_components

@@ -3,6 +3,10 @@ import os
 import sys
 from pathlib import Path
 
+# DRY: Use consolidated error formatting from utils/config.py
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
+from utils.config import format_error
+
 def fix_transcript_extensions(directory="youtube_downloads", old_ext="mp4", new_ext="vtt"):
     """
     Fixes transcript files with incorrect extensions.
@@ -38,7 +42,9 @@ def fix_transcript_extensions(directory="youtube_downloads", old_ext="mp4", new_
             file_path.rename(new_path)
             print(f"Renamed: {file_path.name} -> {new_path.name}")
         except Exception as e:
-            print(f"Error renaming {file_path.name}: {str(e)}")
+            # DRY: Use consolidated error formatting from utils/config.py
+            error_msg = format_error("renaming", file_path.name, e)
+            print(error_msg)
     
     # Count successful renames
     remaining_files = list(directory_path.glob(f"*_transcript.{old_ext}"))

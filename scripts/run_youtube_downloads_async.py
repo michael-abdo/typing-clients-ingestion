@@ -13,7 +13,7 @@ from datetime import datetime
 from utils.path_setup import init_project_imports
 init_project_imports()
 
-from utils.config import get_config
+from utils.config import get_config, format_error
 from utils.validation import validate_youtube_url
 from utils.error_decorators import handle_download_operations, handle_file_operations
 from utils.error_messages import download_error
@@ -78,7 +78,9 @@ def download_youtube_async(urls, max_downloads=None):
                     log.write(f"✗ Failed: {result.stderr}\n")
                     
             except Exception as e:
-                print(f"✗ Error processing {item['name']}: {str(e)}")
+                # DRY: Use consolidated error formatting from utils/config.py
+                error_msg = format_error("processing", item['name'], e)
+                print(f"✗ {error_msg}")
                 log.write(f"✗ Error: {str(e)}\n")
             
             # Small delay between downloads to be respectful

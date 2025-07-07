@@ -1,7 +1,12 @@
 #!/usr/bin/env python3
 import csv
 import os
+import sys
 from extract_links import process_url
+
+# DRY: Use consolidated error formatting and file reading from utils/config.py
+sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
+from utils.config import format_error, read_csv_rows
 
 def update_csv_with_extracts(csv_path, rows_to_process=None):
     """Update the CSV file with extracted links, YouTube playlists, and Google Drive links"""
@@ -10,13 +15,24 @@ def update_csv_with_extracts(csv_path, rows_to_process=None):
     processed = 0
     updated_rows = 0
     
-    with open(csv_path, 'r', newline='', encoding='utf-8') as csvfile, \
-         open(temp_file, 'w', newline='', encoding='utf-8') as outfile:
-        reader = csv.DictReader(csvfile)
-        writer = csv.DictWriter(outfile, fieldnames=reader.fieldnames)
+    # DRY: Use consolidated CSV reading from utils/config.py
+    # Get headers first to set up the output file
+    first_row = None
+    for row_num, row in read_csv_rows(csv_path):
+        first_row = row
+        break
+    
+    if not first_row:
+        print("No data found in CSV file")
+        return
+        
+    fieldnames = list(first_row.keys())
+    
+    with open(temp_file, 'w', newline='', encoding='utf-8') as outfile:
+        writer = csv.DictWriter(outfile, fieldnames=fieldnames)
         writer.writeheader()
         
-        for i, row in enumerate(reader):
+        for row_num, row in read_csv_rows(csv_path):
             # If rows_to_process is specified and we've processed enough rows, just write remaining rows
             if rows_to_process is not None and processed >= rows_to_process:
                 writer.writerow(row)
@@ -25,7 +41,7 @@ def update_csv_with_extracts(csv_path, rows_to_process=None):
             link = row.get('link', '')
             if link:
                 try:
-                    print(f"Processing {i+1}: {row['name']} - {link}")
+                    print(f"Processing {row_num}: {row['name']} - {link}")
                     
                     # Process URL with limit=10 to get more links
                     links, yt_playlist, drive_links = process_url(link, limit=10, debug=False)
@@ -45,7 +61,9 @@ def update_csv_with_extracts(csv_path, rows_to_process=None):
                     updated_rows += 1
                     
                 except Exception as e:
-                    print(f"  Error processing {link}: {str(e)}")
+                    # DRY: Use consolidated error formatting from utils/config.py
+                    error_msg = format_error("processing", link, e)
+                    print(f"  {error_msg}")
             
             writer.writerow(row)
     

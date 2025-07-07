@@ -63,16 +63,22 @@ class RowContext:
     
     def to_filename_suffix(self) -> str:
         """Create unique filename suffix for organization"""
-        # Clean type for filename safety
-        clean_type = self.type.replace('/', '-').replace(' ', '_').replace('#', 'num').replace('(', '').replace(')', '')
+        # DRY: Use consolidated filename cleaning from utils/config.py
+        from .import_utils import setup_project_path, safe_import
+        setup_project_path()
+        clean_filename = safe_import('utils.config', ['clean_filename'])
+        
+        clean_type = clean_filename(self.type, replacement='_')
         return f"_row{self.row_id}_{clean_type}"
     
     def to_safe_name_prefix(self) -> str:
         """Create safe filename prefix from person name"""
-        # Clean name for filename safety
-        safe_name = ''.join(c for c in self.name if c.isalnum() or c in (' ', '-', '_')).strip()
-        safe_name = safe_name.replace(' ', '_')[:20]  # Limit length
-        return safe_name
+        # DRY: Use consolidated identifier creation from utils/config.py  
+        from .import_utils import setup_project_path, safe_import
+        setup_project_path()
+        create_safe_identifier = safe_import('utils.config', ['create_safe_identifier'])
+        
+        return create_safe_identifier(self.name, max_length=20)
 
 
 @dataclass 
@@ -138,8 +144,12 @@ class DownloadResult:
         }
         
         try:
-            with open(metadata_path, 'w') as f:
-                json.dump(metadata, f, indent=2)
+            # DRY: Use consolidated JSON save from utils/config.py
+            from .import_utils import setup_project_path, safe_import
+            setup_project_path()
+            safe_json_save = safe_import('utils.config', ['safe_json_save'])
+            
+            safe_json_save(metadata, metadata_path)
             return metadata_path
         except Exception as e:
             print(f"Warning: Could not save metadata file {metadata_path}: {e}")
@@ -383,8 +393,14 @@ def create_row_context_from_csv_row(row, row_index: int) -> RowContext:
 def load_row_context_from_metadata(metadata_file_path: str) -> Optional[RowContext]:
     """Load RowContext from metadata file"""
     try:
-        with open(metadata_file_path, 'r') as f:
-            metadata = json.load(f)
+        # DRY: Use consolidated JSON load from utils/config.py
+        from .import_utils import setup_project_path, safe_import
+        setup_project_path()
+        safe_json_load = safe_import('utils.config', ['safe_json_load'])
+        
+        metadata = safe_json_load(metadata_file_path)
+        if not metadata:
+            return None
             
         return RowContext(
             row_id=metadata['source_csv_row_id'],
@@ -393,7 +409,7 @@ def load_row_context_from_metadata(metadata_file_path: str) -> Optional[RowConte
             name=metadata['person_name'],
             email=metadata['person_email']
         )
-    except (FileNotFoundError, json.JSONDecodeError, KeyError) as e:
+    except (KeyError) as e:
         print(f"Error loading row context from {metadata_file_path}: {e}")
         return None
 
@@ -407,8 +423,14 @@ def find_metadata_files(downloads_dir: str, pattern: str = "*_metadata.json") ->
 def verify_type_preservation(original_type: str, metadata_file_path: str) -> bool:
     """Verify that type data was preserved in metadata"""
     try:
-        with open(metadata_file_path, 'r') as f:
-            metadata = json.load(f)
+        # DRY: Use consolidated JSON load from utils/config.py
+        from .import_utils import setup_project_path, safe_import
+        setup_project_path()
+        safe_json_load = safe_import('utils.config', ['safe_json_load'])
+        
+        metadata = safe_json_load(metadata_file_path)
+        if not metadata:
+            return False
         return metadata.get('personality_type') == original_type
     except:
         return False

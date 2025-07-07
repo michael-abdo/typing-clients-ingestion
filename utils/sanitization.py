@@ -76,7 +76,12 @@ def sanitize_csv_field(value: Any, max_length: int = 200) -> str:
     value = _escape_csv_characters(value)
     
     # Step 7: Limit length and clean up whitespace
-    value = ' '.join(value.split())  # Normalize whitespace
+    # DRY: Use consolidated whitespace normalization from utils/config.py
+    from .import_utils import setup_project_path, safe_import
+    setup_project_path()
+    normalize_whitespace = safe_import('utils.config', ['normalize_whitespace'])
+    
+    value = normalize_whitespace(value)
     
     if len(value) > max_length:
         value = value[:max_length-3] + "..."
@@ -122,16 +127,12 @@ def _escape_csv_characters(value: str) -> str:
     - Newlines and carriage returns with spaces
     - Multiple consecutive spaces with single spaces
     """
-    # Replace CSV-breaking characters
-    value = value.replace(',', ';')
-    value = value.replace('\n', ' ')
-    value = value.replace('\r', ' ')
-    value = value.replace('\t', ' ')
+    # DRY: Use consolidated CSV escaping from utils/config.py
+    from .import_utils import setup_project_path, safe_import
+    setup_project_path()
+    escape_csv_content = safe_import('utils.config', ['escape_csv_content'])
     
-    # Normalize multiple spaces
-    value = re.sub(r'\s+', ' ', value)
-    
-    return value
+    return escape_csv_content(value)
 
 
 def validate_csv_field_safety(value: str) -> bool:
@@ -234,8 +235,14 @@ def _extract_meaningful_error(error_str: str) -> str:
         return " ".join(meaningful_parts[:3])  # Limit to first 3 meaningful parts
     
     # If no meaningful patterns found, return a cleaned version of the start
+    # DRY: Use consolidated truncation from utils/config.py
+    from .import_utils import setup_project_path, safe_import
+    setup_project_path()
+    safe_truncate = safe_import('utils.config', ['safe_truncate'])
+    
     words = error_str.split()[:10]  # First 10 words
-    return " ".join(words)
+    result = " ".join(words)
+    return safe_truncate(result, max_length=100, suffix='...')
 
 
 # Exception class for safe error handling

@@ -16,6 +16,8 @@ from pathlib import Path
 # Add parent directory to path to import utilities
 sys.path.append(str(Path(__file__).parent.parent.parent))
 from utils.extract_links import clean_url
+# DRY: Use consolidated CSV reading from utils/config.py
+from utils.config import read_csv_rows
 
 def clean_youtube_playlist_url(url):
     """Clean a YouTube playlist URL by extracting valid video IDs and removing duplicates"""
@@ -70,15 +72,24 @@ def cleanup_csv(input_file='outputs/output.csv', output_file='outputs/output_cle
     playlists_cleaned = 0
     duplicates_removed = 0
     
-    with open(input_file, 'r', encoding='utf-8') as infile, \
-         open(output_file, 'w', encoding='utf-8', newline='') as outfile:
+    # DRY: Use consolidated CSV reading from utils/config.py
+    # Get headers first
+    first_row = None
+    for row_num, row in read_csv_rows(input_file):
+        first_row = row
+        break
+    
+    if not first_row:
+        print(f"No data found in {input_file}")
+        return
         
-        reader = csv.DictReader(infile)
-        fieldnames = reader.fieldnames
+    fieldnames = list(first_row.keys())
+    
+    with open(output_file, 'w', encoding='utf-8', newline='') as outfile:
         writer = csv.DictWriter(outfile, fieldnames=fieldnames)
         writer.writeheader()
         
-        for row in reader:
+        for row_num, row in read_csv_rows(input_file):
             rows_processed += 1
             
             # Clean YouTube playlist URLs

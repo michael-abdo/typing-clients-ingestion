@@ -5,10 +5,16 @@ from requests.packages.urllib3.util.retry import Retry
 from typing import Optional, Dict, Any
 import logging
 
-try:
-    from config import get_config, is_ssl_verify_enabled
-except ImportError:
-    from .config import get_config, is_ssl_verify_enabled
+# DRY: Use consolidated import utilities to eliminate try/except ImportError block
+from .import_utils import safe_import_multiple
+
+# Import config functions using consolidated utilities
+imports = safe_import_multiple([
+    {'module': 'config', 'from_items': ['get_config', 'is_ssl_verify_enabled'], 'alias': 'config_funcs'}
+])
+
+# Extract imports
+get_config, is_ssl_verify_enabled = imports['config_funcs'] if isinstance(imports['config_funcs'], tuple) else (None, None)
 
 # Get configuration
 config = get_config()

@@ -8,10 +8,16 @@ from pathlib import Path
 from typing import Optional, Union, IO
 import logging
 
-try:
-    from config import get_config, get_timeout
-except ImportError:
-    from .config import get_config, get_timeout
+# DRY: Use consolidated import utilities to eliminate try/except ImportError block
+from .import_utils import safe_import_multiple
+
+# Import config functions using consolidated utilities
+imports = safe_import_multiple([
+    {'module': 'config', 'from_items': ['get_config', 'get_timeout'], 'alias': 'config_funcs'}
+])
+
+# Extract imports
+get_config, get_timeout = imports['config_funcs'] if isinstance(imports['config_funcs'], tuple) else (None, None)
 
 # Get configuration
 config = get_config()

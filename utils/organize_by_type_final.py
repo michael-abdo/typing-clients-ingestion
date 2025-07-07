@@ -13,11 +13,14 @@ import argparse
 from utils.path_setup import ensure_directory_exists
 from pathlib import Path
 
+# DRY: Use consolidated import utilities to eliminate try/except ImportError block
+from .import_utils import safe_import
+
 # Import standardized CSV reading function
-try:
-    from csv_manager import safe_csv_read
-except ImportError:
-    from .csv_manager import safe_csv_read
+safe_csv_read = safe_import('csv_manager', ['safe_csv_read'])
+
+# DRY: Use consolidated filename cleaning from utils/config.py
+clean_filename = safe_import('config', ['clean_filename'])
 
 
 def organize_files_by_type(mapping_csv: str = 'complete_file_mapping_100_percent.csv',
@@ -64,7 +67,11 @@ def organize_files_by_type(mapping_csv: str = 'complete_file_mapping_100_percent
                     personality_type = 'Unknown_Type'
             
             # Clean type for filesystem
-            type_clean = personality_type.replace('/', '-').replace(' ', '_').replace('#', 'num')
+            # DRY: Use consolidated filename cleaning from utils/config.py
+            if clean_filename:
+                type_clean = clean_filename(personality_type, replacement='_').replace('#', 'num')
+            else:
+                type_clean = personality_type.replace('/', '-').replace(' ', '_').replace('#', 'num')
             
             # Clean person name
             person_name = str(row['person_name'])

@@ -25,9 +25,14 @@ def get_latest_log_content(log_pattern, lines=5):
     
     latest_log = max(logs, key=os.path.getctime)
     try:
-        with open(latest_log, 'r') as f:
-            content = f.readlines()
-            return ''.join(content[-lines:])
+        # DRY: Use consolidated file reading from utils/config.py
+        from utils.config import read_file_with_fallback
+        
+        content = read_file_with_fallback(latest_log)
+        if content:
+            lines_list = content.splitlines()
+            return '\n'.join(lines_list[-lines:])
+        return "Could not read log file"
     except:
         return "Could not read log file"
 

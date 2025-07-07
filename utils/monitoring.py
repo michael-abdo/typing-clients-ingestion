@@ -12,15 +12,29 @@ from datetime import datetime, timedelta
 from dataclasses import dataclass, asdict
 from pathlib import Path
 
-try:
-    import pandas as pd
-    from logging_config import get_logger
-    from csv_manager import CSVManager
-    from error_handling import ErrorHandler
-except ImportError:
-    from .logging_config import get_logger
-    from .csv_manager import CSVManager
-    from .error_handling import ErrorHandler
+# DRY: Import consolidated JSON utilities
+from .import_utils import safe_import
+safe_json_load = safe_import('utils.config', ['safe_json_load'])
+safe_json_save = safe_import('utils.config', ['safe_json_save'])
+
+# DRY: Use consolidated import utilities to eliminate try/except ImportError block
+from .import_utils import safe_import_multiple, optional_import
+
+# Import pandas optionally since it might not be available
+pandas = optional_import('pandas', alias='pd')
+
+# Import other required modules
+imports = safe_import_multiple([
+    {'module': 'logging_config', 'from_items': ['get_logger'], 'alias': 'get_logger'},
+    {'module': 'csv_manager', 'from_items': ['CSVManager'], 'alias': 'CSVManager'},
+    {'module': 'error_handling', 'from_items': ['ErrorHandler'], 'alias': 'ErrorHandler'}
+])
+
+# Extract imports
+get_logger = imports['get_logger'] if not isinstance(imports['get_logger'], ImportError) else None
+CSVManager = imports['CSVManager'] if not isinstance(imports['CSVManager'], ImportError) else None
+ErrorHandler = imports['ErrorHandler'] if not isinstance(imports['ErrorHandler'], ImportError) else None
+pd = pandas if pandas is not None else None
 
 
 @dataclass
@@ -255,8 +269,8 @@ class DownloadMonitor:
             for run_dir in recent_runs:
                 summary_file = run_dir / 'summary.json'
                 if summary_file.exists():
-                    with open(summary_file) as f:
-                        data = json.load(f)
+                    # DRY: Use consolidated JSON load
+                    data = safe_json_load(summary_file)
                         if 'duration_seconds' in data:
                             times.append(data['duration_seconds'])
                             
@@ -334,8 +348,9 @@ class DownloadMonitor:
             date_str = datetime.now().strftime('%Y-%m-%d')
             metrics_file = self.metrics_dir / f"metrics_{date_str}.jsonl"
             
+            # DRY: Use consolidated JSON operations for metrics logging
             with open(metrics_file, 'a') as f:
-                f.write(json.dumps(asdict(metrics)) + '\n')
+                f.write(json.dumps(asdict(metrics)) + '\n')  # Keep as-is for append mode
                 
         except Exception as e:
             self.error_handler.handle_error(e, {'operation': 'save_metrics'})
@@ -346,8 +361,8 @@ class DownloadMonitor:
             timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
             report_file = self.metrics_dir / f"report_{timestamp}.json"
             
-            with open(report_file, 'w') as f:
-                json.dump(report, f, indent=2)
+            # DRY: Use consolidated JSON save
+            safe_json_save(report, report_file)
                 
         except Exception as e:
             self.error_handler.handle_error(e, {'operation': 'save_report'})
@@ -361,6 +376,7 @@ class DownloadMonitor:
             # Read recent metrics files
             for metrics_file in self.metrics_dir.glob("metrics_*.jsonl"):
                 try:
+                    # DRY: Keep line-by-line JSON reading for streaming metrics
                     with open(metrics_file) as f:
                         for line in f:
                             data = json.loads(line.strip())

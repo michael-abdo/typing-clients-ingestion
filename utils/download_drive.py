@@ -7,28 +7,48 @@ import argparse
 import requests
 from pathlib import Path
 from urllib.parse import urlparse, parse_qs
-try:
-    from logging_config import get_logger
-    from validation import validate_google_drive_url, validate_file_path, ValidationError
-    from retry_utils import retry_request, get_with_retry, retry_with_backoff
-    from file_lock import file_lock, safe_file_operation
-    from rate_limiter import rate_limit, wait_for_rate_limit
-    from row_context import RowContext, DownloadResult
-    from sanitization import sanitize_error_message, SafeDownloadError, validate_csv_field_safety
-    from config import get_drive_downloads_dir, create_download_dir
-    from error_decorators import handle_download_operations, handle_network_operations, handle_validation_errors
-    from error_messages import download_error, network_error, validation_error
-except ImportError:
-    from .logging_config import get_logger
-    from .validation import validate_google_drive_url, validate_file_path, ValidationError
-    from .retry_utils import retry_request, get_with_retry, retry_with_backoff
-    from .file_lock import file_lock, safe_file_operation
-    from .rate_limiter import rate_limit, wait_for_rate_limit
-    from .row_context import RowContext, DownloadResult
-    from .sanitization import sanitize_error_message, SafeDownloadError, validate_csv_field_safety
-    from .config import get_drive_downloads_dir, create_download_dir
-    from .error_decorators import handle_download_operations, handle_network_operations, handle_validation_errors
-    from .error_messages import download_error, network_error, validation_error
+# DRY: Use consolidated import utilities to eliminate 22-line try/except ImportError block
+from .import_utils import safe_import_multiple
+
+# Consolidated imports using safe_import_multiple  
+imports = safe_import_multiple([
+    {'module': 'logging_config', 'from_items': ['get_logger'], 'alias': 'get_logger'},
+    {'module': 'validation', 'from_items': ['validate_google_drive_url', 'validate_file_path', 'ValidationError'], 'alias': 'validation_funcs'},
+    {'module': 'retry_utils', 'from_items': ['retry_request', 'get_with_retry', 'retry_with_backoff'], 'alias': 'retry_funcs'},
+    {'module': 'file_lock', 'from_items': ['file_lock', 'safe_file_operation'], 'alias': 'file_funcs'},
+    {'module': 'rate_limiter', 'from_items': ['rate_limit', 'wait_for_rate_limit'], 'alias': 'rate_funcs'},
+    {'module': 'row_context', 'from_items': ['RowContext', 'DownloadResult'], 'alias': 'context_classes'},
+    {'module': 'sanitization', 'from_items': ['sanitize_error_message', 'SafeDownloadError', 'validate_csv_field_safety'], 'alias': 'sanitization_funcs'},
+    {'module': 'config', 'from_items': ['get_drive_downloads_dir', 'create_download_dir'], 'alias': 'config_funcs'},
+    {'module': 'error_decorators', 'from_items': ['handle_download_operations', 'handle_network_operations', 'handle_validation_errors'], 'alias': 'error_decorators'},
+    {'module': 'error_messages', 'from_items': ['download_error', 'network_error', 'validation_error'], 'alias': 'error_messages'}
+])
+
+# Extract imports (with error handling for failed imports)
+get_logger = imports['get_logger'] if not isinstance(imports['get_logger'], ImportError) else None
+validate_google_drive_url = imports['validation_funcs'][0] if isinstance(imports['validation_funcs'], tuple) else None
+validate_file_path = imports['validation_funcs'][1] if isinstance(imports['validation_funcs'], tuple) else None
+ValidationError = imports['validation_funcs'][2] if isinstance(imports['validation_funcs'], tuple) else None
+retry_request = imports['retry_funcs'][0] if isinstance(imports['retry_funcs'], tuple) else None
+get_with_retry = imports['retry_funcs'][1] if isinstance(imports['retry_funcs'], tuple) else None
+retry_with_backoff = imports['retry_funcs'][2] if isinstance(imports['retry_funcs'], tuple) else None
+file_lock = imports['file_funcs'][0] if isinstance(imports['file_funcs'], tuple) else None
+safe_file_operation = imports['file_funcs'][1] if isinstance(imports['file_funcs'], tuple) else None
+rate_limit = imports['rate_funcs'][0] if isinstance(imports['rate_funcs'], tuple) else None
+wait_for_rate_limit = imports['rate_funcs'][1] if isinstance(imports['rate_funcs'], tuple) else None
+RowContext = imports['context_classes'][0] if isinstance(imports['context_classes'], tuple) else None
+DownloadResult = imports['context_classes'][1] if isinstance(imports['context_classes'], tuple) else None
+sanitize_error_message = imports['sanitization_funcs'][0] if isinstance(imports['sanitization_funcs'], tuple) else None
+SafeDownloadError = imports['sanitization_funcs'][1] if isinstance(imports['sanitization_funcs'], tuple) else None
+validate_csv_field_safety = imports['sanitization_funcs'][2] if isinstance(imports['sanitization_funcs'], tuple) else None
+get_drive_downloads_dir = imports['config_funcs'][0] if isinstance(imports['config_funcs'], tuple) else None
+create_download_dir = imports['config_funcs'][1] if isinstance(imports['config_funcs'], tuple) else None
+handle_download_operations = imports['error_decorators'][0] if isinstance(imports['error_decorators'], tuple) else None
+handle_network_operations = imports['error_decorators'][1] if isinstance(imports['error_decorators'], tuple) else None
+handle_validation_errors = imports['error_decorators'][2] if isinstance(imports['error_decorators'], tuple) else None
+download_error = imports['error_messages'][0] if isinstance(imports['error_messages'], tuple) else None
+network_error = imports['error_messages'][1] if isinstance(imports['error_messages'], tuple) else None
+validation_error = imports['error_messages'][2] if isinstance(imports['error_messages'], tuple) else None
 
 # Setup module logger
 logger = get_logger(__name__)

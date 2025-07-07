@@ -3,19 +3,22 @@ import csv
 import os
 import sys
 
-# Add utils directory to the Python path
-sys.path.append(os.path.join(os.path.dirname(__file__), 'utils'))
+# Import consolidated utilities
+from import_utils import safe_import_multiple
 
-try:
-    from scrape_google_sheets import fetch_table_data, update_csv
-    from extract_links import process_url
-    from logging_config import get_logger
-    from csv_manager import CSVManager, atomic_csv_update, streaming_csv_update
-except ImportError:
-    from .scrape_google_sheets import fetch_table_data, update_csv
-    from .extract_links import process_url
-    from .logging_config import get_logger
-    from .csv_manager import CSVManager, atomic_csv_update, streaming_csv_update
+# Setup imports using consolidated utilities
+imports = safe_import_multiple([
+    {'module': 'scrape_google_sheets', 'from_items': ['fetch_table_data', 'update_csv'], 'alias': 'sheets_funcs'},
+    {'module': 'extract_links', 'from_items': ['process_url'], 'alias': 'process_url'},
+    {'module': 'logging_config', 'from_items': ['get_logger'], 'alias': 'get_logger'},
+    {'module': 'csv_manager', 'from_items': ['CSVManager', 'atomic_csv_update', 'streaming_csv_update'], 'alias': 'csv_funcs'}
+])
+
+# Extract imports
+fetch_table_data, update_csv = imports['sheets_funcs']
+process_url = imports['process_url']
+get_logger = imports['get_logger']
+CSVManager, atomic_csv_update, streaming_csv_update = imports['csv_funcs']
 
 # Setup module logger
 logger = get_logger(__name__)

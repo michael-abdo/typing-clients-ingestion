@@ -13,6 +13,11 @@ import hashlib
 import glob
 import shutil
 import pandas as pd
+
+# DRY: Use consolidated filename cleaning from utils/config.py
+import sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from utils.config import clean_filename
 from pathlib import Path
 from collections import defaultdict
 from datetime import datetime
@@ -1441,7 +1446,8 @@ class FileMapper:
                 name_parts = os.path.splitext(old_name)
                 
                 # Clean type for filename
-                type_clean = str(row['type']).replace('/', '-').replace(' ', '_').replace('#', 'num')
+                # DRY: Use consolidated filename cleaning from utils/config.py  
+                type_clean = clean_filename(str(row['type']), replacement='_').replace('#', 'num')
                 new_name = f"{name_parts[0]}_row{row_id}_{type_clean}{name_parts[1]}"
                 new_path = os.path.join(dir_path, new_name)
                 
