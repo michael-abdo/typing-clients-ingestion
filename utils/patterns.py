@@ -158,33 +158,76 @@ def wait_and_scroll_page(driver, wait_timeout: int = 30, scroll_delay: float = 0
     time.sleep(1)
 
 
-# Global selenium driver
+# Global selenium driver with enhanced management
+import atexit
+from selenium import webdriver
+from webdriver_manager.chrome import ChromeDriverManager
+from selenium.webdriver.chrome.service import Service
+
+# Initialize logger and error handling
+try:
+    from logging_config import get_logger
+    from error_handling import with_standard_error_handling
+    logger = get_logger(__name__)
+except ImportError:
+    try:
+        from .logging_config import get_logger
+        from .error_handling import with_standard_error_handling
+        logger = get_logger(__name__)
+    except ImportError:
+        import logging
+        logger = logging.getLogger(__name__)
+        # Fallback decorator if error_handling not available
+        def with_standard_error_handling(operation_name, return_on_error):
+            def decorator(func):
+                return func
+            return decorator
+
 _driver = None
 
+@with_standard_error_handling("Selenium driver initialization", None)
 def get_selenium_driver():
-    """Get initialized Selenium WebDriver with standardized options (DRY)"""
+    """Get initialized Selenium WebDriver with standardized options and enhanced error handling (DRY)"""
     global _driver
     if _driver is None:
-        print("Initializing Selenium Chrome driver...")
+        logger.info("Initializing Selenium Chrome driver...")
         chrome_options = get_chrome_options()
+        
         try:
-            from selenium import webdriver
-            _driver = webdriver.Chrome(options=chrome_options)
+            _driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
         except Exception as e:
-            print(f"Could not initialize Selenium driver: {str(e)}")
-            return None
+            logger.error(f"Error initializing Selenium driver: {str(e)}")
+            # Try fallback method - requires Chrome driver to be installed manually
+            try:
+                _driver = webdriver.Chrome(options=chrome_options)
+            except Exception as e:
+                logger.error(f"Could not initialize Selenium driver: {str(e)}")
+                return None
+    
+    # Ensure driver is still alive
+    try:
+        _driver.title  # Simple check to see if driver is responsive
+    except Exception:
+        logger.warning("Driver was closed, reinitializing...")
+        _driver = None
+        return get_selenium_driver()
+    
     return _driver
 
+@with_standard_error_handling("Selenium driver cleanup", None)
 def cleanup_selenium_driver():
-    """Cleanup global Selenium driver (DRY)"""
+    """Cleanup global Selenium driver with enhanced error handling (DRY)"""
     global _driver
     if _driver is not None:
         try:
             _driver.quit()
             _driver = None
-            print("Selenium driver cleaned up")
+            logger.info("Selenium driver cleaned up successfully")
         except Exception as e:
-            print(f"Error cleaning up Selenium driver: {e}")
+            logger.error(f"Error cleaning up Selenium driver: {e}")
+
+# Register cleanup function to run on exit
+atexit.register(cleanup_selenium_driver)
 
 
 # Example usage

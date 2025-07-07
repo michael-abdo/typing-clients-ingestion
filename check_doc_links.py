@@ -4,7 +4,9 @@
 import pandas as pd
 
 # Load the CSV
-df = pd.read_csv('outputs/output.csv')
+from utils.config import get_config
+config = get_config()
+df = pd.read_csv(config.get('paths.output_csv', 'outputs/output.csv'))
 
 # List of names to check
 names_to_check = [

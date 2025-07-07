@@ -556,3 +556,125 @@ if __name__ == "__main__":
     # Test getting nested values
     print(f"YouTube max workers: {config.get('downloads.youtube.max_workers', 4)}")
     print(f"Large file chunk size: {config.get('downloads.drive.chunk_sizes.large', 8388608)}")
+
+
+# ============================================================================
+# CLI ARGUMENT PARSER CONSOLIDATION (DRY Phase 2)
+# ============================================================================
+
+def create_standard_parser(description: str, **standard_args) -> 'argparse.ArgumentParser':
+    """
+    Create standardized ArgumentParser with common arguments (DRY consolidation).
+    
+    Eliminates duplicate argparse setup patterns across 20+ scripts.
+    
+    Args:
+        description: Description for the parser
+        **standard_args: Standard argument flags to include:
+            - csv: bool - Add --csv argument for CSV file path
+            - max_rows: bool - Add --max-rows argument  
+            - directory: bool - Add --directory argument
+            - debug: bool - Add --debug/--verbose arguments
+            - output: bool - Add --output argument
+            - dry_run: bool - Add --dry-run argument
+            
+    Returns:
+        Configured ArgumentParser instance
+    """
+    import argparse
+    
+    parser = argparse.ArgumentParser(description=description)
+    
+    # Standard CSV file argument
+    if standard_args.get('csv', False):
+        default_csv = get_config().get('paths.output_csv', 'outputs/output.csv')
+        parser.add_argument('--csv', default=default_csv,
+                          help=f'Path to CSV file (default: {default_csv})')
+    
+    # Standard max rows argument
+    if standard_args.get('max_rows', False):
+        parser.add_argument('--max-rows', type=int, default=None,
+                          help='Maximum number of rows to process')
+    
+    # Standard directory argument
+    if standard_args.get('directory', False):
+        parser.add_argument('--directory', default='youtube_downloads',
+                          help='Directory path (default: youtube_downloads)')
+    
+    # Standard debug/verbose arguments
+    if standard_args.get('debug', False):
+        parser.add_argument('--debug', action='store_true',
+                          help='Enable debug output')
+        parser.add_argument('--verbose', '-v', action='store_true',
+                          help='Enable verbose output')
+    
+    # Standard output argument
+    if standard_args.get('output', False):
+        parser.add_argument('--output', '-o', type=str,
+                          help='Output file path')
+    
+    # Standard dry run argument
+    if standard_args.get('dry_run', False):
+        parser.add_argument('--dry-run', action='store_true',
+                          help='Show what would be done without executing')
+    
+    return parser
+
+
+def standard_script_main(main_func, description: str, **parser_args):
+    """
+    Standard script entry point wrapper with error handling (DRY consolidation).
+    
+    Eliminates duplicate main() patterns across 78+ script files.
+    
+    Args:
+        main_func: Function to call with parsed args
+        description: Description for argument parser
+        **parser_args: Arguments to pass to create_standard_parser()
+        
+    Returns:
+        Exit code (0 for success, 1 for error)
+    """
+    try:
+        parser = create_standard_parser(description, **parser_args)
+        args = parser.parse_args()
+        result = main_func(args)
+        return result if isinstance(result, int) else 0
+    except KeyboardInterrupt:
+        print("\n⚠️  Script interrupted by user")
+        return 1
+    except Exception as e:
+        print(f"❌ Error: {e}")
+        return 1
+
+# ============================================================================
+# CONSOLIDATED CONSTANTS AND MAGIC NUMBERS (DRY Phase 2)
+# ============================================================================
+
+class Constants:
+    """Centralized constants to eliminate magic numbers across the codebase (DRY consolidation)."""
+    
+    # File size constants (bytes)
+    BYTES_PER_KB = 1024
+    BYTES_PER_MB = 1024 * 1024
+    BYTES_PER_GB = 1024 * 1024 * 1024
+    
+    # Progress display constants
+    DEFAULT_PROGRESS_BAR_WIDTH = 40
+    PROGRESS_UPDATE_INTERVAL = 1.0  # seconds
+    
+    # Default delays (seconds)
+    DEFAULT_DELAY = 2.0
+    SHORT_DELAY = 1.0
+    LONG_DELAY = 5.0
+
+
+def bytes_to_mb(bytes_value: int) -> float:
+    """Convert bytes to megabytes (DRY utility)."""
+    return bytes_value / Constants.BYTES_PER_MB
+
+
+def bytes_to_gb(bytes_value: int) -> float:
+    """Convert bytes to gigabytes (DRY utility)."""
+    return bytes_value / Constants.BYTES_PER_GB
+

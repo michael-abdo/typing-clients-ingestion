@@ -12,7 +12,9 @@ sys.path.append(os.path.join(os.path.dirname(__file__), 'utils'))
 from csv_tracker import safe_csv_read
 
 # Load the CSV with tracking dtype specification
-df = safe_csv_read('outputs/output.csv', 'tracking')
+from utils.config import get_config
+config = get_config()
+df = safe_csv_read(config.get('paths.output_csv', 'outputs/output.csv'), 'tracking')
 
 # List of names to check
 names_to_check = [

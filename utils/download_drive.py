@@ -15,7 +15,8 @@ try:
     from rate_limiter import rate_limit, wait_for_rate_limit
     from row_context import RowContext, DownloadResult
     from sanitization import sanitize_error_message, SafeDownloadError, validate_csv_field_safety
-    from config import get_drive_downloads_dir, create_download_dir
+    from config import get_drive_downloads_dir, create_download_dir, Constants
+    from download_utils import download_file_with_progress
 except ImportError:
     from .logging_config import get_logger
     from .validation import validate_google_drive_url, validate_file_path, ValidationError
@@ -24,7 +25,8 @@ except ImportError:
     from .rate_limiter import rate_limit, wait_for_rate_limit
     from .row_context import RowContext, DownloadResult
     from .sanitization import sanitize_error_message, SafeDownloadError, validate_csv_field_safety
-    from .config import get_drive_downloads_dir, create_download_dir
+    from .config import get_drive_downloads_dir, create_download_dir, Constants
+    from .download_utils import download_file_with_progress
 
 # Setup module logger
 logger = get_logger(__name__)
@@ -543,42 +545,18 @@ def download_drive_file(file_id, output_filename=None, logger=None):
         if total_size == 0:
             logger.warning("Could not determine file size")
         else:
-            logger.info(f"File size: {total_size / (1024 * 1024):.2f} MB")
+            logger.info(f"File size: {total_size / Constants.BYTES_PER_MB:.2f} MB")
         
         # Download to a temporary file first
         temp_path = f"{output_path}.tmp"
         
-        # Download with progress indicator and adaptive chunk size
-        try:
-            with open(temp_path, 'wb') as f:
-                downloaded = 0
-                
-                # Adaptive chunk size based on file size
-                if total_size > 100 * 1024 * 1024:  # Files > 100MB
-                    chunk_size = 8 * 1024 * 1024  # 8MB chunks for large files
-                elif total_size > 10 * 1024 * 1024:  # Files > 10MB
-                    chunk_size = 2 * 1024 * 1024  # 2MB chunks for medium files
-                else:
-                    chunk_size = 1024 * 1024  # 1MB chunks for small files
-                
-                for chunk in response.iter_content(chunk_size=chunk_size):
-                    if chunk:
-                        f.write(chunk)
-                        downloaded += len(chunk)
-                        
-                        if total_size > 0:
-                            # Only show progress if we know the total size
-                            progress = int(50 * downloaded / total_size)
-                            sys.stdout.write("\r[%s%s] %s%%" % ('=' * progress, ' ' * (50-progress), int(100 * downloaded / total_size)))
-                            sys.stdout.flush()
-                
-                if total_size > 0:
-                    sys.stdout.write("\n")
+            # Use centralized download function (DRY consolidation)
+            success = download_file_with_progress(response, temp_path, total_size, logger)
+            if not success:
+                raise Exception("Download failed")
             
-            # Atomic rename after successful download
+            # Move to final location
             os.replace(temp_path, output_path)
-            logger.success(f"Downloaded file to {output_path}")
-            return output_path
             
         except Exception as e:
             # Clean up temp file on error
@@ -687,27 +665,15 @@ def process_direct_download_url(url, output_filename=None, logger=None):
         total_size = int(response.headers.get('Content-Length', 0))
         
         if total_size > 0:
-            logger.info(f"File size: {total_size / (1024 * 1024):.2f} MB")
+            logger.info(f"File size: {total_size / Constants.BYTES_PER_MB:.2f} MB")
         
         try:
-            with open(temp_path, 'wb') as f:
-                downloaded = 0
-                chunk_size = 8 * 1024 * 1024 if total_size > 100 * 1024 * 1024 else 1024 * 1024
-                
-                for chunk in response.iter_content(chunk_size=chunk_size):
-                    if chunk:
-                        f.write(chunk)
-                        downloaded += len(chunk)
-                        
-                        if total_size > 0:
-                            progress = int(50 * downloaded / total_size)
-                            sys.stdout.write("\r[%s%s] %s%%" % ('=' * progress, ' ' * (50-progress), int(100 * downloaded / total_size)))
-                            sys.stdout.flush()
-                
-                if total_size > 0:
-                    sys.stdout.write("\n")
+            # Use centralized download function (DRY consolidation)
+            success = download_file_with_progress(response, temp_path, total_size, logger)
+            if not success:
+                raise Exception("Download failed")
             
-            # Atomic rename
+            # Move to final location
             os.replace(temp_path, output_path)
             logger.success(f"Downloaded file to {output_path}")
             return output_path

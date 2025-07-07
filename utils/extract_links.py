@@ -4,11 +4,8 @@ import os
 import json
 import time
 import atexit
-from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
+import urllib.parse
 from selenium.webdriver.common.by import By
-from selenium.webdriver.chrome.options import Options
-from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
@@ -17,13 +14,15 @@ try:
     from config import get_config
     from logging_config import get_logger
     from rate_limiter import rate_limit, wait_for_rate_limit
-    from patterns import clean_url
+    from patterns import clean_url, get_selenium_driver, cleanup_selenium_driver
+    from error_handling import with_standard_error_handling
 except ImportError:
     from .http_pool import get as http_get
     from .config import get_config
     from .logging_config import get_logger
     from .rate_limiter import rate_limit, wait_for_rate_limit
-    from .patterns import clean_url
+    from .patterns import clean_url, get_selenium_driver, cleanup_selenium_driver
+    from .error_handling import with_standard_error_handling
 
 # Setup module logger
 logger = get_logger(__name__)
@@ -38,58 +37,10 @@ CACHE_DIR = os.path.join(BASE_DIR, "cache")
 # Only cache Google Sheets HTML
 GOOGLE_SHEET_CACHE_FILE = os.path.join(CACHE_DIR, "google_sheet_cache.html")
 
-# Selenium driver instance (initialize lazily)
-_driver = None
-
-# Register cleanup function to run on exit
-atexit.register(lambda: cleanup_driver())
-
-def cleanup_driver():
-    """Clean up the Selenium driver"""
-    global _driver
-    if _driver is not None:
-        try:
-            _driver.quit()
-            _driver = None
-            logger.info("Selenium driver cleaned up successfully")
-        except Exception as e:
-            logger.error(f"Error cleaning up Selenium driver: {e}")
-
-
-def get_selenium_driver():
-    """Initialize and return a Selenium WebDriver instance"""
-    global _driver
-    if _driver is None:
-        logger.info("Initializing Selenium Chrome driver...")
-        chrome_options = Options()
-        chrome_options.add_argument("--headless")  # Run in headless mode
-        chrome_options.add_argument("--disable-gpu")
-        chrome_options.add_argument("--window-size=1920,1080")
-        chrome_options.add_argument("--disable-dev-shm-usage")
-        chrome_options.add_argument("--no-sandbox")
-        
-        try:
-            _driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
-        except Exception as e:
-            logger.error(f"Error initializing Selenium driver: {str(e)}")
-            # Try fallback method - requires Chrome driver to be installed manually
-            try:
-                _driver = webdriver.Chrome(options=chrome_options)
-            except Exception as e:
-                logger.error(f"Could not initialize Selenium driver: {str(e)}")
-                return None
-    
-    # Ensure driver is still alive
-    try:
-        _driver.title  # Simple check to see if driver is responsive
-    except Exception:
-        logger.warning("Driver was closed, reinitializing...")
-        _driver = None
-        return get_selenium_driver()
-    
-    return _driver
+# Selenium driver functions are now imported from patterns.py (DRY consolidation)
 
 @rate_limit('selenium')
+@with_standard_error_handling("Selenium HTML extraction", "")
 def get_html_with_selenium(url, debug=False):
     """Get HTML using Selenium for JavaScript rendering"""
     driver = get_selenium_driver()
@@ -135,6 +86,205 @@ def get_html_with_selenium(url, debug=False):
         logger.error(f"Error loading {url} with Selenium: {str(e)}")
         return ""
 
+@with_standard_error_handling("Google Doc text extraction", "")
+def extract_google_doc_text(url, driver=None):
+    """Enhanced Google Doc text extraction with JavaScript and dynamic waiting
+    
+    Consolidates extraction logic from multiple duplicate implementations.
+    Uses advanced techniques for modern Google Docs content extraction.
+    
+    Args:
+        url (str): Google Doc URL to extract text from
+        driver: Optional existing Selenium driver instance
+        
+    Returns:
+        str: Extracted text content from the document
+    """
+    # Use provided driver or get the shared one
+    if driver is None:
+        driver = get_selenium_driver()
+    if not driver:
+        logger.error("Failed to initialize Selenium driver")
+        return ""
+    
+    logger.info(f"Loading Google Doc with enhanced extraction: {url}")
+    start_time = time.time()
+    driver.get(url)
+    
+    # Wait for page to load
+    WebDriverWait(driver, 30).until(
+        EC.presence_of_element_located((By.TAG_NAME, "body"))
+    )
+    load_time = time.time() - start_time
+    logger.info(f"Page loaded in {load_time:.2f} seconds")
+    
+    # Dynamic wait for content to stabilize
+    logger.info("Waiting for content to stabilize...")
+    previous_content_length = 0
+    stable_checks = 0
+    max_wait = 30
+    start_wait = time.time()
+    
+    while time.time() - start_wait < max_wait:
+        try:
+            current_content_length = driver.execute_script("""
+                var content = document.body.innerText || '';
+                var editables = document.querySelectorAll('[contenteditable="true"]');
+                for (var i = 0; i < editables.length; i++) {
+                    content += editables[i].innerText || '';
+                }
+                return content.length;
+            """)
+            
+            if current_content_length > previous_content_length:
+                previous_content_length = current_content_length
+                stable_checks = 0
+                time.sleep(2)
+            elif current_content_length == previous_content_length and current_content_length > 100:
+                stable_checks += 1
+                if stable_checks >= 2:
+                    logger.info(f"Content stabilized at {current_content_length} chars")
+                    break
+                time.sleep(1)
+            else:
+                time.sleep(2)
+        except:
+            time.sleep(2)
+    
+    # Enhanced JavaScript-based extraction
+    logger.info("Extracting content with JavaScript...")
+    extraction_result = driver.execute_script("""
+            var content = '';
+            
+            // Method 1: Extract from contenteditable areas (main document content)
+            var editables = document.querySelectorAll('[contenteditable="true"]');
+            for (var i = 0; i < editables.length; i++) {
+                var text = editables[i].innerText || editables[i].textContent || '';
+                if (text.length > 20) {
+                    content += text + '\\n';
+                }
+            }
+            
+            // Method 2: Extract from document/textbox roles
+            var docElements = document.querySelectorAll('[role="document"], [role="textbox"]');
+            for (var i = 0; i < docElements.length; i++) {
+                var text = docElements[i].innerText || docElements[i].textContent || '';
+                if (text.length > 20 && content.indexOf(text.substring(0, 50)) === -1) {
+                    content += text + '\\n';
+                }
+            }
+            
+            // Method 3: Look for Google Docs specific content areas
+            var kixElements = document.querySelectorAll('[class*="kix"]');
+            for (var i = 0; i < kixElements.length; i++) {
+                var text = kixElements[i].innerText || kixElements[i].textContent || '';
+                if (text.length > 50 && content.indexOf(text.substring(0, 50)) === -1) {
+                    content += text + '\\n';
+                }
+            }
+            
+            // Method 4: Try iframe content if accessible
+            var iframes = document.querySelectorAll('iframe');
+            for (var i = 0; i < iframes.length; i++) {
+                try {
+                    var iframeDoc = iframes[i].contentDocument || iframes[i].contentWindow.document;
+                    if (iframeDoc && iframeDoc.body) {
+                        var text = iframeDoc.body.innerText || iframeDoc.body.textContent || '';
+                        if (text.length > 50 && content.indexOf(text.substring(0, 50)) === -1) {
+                            content += text + '\\n';
+                        }
+                    }
+                } catch (e) {
+                    // Cross-origin iframe, skip
+                }
+            }
+            
+            // Fallback: get all meaningful text
+            if (content.length < 100) {
+                content = document.body.innerText || document.body.textContent || '';
+            }
+            
+            return content.trim();
+    """)
+    
+    # Clean up the extracted content
+    text_content = re.sub(r'\s+', ' ', extraction_result).strip()
+    
+    # Additional verification - ensure we got meaningful content
+    if len(text_content) < 50:
+        logger.warning("Low content extraction, trying fallback...")
+        # Fallback to BeautifulSoup extraction
+        soup = BeautifulSoup(driver.page_source, 'html.parser')
+        body = soup.find('body')
+        if body:
+            fallback_text = body.get_text(separator=' ', strip=True)
+            if len(fallback_text) > len(text_content):
+                text_content = fallback_text
+    
+    logger.info(f"Enhanced extraction: {len(text_content)} characters")
+    
+    # Quality assessment
+    if len(text_content) > 200:
+        logger.debug("Quality: High content volume")
+    elif len(text_content) > 50:
+        logger.debug("Quality: Moderate content volume")
+    else:
+        logger.warning("Quality: Low content volume - may need manual review")
+    
+    return text_content
+        # Note: Error handling now provided by @with_standard_error_handling decorator (DRY)
+
+@with_standard_error_handling("Document text extraction with retry", ("", "Failed to extract text"))
+def extract_text_with_retry(doc_url, max_attempts=None):
+    """Extract text from document with retry logic (DRY consolidation)"""
+    if max_attempts is None:
+        max_attempts = config.get("retry.max_attempts", 3)
+    
+    for attempt in range(max_attempts):
+        try:
+            logger.info(f"Attempt {attempt + 1}/{max_attempts}: Extracting text from {doc_url}")
+            text = extract_google_doc_text(doc_url)
+            if text and len(text.strip()) > 0:
+                logger.info(f"Successfully extracted {len(text)} characters")
+                return text, None
+            else:
+                logger.warning(f"No text extracted on attempt {attempt + 1}")
+        except Exception as e:
+            error_msg = str(e)
+            logger.error(f"Attempt {attempt + 1} failed: {error_msg}")
+            if attempt < max_attempts - 1:
+                retry_delay = config.get("retry.base_delay", 2.0)
+                logger.info(f"Retrying in {retry_delay} seconds...")
+                time.sleep(retry_delay)
+    
+    return "", f"Failed after {max_attempts} attempts"
+
+def extract_actual_url(google_url):
+    """Extract the actual URL from a Google redirect URL
+    
+    Consolidates URL extraction logic from multiple duplicate implementations.
+    
+    Args:
+        google_url (str): Google redirect URL (starts with https://www.google.com/url?q=)
+        
+    Returns:
+        str: The actual URL extracted from the Google redirect, or original URL if not a redirect
+    """
+    if not google_url.startswith("https://www.google.com/url?q="):
+        return google_url
+    
+    # Extract the 'q' parameter which contains the actual URL
+    start_idx = google_url.find("q=") + 2
+    end_idx = google_url.find("&", start_idx)
+    if end_idx == -1:
+        actual_url = google_url[start_idx:]
+    else:
+        actual_url = google_url[start_idx:end_idx]
+    
+    # URL decode
+    return urllib.parse.unquote(actual_url)
+
+@with_standard_error_handling("HTML download", "")
 def get_html(url, debug=False):
     """Get HTML from the web without caching (except for Google Sheets)"""
     # Use Selenium for Google Docs to handle JavaScript rendering
@@ -611,4 +761,4 @@ if __name__ == "__main__":
         print(f"  - {drive_link}")
     
     # Clean up the driver
-    cleanup_driver()
+    cleanup_selenium_driver()

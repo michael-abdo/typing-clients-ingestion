@@ -1,4 +1,8 @@
 #!/usr/bin/env python3
+import sys, os
+sys.path.append(os.path.join(os.path.dirname(__file__), "..", "utils"))
+from download_utils import download_file_with_progress
+from config import Constants
 """
 Download large Google Drive files that show virus scan warnings.
 Handles direct drive.usercontent.google.com URLs properly.
@@ -115,43 +119,20 @@ def download_large_drive_file(url, output_dir=DOWNLOADS_DIR):
         # Get file size if available
         total_size = int(response.headers.get('Content-Length', 0))
         if total_size > 0:
-            logger.info(f"File size: {total_size / (1024 * 1024):.2f} MB")
+            logger.info(f"File size: {total_size / Constants.BYTES_PER_MB:.2f} MB")
         
         # Download file with progress
         try:
-            with open(temp_path, 'wb') as f:
-                downloaded = 0
-                chunk_size = 8 * 1024 * 1024  # 8MB chunks for large files
-                start_time = time.time()
-                
-                for chunk in response.iter_content(chunk_size=chunk_size):
-                    if chunk:
-                        f.write(chunk)
-                        downloaded += len(chunk)
-                        
-                        # Show progress
-                        if total_size > 0:
-                            progress = downloaded / total_size * 100
-                            speed = downloaded / (time.time() - start_time) / (1024 * 1024)  # MB/s
-                            eta = (total_size - downloaded) / (downloaded / (time.time() - start_time)) if downloaded > 0 else 0
-                            
-                            sys.stdout.write(f"\rDownloading: {progress:.1f}% | {downloaded / (1024 * 1024):.1f}/{total_size / (1024 * 1024):.1f} MB | {speed:.1f} MB/s | ETA: {eta:.0f}s")
-                            sys.stdout.flush()
-                
-                if total_size > 0:
-                    sys.stdout.write("\n")
-            
-            # Verify download completed
-            if total_size > 0 and os.path.getsize(temp_path) != total_size:
-                logger.error(f"Download incomplete: got {os.path.getsize(temp_path)} bytes, expected {total_size}")
-                os.unlink(temp_path)
+            # Use centralized download function (DRY consolidation)
+            success = download_file_with_progress(response, temp_path, total_size, logger)
+            if not success:
+                logger.error("Download failed")
                 return None
             
-            # Atomic rename
+            # Move to final location
             os.replace(temp_path, output_path)
             
-            elapsed = time.time() - start_time
-            logger.info(f"✅ Download completed in {elapsed:.1f} seconds")
+            logger.info(f"✅ Download completed")
             logger.info(f"Saved to: {output_path}")
             
             return output_path

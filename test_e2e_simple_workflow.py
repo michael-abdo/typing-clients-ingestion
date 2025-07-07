@@ -71,7 +71,9 @@ class E2ESimpleWorkflowTest:
         self.test_output_dir.mkdir(exist_ok=True)
         
         # Backup original outputs if they exist
-        original_output = Path("outputs/output.csv")
+        from utils.config import get_config
+        config = get_config()
+        original_output = Path(config.get('paths.output_csv', 'outputs/output.csv'))
         if original_output.exists():
             backup_path = self.test_output_dir / f"backup_output_{int(time.time())}.csv"
             shutil.copy2(original_output, backup_path)

@@ -10,6 +10,12 @@ from dataclasses import dataclass
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 
+# Import centralized state management (DRY)
+try:
+    from config import save_json_state, load_json_state
+except ImportError:
+    from .config import save_json_state, load_json_state
+
 
 @dataclass
 class RowContext:
@@ -89,12 +95,12 @@ class DownloadResult:
             **self.row_context.to_metadata_dict()
         }
         
-        try:
-            with open(metadata_path, 'w') as f:
-                json.dump(metadata, f, indent=2)
+        # Use centralized state management (DRY)
+        save_json_state(metadata_path, metadata)
+        if os.path.exists(metadata_path):
             return metadata_path
-        except Exception as e:
-            print(f"Warning: Could not save metadata file {metadata_path}: {e}")
+        else:
+            print(f"Warning: Could not save metadata file {metadata_path}")
             return ""
 
 
@@ -111,20 +117,21 @@ def create_row_context_from_csv_row(row, row_index: int) -> RowContext:
 
 def load_row_context_from_metadata(metadata_file_path: str) -> Optional[RowContext]:
     """Load RowContext from metadata file"""
-    try:
-        with open(metadata_file_path, 'r') as f:
-            metadata = json.load(f)
-            
-        return RowContext(
-            row_id=metadata['source_csv_row_id'],
-            row_index=metadata['source_csv_index'],
-            type=metadata['personality_type'],
-            name=metadata['person_name'],
-            email=metadata['person_email']
-        )
-    except (FileNotFoundError, json.JSONDecodeError, KeyError) as e:
-        print(f"Error loading row context from {metadata_file_path}: {e}")
-        return None
+    # Use centralized state management (DRY)
+    metadata = load_json_state(metadata_file_path, default=None)
+    if metadata:
+        try:
+            return RowContext(
+                row_id=metadata['source_csv_row_id'],
+                row_index=metadata['source_csv_index'],
+                type=metadata['personality_type'],
+                name=metadata['person_name'],
+                email=metadata['person_email']
+            )
+        except KeyError as e:
+            print(f"Error loading row context from {metadata_file_path}: missing key {e}")
+            return None
+    return None
 
 
 def find_metadata_files(downloads_dir: str, pattern: str = "*_metadata.json") -> List[str]:
@@ -135,12 +142,9 @@ def find_metadata_files(downloads_dir: str, pattern: str = "*_metadata.json") ->
 
 def verify_type_preservation(original_type: str, metadata_file_path: str) -> bool:
     """Verify that type data was preserved in metadata"""
-    try:
-        with open(metadata_file_path, 'r') as f:
-            metadata = json.load(f)
-        return metadata.get('personality_type') == original_type
-    except:
-        return False
+    # Use centralized state management (DRY)
+    metadata = load_json_state(metadata_file_path, default={})
+    return metadata.get('personality_type') == original_type
 
 
 if __name__ == "__main__":

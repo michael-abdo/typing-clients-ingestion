@@ -14,13 +14,15 @@ from pathlib import Path
 
 try:
     import pandas as pd
-    from logging_config import get_logger
-    from csv_tracker import get_download_status_summary, get_failed_downloads
-    from error_handling import ErrorHandler
+    from utils.logging_config import get_logger
+    from utils.csv_tracker import get_download_status_summary, get_failed_downloads
+    from utils.error_handling import ErrorHandler
+    from utils.config import Constants
 except ImportError:
     from .logging_config import get_logger
     from .csv_tracker import get_download_status_summary, get_failed_downloads
     from .error_handling import ErrorHandler
+    from .config import Constants
 
 
 @dataclass
@@ -290,7 +292,7 @@ class DownloadMonitor:
                             total_files += 1
                             total_size += file_path.stat().st_size
                             
-            return total_files, total_size / (1024 * 1024)  # Convert to MB
+            return total_files, total_size / Constants.BYTES_PER_MB  # Convert to MB
             
         except:
             return 0, 0.0
@@ -435,38 +437,17 @@ class DownloadMonitor:
         return recommendations
 
 
-if __name__ == "__main__":
-    """CLI interface for monitoring"""
-    import argparse
-    
-    parser = argparse.ArgumentParser(description="Download System Monitor")
-    parser.add_argument('--status', action='store_true',
-                       help='Show current system status')
-    parser.add_argument('--report', action='store_true',
-                       help='Generate full status report')
-    parser.add_argument('--metrics', action='store_true',
-                       help='Show current metrics')
-    parser.add_argument('--alerts', action='store_true',
-                       help='Check alert conditions')
-    parser.add_argument('--detailed', action='store_true',
-                       help='Include detailed information')
-    parser.add_argument('--csv-path', default='outputs/output.csv',
-                       help='Path to CSV file (default: outputs/output.csv)')
-    
-    args = parser.parse_args()
-    
-    monitor = DownloadMonitor(args.csv_path)
+def monitoring_main(args):
+    """Main monitoring function"""
+    monitor = DownloadMonitor(csv_path=args.csv_path)
     
     if args.status:
-        metrics = monitor.collect_metrics()
         stats = monitor.get_download_stats()
-        status = monitor._determine_system_status(metrics)
-        
-        print(f"\n📊 System Status: {status.upper()}")
-        print(f"Success Rate: {metrics.success_rate:.1%}")
-        print(f"Pending Downloads: {metrics.pending_downloads}")
-        print(f"Failed Downloads: {metrics.failed_downloads}")
-        print(f"Disk Space: {metrics.disk_usage_gb:.1f}GB free")
+        print(f"📊 Download Statistics:")
+        print(f"  YouTube Success Rate: {stats.youtube_success_rate:.1%}")
+        print(f"  Drive Success Rate: {stats.drive_success_rate:.1%}")
+        print(f"  Total Files: {stats.total_files_downloaded}")
+        print(f"  Total Size: {stats.total_size_mb:.1f}MB")
         
     elif args.report:
         report = monitor.generate_report(include_details=args.detailed)
@@ -514,7 +495,37 @@ if __name__ == "__main__":
             for alert in alerts:
                 print(f"  • {alert['severity'].upper()}: {alert['message']}")
         else:
-            print("\n✅ No active alerts")
+            print(f"\n✅ No active alerts")
             
     else:
-        parser.print_help()
+        print("Please specify an action: --status, --report, --metrics, or --alerts")
+        return 1
+    
+    return 0
+
+if __name__ == "__main__":
+    """CLI interface for monitoring using centralized parser (DRY)"""
+    from utils.config import create_standard_parser
+    
+    parser = create_standard_parser("Download System Monitor", debug=True, csv=True)
+    parser.add_argument('--status', action='store_true',
+                       help='Show current system status')
+    parser.add_argument('--report', action='store_true',
+                       help='Generate full status report')
+    parser.add_argument('--metrics', action='store_true',
+                       help='Show current metrics')
+    parser.add_argument('--alerts', action='store_true',
+                       help='Check alert conditions')
+    parser.add_argument('--detailed', action='store_true',
+                       help='Include detailed information')
+    
+    args = parser.parse_args()
+    
+    # Map CSV argument to csv_path for backwards compatibility
+    if hasattr(args, 'csv'):
+        args.csv_path = args.csv
+    elif not hasattr(args, 'csv_path'):
+        args.csv_path = 'outputs/output.csv'
+    
+    exit_code = monitoring_main(args)
+    exit(exit_code)

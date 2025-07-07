@@ -23,14 +23,14 @@ from .csv_manager import (
 )
 
 # Backward compatibility functions
-def ensure_tracking_columns(csv_path: str = 'outputs/output.csv') -> bool:
+def ensure_tracking_columns(csv_path: str = None) -> bool:
     """DEPRECATED: Use CSVManager.ensure_tracking_columns() instead"""
     warnings.warn("ensure_tracking_columns is deprecated. Use CSVManager.ensure_tracking_columns()", DeprecationWarning)
     manager = CSVManager(csv_path=csv_path)
     return manager.ensure_tracking_columns()
 
 
-def get_pending_downloads(csv_path: str = 'outputs/output.csv', download_type: str = 'both', 
+def get_pending_downloads(csv_path: str = None, download_type: str = 'both', 
                          include_failed: bool = True, retry_attempts: int = 3):
     """DEPRECATED: Use CSVManager.get_pending_downloads() instead"""
     warnings.warn("get_pending_downloads is deprecated. Use CSVManager.get_pending_downloads()", DeprecationWarning)
@@ -38,7 +38,7 @@ def get_pending_downloads(csv_path: str = 'outputs/output.csv', download_type: s
     return manager.get_pending_downloads(download_type, include_failed, retry_attempts)
 
 
-def get_failed_downloads(csv_path: str = 'outputs/output.csv', download_type: str = 'both'):
+def get_failed_downloads(csv_path: str = None, download_type: str = 'both'):
     """DEPRECATED: Use CSVManager.get_pending_downloads() with include_failed=True instead"""
     warnings.warn("get_failed_downloads is deprecated. Use CSVManager.get_pending_downloads()", DeprecationWarning)
     manager = CSVManager(csv_path=csv_path)
@@ -48,14 +48,14 @@ def get_failed_downloads(csv_path: str = 'outputs/output.csv', download_type: st
     return all_pending
 
 
-def reset_download_status(row_id: str, download_type: str, csv_path: str = 'outputs/output.csv') -> bool:
+def reset_download_status(row_id: str, download_type: str, csv_path: str = None) -> bool:
     """DEPRECATED: Use CSVManager with custom reset logic instead"""
     warnings.warn("reset_download_status is deprecated. Use CSVManager with custom logic", DeprecationWarning)
     # This would require finding the row by ID and updating status - simplified for now
     return True
 
 
-def reset_all_download_status(download_type: str = 'both', csv_path: str = 'outputs/output.csv', 
+def reset_all_download_status(download_type: str = 'both', csv_path: str = None, 
                             reset_only_failed: bool = False):
     """DEPRECATED: Use CSVManager with custom reset logic instead"""
     warnings.warn("reset_all_download_status is deprecated. Use CSVManager with custom logic", DeprecationWarning)
@@ -63,14 +63,14 @@ def reset_all_download_status(download_type: str = 'both', csv_path: str = 'outp
     return {'reset_count': 0}
 
 
-def update_csv_download_status(row_index: int, download_type: str, result, csv_path: str = 'outputs/output.csv'):
+def update_csv_download_status(row_index: int, download_type: str, result, csv_path: str = None):
     """DEPRECATED: Use CSVManager.update_download_status() instead"""
     warnings.warn("update_csv_download_status is deprecated. Use CSVManager.update_download_status()", DeprecationWarning)
     manager = CSVManager(csv_path=csv_path)
     return manager.update_download_status(row_index, download_type, result)
 
 
-def get_download_status_summary(csv_path: str = 'outputs/output.csv'):
+def get_download_status_summary(csv_path: str = None):
     """DEPRECATED: Use CSVManager.get_download_status_summary() instead"""
     warnings.warn("get_download_status_summary is deprecated. Use CSVManager.get_download_status_summary()", DeprecationWarning)
     manager = CSVManager(csv_path=csv_path)

@@ -211,7 +211,10 @@ def main():
     import argparse
     
     parser = argparse.ArgumentParser(description='Migrate CSV placeholders to NaN')
-    parser.add_argument('--csv', default='outputs/output.csv', help='Path to CSV file')
+    from utils.config import get_config
+    config = get_config()
+    default_csv = config.get('paths.output_csv', 'outputs/output.csv')
+    parser.add_argument('--csv', default=default_csv, help='Path to CSV file')
     parser.add_argument('--apply', action='store_true', help='Apply migration (default is dry run)')
     
     args = parser.parse_args()

@@ -4,7 +4,6 @@ SIMPLE 6-STEP WORKFLOW - MINIMAL IMPLEMENTATION
 Keep it simple. No over-engineering.
 """
 
-import requests
 import pandas as pd
 import re
 import argparse
@@ -18,17 +17,16 @@ import os
 import urllib.parse
 import time
 from bs4 import BeautifulSoup
-from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.common.by import By
-from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 
 # Import centralized configuration, path utilities, error handling, patterns, and CSV operations (DRY)
 from utils.config import get_config, ensure_parent_dir, ensure_directory, format_error_message, load_json_state, save_json_state
-from utils.patterns import PatternRegistry, extract_youtube_id, extract_drive_id, clean_url, normalize_whitespace, get_chrome_options, wait_and_scroll_page
+from utils.patterns import PatternRegistry, extract_youtube_id, extract_drive_id, clean_url, normalize_whitespace, get_chrome_options, wait_and_scroll_page, get_selenium_driver, cleanup_selenium_driver
+from utils.extract_links import extract_google_doc_text, extract_actual_url, extract_text_with_retry
 from utils.csv_manager import CSVManager
+from utils.http_pool import get as http_get  # Centralized HTTP requests (DRY)
 
 # Import database operations for dual-write functionality
 from database.models.person import Person, PersonOperations
@@ -38,23 +36,10 @@ config = get_config()
 
 # CSV operations now use centralized CSVManager (DRY)
 
-# Global selenium driver
-_driver = None
+# Selenium driver functions now imported from patterns.py (DRY consolidation)
 
 # Progress tracking functions (DRY: using centralized state management)
-def load_progress():
-    """Load extraction progress from file"""
-    return load_json_state(
-        config.get("paths.extraction_progress", "extraction_progress.json"),
-        {"completed": [], "failed": [], "last_batch": 0, "total_processed": 0}
-    )
-
-def save_progress(progress):
-    """Save extraction progress to file"""
-    save_json_state(
-        config.get("paths.extraction_progress", "extraction_progress.json"),
-        progress
-    )
+# Progress management functions removed - now using centralized load_json_state/save_json_state (DRY)
 
 def load_failed_docs():
     """Load failed document extraction list"""
@@ -70,107 +55,13 @@ def save_failed_docs(failed_list):
         failed_list
     )
 
-def get_selenium_driver():
-    """Initialize and return a Selenium WebDriver instance"""
-    global _driver
-    if _driver is None:
-        print("Initializing Selenium Chrome driver...")
-        # Use centralized Chrome options (DRY)
-        chrome_options = get_chrome_options()
-        
-        try:
-            _driver = webdriver.Chrome(options=chrome_options)
-        except Exception as e:
-            print(format_error_message("Selenium driver initialization", e))
-            return None
-    
-    return _driver
-
-def cleanup_driver():
-    """Clean up the Selenium driver"""
-    global _driver
-    if _driver is not None:
-        try:
-            _driver.quit()
-            _driver = None
-            print("Selenium driver cleaned up")
-        except Exception as e:
-            print(format_error_message("Selenium driver cleanup", e))
-
-def extract_google_doc_text(url):
-    """Extract text content from a Google Doc using Selenium"""
-    driver = get_selenium_driver()
-    if not driver:
-        print("Failed to initialize Selenium driver")
-        return ""
-    
-    try:
-        print(f"Loading Google Doc with Selenium: {url}")
-        driver.get(url)
-        
-        # Use centralized wait and scroll function (DRY)
-        wait_and_scroll_page(driver)
-        
-        # Get the page source and extract text
-        html = driver.page_source
-        soup = BeautifulSoup(html, 'html.parser')
-        
-        # Extract text from the document content
-        # Google Docs puts content in divs with specific classes
-        text_content = ""
-        
-        # Try different selectors for Google Docs content
-        content_selectors = [
-            '.kix-pagesettings-protected-text',
-            '.kix-page',
-            '.doc-content',
-            '.google-docs-content'
-        ]
-        
-        for selector in content_selectors:
-            elements = soup.select(selector)
-            if elements:
-                for element in elements:
-                    text_content += element.get_text(separator=' ', strip=True) + " "
-                break
-        
-        # Fallback: extract all text from body
-        if not text_content.strip():
-            body = soup.find('body')
-            if body:
-                text_content = body.get_text(separator=' ', strip=True)
-        
-        # Clean up the text using centralized pattern (DRY)
-        text_content = normalize_whitespace(text_content)
-        
-        print(f"✓ Extracted {len(text_content)} characters of text")
-        return text_content
-        
-    except Exception as e:
-        print(format_error_message("Google Doc text extraction", e, context=url))
-        return ""
-
-def extract_actual_url(google_url):
-    """Extract the actual URL from a Google redirect URL"""
-    if not google_url.startswith("https://www.google.com/url?q="):
-        return google_url
-    
-    # Extract the 'q' parameter which contains the actual URL
-    start_idx = google_url.find("q=") + 2
-    end_idx = google_url.find("&", start_idx)
-    if end_idx == -1:
-        actual_url = google_url[start_idx:]
-    else:
-        actual_url = google_url[start_idx:end_idx]
-    
-    # URL decode
-    return urllib.parse.unquote(actual_url)
+# Selenium driver functions moved to patterns.py (DRY consolidation)
 
 def step1_download_sheet():
     """Step 1: Download a local copy of the Google Sheet"""
     print("Step 1: Downloading Google Sheet...")
     
-    response = requests.get(config.get("google_sheets.url"))
+    response = http_get(config.get("google_sheets.url"))  # Use centralized HTTP pool (DRY)
     response.raise_for_status()
     
     # Save the HTML
@@ -263,7 +154,7 @@ def step3_scrape_doc_contents(doc_url):
         
         # Also get the HTML for link extraction
         try:
-            response = requests.get(doc_url)
+            response = http_get(doc_url)  # Use centralized HTTP pool (DRY)
             response.raise_for_status()
             html_content = response.text
             print("✓ Doc scraped successfully (HTML + text)")
@@ -274,7 +165,7 @@ def step3_scrape_doc_contents(doc_url):
     else:
         # For other URLs, just get HTML
         try:
-            response = requests.get(doc_url)
+            response = http_get(doc_url)  # Use centralized HTTP pool (DRY)
             response.raise_for_status()
             print("✓ Doc scraped successfully (HTML only)")
             return response.text, ""
@@ -422,29 +313,7 @@ def step5_process_extracted_data(person, links, doc_text=""):
     return record
 
 
-def extract_text_with_retry(doc_url, max_attempts=None):
-    """Extract text from document with retry logic"""
-    if max_attempts is None:
-        max_attempts = config.get("retry.max_attempts", 3)
-    
-    for attempt in range(max_attempts):
-        try:
-            print(f"  Attempt {attempt + 1}/{max_attempts}: Extracting text...")
-            text = extract_google_doc_text(doc_url)
-            if text and len(text.strip()) > 0:
-                print(f"  ✓ Extracted {len(text)} characters")
-                return text, None
-            else:
-                print(f"  ⚠ No text extracted on attempt {attempt + 1}")
-        except Exception as e:
-            error_msg = str(e)
-            print(f"  ✗ Attempt {attempt + 1} failed: {error_msg}")
-            if attempt < max_attempts - 1:
-                retry_delay = config.get("retry.base_delay", 2.0)
-                print(f"  Retrying in {retry_delay} seconds...")
-                time.sleep(retry_delay)
-    
-    return "", f"Failed after {max_attempts} attempts"
+# extract_text_with_retry function moved to utils/extract_links.py (DRY consolidation)
 
 def step6_map_data(processed_records, basic_mode=False, text_mode=False, output_file=None):
     """Step 6: Map data to CSV and Database (dual-write for migration)"""
@@ -653,7 +522,9 @@ def main():
         print(f"\n🚀 TEXT EXTRACTION MODE: Processing {len(people_with_docs)} documents...")
         
         # Load previous progress if resuming
-        progress = load_progress() if args.resume else {"completed": [], "failed": [], "last_batch": 0, "total_processed": 0}
+        # Load progress using centralized state management (DRY)
+        default_progress = {"completed": [], "failed": [], "last_batch": 0, "total_processed": 0}
+        progress = load_json_state(config.get("paths.extraction_progress", "extraction_progress.json"), default_progress) if args.resume else default_progress
         failed_docs = load_failed_docs() if args.retry_failed else []
         
         # Process all people first (add basic records for those without docs)
@@ -718,7 +589,8 @@ def main():
             
             # Save progress after each batch
             progress['last_batch'] = i + batch_size
-            save_progress(progress)
+            # Save progress using centralized state management (DRY)
+            save_json_state(config.get("paths.extraction_progress", "extraction_progress.json"), progress)
             save_failed_docs(current_failed)
             
             print(f"\n✓ Batch {batch_num} complete")
@@ -767,7 +639,7 @@ def main():
         print("No records to map")
     
     # Cleanup Selenium driver
-    cleanup_driver()
+    cleanup_selenium_driver()
     
     print("\n" + "=" * 50)
     print("WORKFLOW COMPLETE")

@@ -24,7 +24,10 @@ import argparse
 class CleanFileMapper:
     """Clean file-to-row mapper that eliminates directory-based contamination"""
     
-    def __init__(self, csv_path: str = 'outputs/output.csv'):
+    def __init__(self, csv_path: str = None):
+        if csv_path is None:
+            from utils.config import get_config
+            csv_path = get_config().get('paths.output_csv', 'outputs/output.csv')
         self.csv_path = csv_path
         self.df = pd.read_csv(csv_path)
         
@@ -305,7 +308,10 @@ class CleanFileMapper:
 class ComprehensiveFileMapper:
     """Complete file analysis and mapping system (contamination-free)"""
     
-    def __init__(self, csv_path: str = 'outputs/output.csv'):
+    def __init__(self, csv_path: str = None):
+        if csv_path is None:
+            from utils.config import get_config
+            csv_path = get_config().get('paths.output_csv', 'outputs/output.csv')
         self.csv_path = csv_path
         self.df = pd.read_csv(csv_path)
         
@@ -763,16 +769,7 @@ class ComprehensiveFileMapper:
         print(f"Summary statistics saved to: mapping_summary.json")
 
 
-def main():
-    parser = argparse.ArgumentParser(description='Comprehensive file mapping and analysis')
-    parser.add_argument('--csv-path', default='outputs/output.csv',
-                       help='Path to CSV file')
-    parser.add_argument('--fix-unmapped', action='store_true',
-                       help='Attempt to fix unmapped files')
-    parser.add_argument('--clean-duplicates', action='store_true',
-                       help='Remove duplicate files (keep primary)')
-    
-    args = parser.parse_args()
+def comprehensive_file_mapper_main(args):
     
     # Run comprehensive mapping
     mapper = ComprehensiveFileMapper(args.csv_path)
@@ -830,7 +827,10 @@ class FileMapper:
         results = mapper.check_integrity()
     """
     
-    def __init__(self, csv_path: str = 'outputs/output.csv', mode: str = 'comprehensive'):
+    def __init__(self, csv_path: str = None, mode: str = 'comprehensive'):
+        if csv_path is None:
+            from utils.config import get_config
+            csv_path = get_config().get('paths.output_csv', 'outputs/output.csv')
         """
         Initialize unified file mapper
         

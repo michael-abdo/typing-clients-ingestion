@@ -71,13 +71,15 @@ class CSVManager:
     """Unified CSV operations manager with atomic, streaming, tracking, and integrity capabilities"""
     
     def __init__(self, 
-                 csv_path: str = 'outputs/output.csv',
+                 csv_path: str = None,
                  chunk_size: int = 1000, 
                  use_file_lock: bool = True, 
                  auto_backup: bool = True,
                  timeout: float = 30.0,
                  encoding: str = 'utf-8'):
         """Initialize CSV manager with configurable defaults"""
+        if csv_path is None:
+            csv_path = get_config().get('paths.output_csv', 'outputs/output.csv')
         self.csv_path = Path(csv_path)
         self.chunk_size = chunk_size
         self.use_file_lock = use_file_lock

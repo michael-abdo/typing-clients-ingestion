@@ -263,6 +263,75 @@ class ErrorHandler:
         return base_delay * attempt_count
 
 
+# Standardized Error Handling Decorator (DRY)
+import functools
+from typing import Callable, Any, Union
+
+def with_standard_error_handling(operation_name: str = None, return_on_error: Any = None, log_errors: bool = True):
+    """Decorator for standardized error handling across the codebase
+    
+    Consolidates the common 'except Exception as e:' patterns into a reusable decorator.
+    
+    Args:
+        operation_name: Name of the operation for error context (defaults to function name)
+        return_on_error: Value to return when an error occurs (defaults to None)
+        log_errors: Whether to log errors (defaults to True)
+    
+    Example:
+        @with_standard_error_handling("Google Doc extraction", "")
+        def extract_doc_text(url):
+            # function implementation
+            return extracted_text
+    """
+    def decorator(func: Callable) -> Callable:
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            try:
+                return func(*args, **kwargs)
+            except Exception as e:
+                # Use operation name or function name
+                op_name = operation_name or func.__name__
+                
+                if log_errors:
+                    # Create error handler for this operation
+                    error_handler = ErrorHandler()
+                    
+                    # Build context from function arguments
+                    context = {
+                        'operation': op_name,
+                        'function': func.__name__,
+                        'args_count': len(args),
+                        'kwargs_keys': list(kwargs.keys())
+                    }
+                    
+                    # Add URL context if available in args/kwargs
+                    for arg in args:
+                        if isinstance(arg, str) and ('http' in arg or 'docs.google.com' in arg):
+                            context['url'] = arg[:100]  # Truncate long URLs
+                            break
+                    
+                    if 'url' in kwargs:
+                        context['url'] = str(kwargs['url'])[:100]
+                    
+                    # Handle the error with full context
+                    error_context = error_handler.handle_error(e, context)
+                    
+                    # Log with appropriate severity
+                    if error_context.severity == ErrorSeverity.CRITICAL:
+                        error_handler.logger.critical(error_context.to_user_message())
+                    elif error_context.severity == ErrorSeverity.ERROR:
+                        error_handler.logger.error(error_context.to_user_message())
+                    elif error_context.severity == ErrorSeverity.WARNING:
+                        error_handler.logger.warning(error_context.to_user_message())
+                    else:
+                        error_handler.logger.info(error_context.to_user_message())
+                
+                return return_on_error
+                
+        return wrapper
+    return decorator
+
+
 def validate_csv_integrity(csv_path: str) -> List[ErrorContext]:
     """Validate CSV file integrity"""
     errors = []

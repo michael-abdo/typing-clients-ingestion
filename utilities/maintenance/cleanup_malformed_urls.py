@@ -59,7 +59,15 @@ def clean_youtube_playlist_url(url):
     # For regular YouTube URLs, just clean them
     return clean_url(url)
 
-def cleanup_csv(input_file='outputs/output.csv', output_file='outputs/output_cleaned.csv'):
+def cleanup_csv(input_file=None, output_file=None):
+    if input_file is None:
+        import sys, os
+        sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'utils'))
+        from config import get_config
+        config = get_config()
+        input_file = config.get('paths.output_csv', 'outputs/output.csv')
+    if output_file is None:
+        output_file = input_file.replace('.csv', '_cleaned.csv')
     """Clean up malformed URLs in the CSV file"""
     
     if not os.path.exists(input_file):
@@ -109,7 +117,7 @@ def cleanup_csv(input_file='outputs/output.csv', output_file='outputs/output_cle
     print(f"\nCleaned data saved to: {output_file}")
     
     # Ask if user wants to replace original file
-    response = input("\nReplace original outputs/output.csv with cleaned version? (y/n): ")
+    response = input(f"\nReplace original {input_file} with cleaned version? (y/n): ")
     if response.lower() == 'y':
         import shutil
         shutil.move(output_file, input_file)
@@ -123,7 +131,12 @@ if __name__ == "__main__":
     
     print("YouTube Playlist URL Cleanup Utility")
     print("====================================")
-    print("This will clean malformed YouTube playlist URLs in outputs/output.csv")
+    import sys, os
+    sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'utils'))
+    from config import get_config
+    config = get_config()
+    csv_path = config.get('paths.output_csv', 'outputs/output.csv')
+    print(f"This will clean malformed YouTube playlist URLs in {csv_path}")
     print()
     
     cleanup_csv()

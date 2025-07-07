@@ -12,7 +12,11 @@ def update_empty_links_in_csv(max_rows=None):
     Args:
         max_rows (int, optional): Maximum number of rows to process. Defaults to None (process all).
     """
-    input_filename = "outputs/output.csv"
+    import sys, os
+    sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..', 'utils'))
+    from config import get_config
+    config = get_config()
+    input_filename = config.get('paths.output_csv', 'outputs/output.csv')
     temp_filename = "output_with_links.csv"
     
     if not os.path.exists(input_filename):
