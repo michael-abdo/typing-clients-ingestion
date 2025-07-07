@@ -502,6 +502,118 @@ def get_streaming_threshold() -> int:
     return get_config().get("file_processing.streaming_threshold", 5242880)
 
 
+def create_chrome_driver(config_type: str = "extraction", download_dir: Optional[str] = None, headless: bool = True):
+    """
+    Create Chrome WebDriver with consolidated configuration
+    DRY: Eliminates duplicate Chrome setup from extraction_utils.py and download_drive_files_from_html.py
+    
+    Args:
+        config_type: Type of configuration ('extraction', 'download')
+        download_dir: Download directory (required for download config)
+        headless: Whether to run in headless mode
+        
+    Returns:
+        Configured Chrome WebDriver instance
+    """
+    from selenium import webdriver
+    from selenium.webdriver.chrome.options import Options
+    from selenium.webdriver.chrome.service import Service
+    import time
+    import subprocess
+    
+    chrome_options = Options()
+    
+    # Common options for both configurations
+    if headless:
+        chrome_options.add_argument("--headless")
+    
+    # Anti-detection measures (common to both)
+    chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+    chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
+    chrome_options.add_experimental_option('useAutomationExtension', False)
+    
+    # Realistic browser behavior
+    chrome_options.add_argument("--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+    chrome_options.add_argument("--window-size=1920,1080")
+    
+    # Performance and stability (common to both)
+    chrome_options.add_argument("--disable-gpu")
+    chrome_options.add_argument("--disable-dev-shm-usage")
+    chrome_options.add_argument("--no-sandbox")
+    chrome_options.add_argument("--disable-extensions")
+    
+    if config_type == "extraction":
+        # Configuration for document extraction (from extraction_utils.py)
+        chrome_options.add_argument("--start-maximized")
+        chrome_options.add_argument("--disable-plugins")
+        chrome_options.add_argument("--remote-debugging-port=0")
+        chrome_options.add_argument("--no-first-run")
+        chrome_options.add_argument("--disable-default-apps")
+        chrome_options.add_argument("--disable-background-timer-throttling")
+        chrome_options.add_argument("--disable-renderer-backgrounding")
+        chrome_options.add_argument("--disable-backgrounding-occluded-windows")
+        chrome_options.add_argument("--enable-javascript")
+        chrome_options.add_argument("--disable-web-security")
+        chrome_options.add_argument("--allow-running-insecure-content")
+        
+    elif config_type == "download":
+        # Configuration for file downloads (from download_drive_files_from_html.py)
+        if not download_dir:
+            raise ValueError("download_dir is required for download configuration")
+            
+        # Set download directory and preferences
+        prefs = {
+            "download.default_directory": str(Path(download_dir).absolute()),
+            "download.prompt_for_download": False,
+            "download.directory_upgrade": True,
+            "safebrowsing.enabled": True,
+            "safebrowsing.disable_download_protection": True,
+        }
+        chrome_options.add_experimental_option("prefs", prefs)
+        
+    # Clean up any existing Chrome processes
+    try:
+        subprocess.run(['pkill', '-f', 'chrome'], capture_output=True)
+        time.sleep(1)
+    except:
+        pass
+    
+    # Initialize driver with retry logic
+    max_attempts = 3
+    for attempt in range(max_attempts):
+        try:
+            # Use ChromeDriver service
+            service = Service('/usr/bin/chromedriver')
+            chrome_options.binary_location = '/usr/bin/chromium-browser'
+            
+            driver = webdriver.Chrome(service=service, options=chrome_options)
+            
+            # Additional anti-detection measures for extraction
+            if config_type == "extraction":
+                driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+                driver.execute_cdp_cmd('Network.setUserAgentOverride', {
+                    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                })
+            
+            # Enable automatic downloads for download configuration
+            elif config_type == "download":
+                driver.implicitly_wait(10)
+                driver.execute_cdp_cmd("Page.setDownloadBehavior", {
+                    "behavior": "allow",
+                    "downloadPath": str(Path(download_dir).absolute())
+                })
+            
+            return driver
+            
+        except Exception as init_error:
+            if attempt < max_attempts - 1:
+                print(f"Chrome driver init attempt {attempt + 1} failed: {init_error}")
+                print(f"Retrying...")
+                time.sleep(2)
+            else:
+                raise init_error
+
+
 def get_minimal_config():
     """
     Get minimal workflow configuration (DRY: absorbed from minimal/simple_workflow.py).

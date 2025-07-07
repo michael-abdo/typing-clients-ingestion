@@ -126,35 +126,14 @@ class DriveFileDownloader:
         """Configure Chrome for automatic downloads"""
         logger.info("Setting up Chrome driver with download preferences...")
         
-        chrome_options = webdriver.ChromeOptions()
+        # DRY: Use consolidated Chrome driver creation from utils/config.py
+        from utils.config import create_chrome_driver
         
-        # Set download directory
-        prefs = {
-            "download.default_directory": str(self.files_dir.absolute()),
-            "download.prompt_for_download": False,
-            "download.directory_upgrade": True,
-            "safebrowsing.enabled": True,  # This allows "Download anyway" functionality
-            "safebrowsing.disable_download_protection": True,
-        }
-        chrome_options.add_experimental_option("prefs", prefs)
-        
-        # Add other useful options
-        chrome_options.add_argument("--no-sandbox")
-        chrome_options.add_argument("--disable-dev-shm-usage")
-        chrome_options.add_argument("--disable-blink-features=AutomationControlled")
-        
-        # Run headless for automated execution (comment out for debugging)
-        chrome_options.add_argument("--headless")
-        chrome_options.add_argument("--window-size=1920,1080")
-        
-        self.driver = webdriver.Chrome(options=chrome_options)
-        self.driver.implicitly_wait(10)
-        
-        # Enable automatic download of multiple files
-        self.driver.execute_cdp_cmd("Page.setDownloadBehavior", {
-            "behavior": "allow",
-            "downloadPath": str(self.files_dir.absolute())
-        })
+        self.driver = create_chrome_driver(
+            config_type="download", 
+            download_dir=str(self.files_dir), 
+            headless=True
+        )
     
     def wait_for_download(self, timeout=3600, check_interval=5):
         """Wait for download to complete by monitoring the downloads directory"""

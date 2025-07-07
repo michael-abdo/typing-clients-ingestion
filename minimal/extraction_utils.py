@@ -24,109 +24,18 @@ def get_selenium_driver():
     global _driver
     if _driver is None:
         print("Initializing Selenium Chrome driver with Google Docs support...")
-        chrome_options = Options()
-        
-        # Try headless mode as fallback when GUI fails
-        chrome_options.add_argument("--headless")
-        
-        # Anti-detection measures
-        chrome_options.add_argument("--disable-blink-features=AutomationControlled")
-        chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
-        chrome_options.add_experimental_option('useAutomationExtension', False)
-        
-        # Realistic browser behavior
-        chrome_options.add_argument("--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-        chrome_options.add_argument("--window-size=1920,1080")
-        chrome_options.add_argument("--start-maximized")
-        
-        # Performance and stability
-        chrome_options.add_argument("--disable-gpu")
-        chrome_options.add_argument("--disable-dev-shm-usage")
-        chrome_options.add_argument("--no-sandbox")
-        chrome_options.add_argument("--disable-extensions")
-        chrome_options.add_argument("--disable-plugins")
-        
-        # Minimal options for headless mode
-        chrome_options.add_argument("--remote-debugging-port=0")  # Auto-assign port
-        chrome_options.add_argument("--no-first-run")  # Disable first run experience
-        chrome_options.add_argument("--disable-default-apps")  # Disable default apps
-        chrome_options.add_argument("--disable-background-timer-throttling")
-        chrome_options.add_argument("--disable-renderer-backgrounding")
-        chrome_options.add_argument("--disable-backgrounding-occluded-windows")
-        
-        print("  Using incognito mode to avoid profile conflicts")
-        
-        # JavaScript and content handling
-        chrome_options.add_argument("--enable-javascript")
-        chrome_options.add_argument("--disable-web-security")
-        chrome_options.add_argument("--allow-running-insecure-content")
+        # DRY: Use consolidated Chrome driver creation from utils/config.py
+        import sys
+        import os
+        sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        from utils.config import create_chrome_driver
         
         try:
-            # Try to clean up any existing Chrome processes first
-            import subprocess
-            try:
-                subprocess.run(['pkill', '-f', 'chrome'], capture_output=True)
-                time.sleep(1)
-            except:
-                pass
-            
-            # Initialize driver with retry logic
-            max_attempts = 3
-            for attempt in range(max_attempts):
-                try:
-                    # Use ChromeDriver service to handle binary location
-                    from selenium.webdriver.chrome.service import Service
-                    service = Service('/usr/bin/chromedriver')
-                    
-                    # Point to Chromium binary
-                    chrome_options.binary_location = '/usr/bin/chromium-browser'
-                    
-                    _driver = webdriver.Chrome(service=service, options=chrome_options)
-                    
-                    # Additional anti-detection measures
-                    _driver.execute_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
-                    _driver.execute_cdp_cmd('Network.setUserAgentOverride', {
-                        "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-                    })
-                    
-                    print("✓ Driver initialized with anti-detection measures")
-                    break
-                    
-                except Exception as init_error:
-                    if attempt < max_attempts - 1:
-                        print(f"  Attempt {attempt + 1} failed: {init_error}")
-                        print(f"  Retrying...")
-                        time.sleep(2)
-                    else:
-                        raise init_error
-            
+            _driver = create_chrome_driver(config_type="extraction", headless=True)
+            print("✓ Driver initialized with consolidated configuration")
         except Exception as e:
-            print(f"Could not initialize Selenium driver after {max_attempts} attempts: {str(e)}")
-            
-            # Try alternative: use Chrome without user data directory
-            print("Attempting alternative Chrome configuration...")
-            try:
-                from selenium.webdriver.chrome.service import Service
-                service = Service('/usr/bin/chromedriver')
-                
-                alt_options = Options()
-                alt_options.binary_location = '/usr/bin/chromium-browser'
-                alt_options.add_argument("--disable-blink-features=AutomationControlled")
-                alt_options.add_experimental_option("excludeSwitches", ["enable-automation"])
-                alt_options.add_experimental_option('useAutomationExtension', False)
-                alt_options.add_argument("--user-agent=Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-                alt_options.add_argument("--window-size=1920,1080")
-                alt_options.add_argument("--disable-gpu")
-                alt_options.add_argument("--disable-dev-shm-usage")
-                alt_options.add_argument("--no-sandbox")
-                alt_options.add_argument("--enable-javascript")
-                
-                _driver = webdriver.Chrome(service=service, options=alt_options)
-                print("✓ Alternative Chrome configuration successful")
-                
-            except Exception as alt_error:
-                print(f"Alternative configuration also failed: {alt_error}")
-                return None
+            print(f"Could not initialize Selenium driver: {str(e)}")
+            return None
     
     return _driver
 
