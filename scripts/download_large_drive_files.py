@@ -2,6 +2,12 @@
 """
 Download large Drive files with extended timeouts and better progress tracking
 """
+import os
+import sys
+
+# Add parent directory to path to import utils  
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from utils.path_setup import init_project_imports
 init_project_imports()
 
@@ -34,42 +40,29 @@ class LargeFileDownloader(DriveFileDownloader):
             html_content = f.read()
             
         # Look for file size in HTML
-        import re
-        size_match = re.search(r'\(([0-9.]+)([GMK])\)', html_content)
+        # DRY: Use consolidated file size parsing
+        from utils.config import parse_file_size_from_html
+        size_gb = parse_file_size_from_html(html_content, 'GB')
         
-        if size_match:
-            size_value = float(size_match.group(1))
-            size_unit = size_match.group(2)
+        if size_gb < self.min_size_gb:
+            print(f"Skipping {file_id} - file too small: {size_gb:.2f} GB")
+            return False
             
-            # Convert to GB
-            if size_unit == 'G':
-                size_gb = size_value
-            elif size_unit == 'M':
-                size_gb = size_value / 1024
-            elif size_unit == 'K':
-                size_gb = size_value / (1024 * 1024)
-            else:
-                size_gb = 0
-            
-            if size_gb < self.min_size_gb:
-                print(f"Skipping {file_id} - file too small: {size_value}{size_unit} ({size_gb:.2f} GB)")
-                return False
-                
-            # Log large file processing
-            rows = self.mapping.get(file_id, {}).get('rows', [])
-            names = [r['name'] for r in rows]
-            print(f"\n{'='*60}")
-            print(f"Processing LARGE file: {file_id}")
-            print(f"Size: {size_value}{size_unit}")
-            print(f"Person: {', '.join(names)}")
-            print(f"{'='*60}")
-            
-            self.processed_large.append({
-                'file_id': file_id,
-                'size': f"{size_value}{size_unit}",
-                'size_gb': size_gb,
-                'names': names
-            })
+        # Log large file processing
+        rows = self.mapping.get(file_id, {}).get('rows', [])
+        names = [r['name'] for r in rows]
+        print(f"\n{'='*60}")
+        print(f"Processing LARGE file: {file_id}")
+        print(f"Size: {size_gb:.2f} GB")
+        print(f"Person: {', '.join(names)}")
+        print(f"{'='*60}")
+        
+        self.processed_large.append({
+            'file_id': file_id,
+            'size': f"{size_gb:.2f} GB",
+            'size_gb': size_gb,
+            'names': names
+        })
         
         # Process with extended timeout
         start_time = time.time()
@@ -94,12 +87,13 @@ class LargeFileDownloader(DriveFileDownloader):
                 print(f"  - {file_info['file_id']}: {file_info['size']} - {', '.join(file_info['names'])} [{status}]")
 
 if __name__ == "__main__":
-    import argparse
+    # DRY: Use standardized CLI arguments from utils/config.py
+    from utils.config import create_standard_parser, StandardCLIArguments
     from utils.logging_config import get_logger
     
     logger = get_logger(__name__)
     
-    parser = argparse.ArgumentParser(description='Download large Drive files')
+    parser = create_standard_parser('Download large Drive files', ['files', 'processing'])
     parser.add_argument('--min-gb', type=float, default=1.0, 
                         help='Minimum file size in GB (default: 1.0)')
     parser.add_argument('--test-one', action='store_true',

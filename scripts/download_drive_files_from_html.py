@@ -22,14 +22,17 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import TimeoutException, NoSuchElementException
 
 from utils.config import get_config
-from utils.logging_config import get_logger
 from utils.download_drive import extract_file_id
+from utils.error_decorators import handle_download_operations, handle_file_operations
+from utils.error_messages import download_error, file_error
 
-logger = get_logger(__name__)
-config = get_config()
+# DRY: Use consolidated logger and config initialization
+from utils.config import get_standard_components
+logger, config = get_standard_components(__name__)
 
-# Increase CSV field size limit
-csv.field_size_limit(config.get('file_processing.max_csv_field_size', sys.maxsize))
+# DRY: Use consolidated CSV setup
+from utils.config import setup_csv_environment
+setup_csv_environment()
 
 class DriveFileDownloader:
     def __init__(self):
@@ -208,6 +211,7 @@ class DriveFileDownloader:
         latest_file = max(files, key=lambda f: f.stat().st_mtime)
         return latest_file
     
+    @handle_download_operations("Drive HTML file processing", download_type='drive', retry_count=2)
     def process_html_file(self, html_file):
         """Process a single HTML file and download the actual file"""
         file_id = html_file['file_id']

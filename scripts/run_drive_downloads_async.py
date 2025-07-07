@@ -10,6 +10,9 @@ import time
 from datetime import datetime
 
 # Add parent directory to path to access utils
+import sys
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from utils.path_setup import init_project_imports
 init_project_imports()
 
@@ -93,9 +96,10 @@ def download_drive_async(urls, max_downloads=None):
     return log_file
 
 if __name__ == "__main__":
-    import argparse
+    # DRY: Use standardized CLI arguments from utils/config.py
+    from utils.config import create_standard_parser, StandardCLIArguments
     
-    parser = argparse.ArgumentParser(description='Download Google Drive files from CSV in background')
+    parser = create_standard_parser('Download Google Drive files from CSV in background', ['files', 'processing'])
     parser.add_argument('--max-downloads', type=int, help='Maximum number of files to download')
     
     args = parser.parse_args()

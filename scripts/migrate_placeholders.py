@@ -15,8 +15,9 @@ import sys
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from utils.csv_manager import CSVManager, safe_csv_read
-from utils.csv_backup import backup_csv
+from utils.csv_manager import create_csv_backup as backup_csv
 from utils.file_lock import file_lock
+from utils.error_handling import validate_csv_integrity
 
 def analyze_placeholders(csv_path: str) -> dict:
     """Analyze current placeholder usage in CSV"""
@@ -209,32 +210,37 @@ def migrate_placeholders_to_nan(csv_path: str, dry_run: bool = True) -> bool:
 
 def main():
     """Run the migration with safety checks"""
-    import argparse
+    # DRY: Use standardized CLI arguments from utils/config.py
+    from utils.config import create_standard_parser, StandardCLIArguments
     
-    parser = argparse.ArgumentParser(description='Migrate CSV placeholders to NaN')
-    parser.add_argument('--csv', default='outputs/output.csv', help='Path to CSV file')
+    parser = create_standard_parser('Migrate CSV placeholders to NaN', ['files', 'processing'])
+    
+    # Add migration-specific arguments
     parser.add_argument('--apply', action='store_true', help='Apply migration (default is dry run)')
     
     args = parser.parse_args()
+    
+    # Map standardized argument names
+    csv_path = getattr(args, 'csv', 'outputs/output.csv')
     
     # Always do dry run first
     if args.apply:
         # First show what will change
         print("=== Preview of changes ===")
-        migrate_placeholders_to_nan(args.csv, dry_run=True)
+        migrate_placeholders_to_nan(csv_path, dry_run=True)
         
         # Ask for confirmation
         print("\n" + "="*50)
         response = input("Do you want to proceed with the migration? (yes/no): ")
         if response.lower() == 'yes':
             print("\n=== Running migration ===")
-            success = migrate_placeholders_to_nan(args.csv, dry_run=False)
+            success = migrate_placeholders_to_nan(csv_path, dry_run=False)
         else:
             print("Migration cancelled.")
             success = False
     else:
         print("=== Dry run mode (use --apply to make changes) ===")
-        success = migrate_placeholders_to_nan(args.csv, dry_run=True)
+        success = migrate_placeholders_to_nan(csv_path, dry_run=True)
     
     return 0 if success else 1
 

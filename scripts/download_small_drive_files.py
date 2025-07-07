@@ -2,6 +2,12 @@
 """
 Download only small Drive files (< 100MB) for testing
 """
+import os
+import sys
+
+# Add parent directory to path to import utils  
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from utils.path_setup import init_project_imports
 init_project_imports()
 
@@ -34,37 +40,24 @@ class SmallFileDownloader(DriveFileDownloader):
             html_content = f.read()
             
         # Look for file size in HTML (e.g., "4.8G" or "100M")
-        import re
-        size_match = re.search(r'\(([0-9.]+)([GMK])\)', html_content)
+        # DRY: Use consolidated file size parsing
+        from utils.config import parse_file_size_from_html
+        size_mb = parse_file_size_from_html(html_content, 'MB')
         
-        if size_match:
-            size_value = float(size_match.group(1))
-            size_unit = size_match.group(2)
+        if size_mb > self.max_size_mb:
+            print(f"Skipping {file_id} - file too large: {size_mb:.1f} MB")
+            self.skipped_large.append({
+                'file_id': file_id,
+                'size': f"{size_mb:.1f} MB",
+                'size_mb': size_mb
+            })
             
-            # Convert to MB
-            if size_unit == 'G':
-                size_mb = size_value * 1024
-            elif size_unit == 'M':
-                size_mb = size_value
-            elif size_unit == 'K':
-                size_mb = size_value / 1024
-            else:
-                size_mb = 0
+            # Update mapping
+            if file_id in self.mapping:
+                self.mapping[file_id]['status'] = 'skipped_too_large'
+                self.mapping[file_id]['file_size'] = f"{size_mb:.1f} MB"
             
-            if size_mb > self.max_size_mb:
-                print(f"Skipping {file_id} - file too large: {size_value}{size_unit} ({size_mb:.1f} MB)")
-                self.skipped_large.append({
-                    'file_id': file_id,
-                    'size': f"{size_value}{size_unit}",
-                    'size_mb': size_mb
-                })
-                
-                # Update mapping
-                if file_id in self.mapping:
-                    self.mapping[file_id]['status'] = 'skipped_too_large'
-                    self.mapping[file_id]['file_size'] = f"{size_value}{size_unit}"
-                
-                return False
+            return False
         
         # Process normally if size is OK
         return super().process_html_file(html_file)
@@ -81,9 +74,10 @@ class SmallFileDownloader(DriveFileDownloader):
                 print(f"  - {file_info['file_id']}: {file_info['size']} - {', '.join(names)}")
 
 if __name__ == "__main__":
-    import argparse
+    # DRY: Use standardized CLI arguments from utils/config.py
+    from utils.config import create_standard_parser, StandardCLIArguments
     
-    parser = argparse.ArgumentParser(description='Download small Drive files only')
+    parser = create_standard_parser('Download small Drive files only', ['files', 'processing'])
     parser.add_argument('--max-size', type=int, default=100, 
                         help='Maximum file size in MB (default: 100)')
     

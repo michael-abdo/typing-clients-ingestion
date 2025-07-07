@@ -107,7 +107,10 @@ python3 csv_to_sqlite_migration.py --database my_data.db --create-tables
 - **simple_workflow.py**: Single unified script with all modes
 - **extraction_utils.py**: Reusable extraction functions with Google Docs improvements
 - **database_manager.py**: All database operations centralized
-- **utils/config.py**: Centralized configuration management
+- **utils/config.py**: Centralized configuration management with shared utilities:
+  - `parse_file_size_from_html()`: Consolidates file size parsing from Google Drive HTML
+  - `setup_csv_environment()`: Standardized CSV field size limit setup
+  - `get_standard_components()`: Unified logger and config initialization
 - **Person/Document/Link**: Data models for type safety
 
 ## Success Criteria:

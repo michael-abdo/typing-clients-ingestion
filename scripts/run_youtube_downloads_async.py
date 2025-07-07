@@ -15,7 +15,10 @@ init_project_imports()
 
 from utils.config import get_config
 from utils.validation import validate_youtube_url
+from utils.error_decorators import handle_download_operations, handle_file_operations
+from utils.error_messages import download_error
 
+@handle_file_operations("YouTube URLs CSV extraction")
 def get_youtube_urls_from_csv():
     """Extract all YouTube URLs from the CSV file"""
     config = get_config()
@@ -38,6 +41,7 @@ def get_youtube_urls_from_csv():
     
     return youtube_urls
 
+@handle_download_operations("YouTube async downloads", download_type='youtube', retry_count=2)
 def download_youtube_async(urls, max_downloads=None):
     """Download YouTube videos asynchronously"""
     venv_python = os.path.join(os.path.dirname(__file__), 'venv', 'bin', 'python')

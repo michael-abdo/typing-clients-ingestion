@@ -16,6 +16,8 @@ try:
     from row_context import RowContext, DownloadResult
     from sanitization import sanitize_error_message, SafeDownloadError, validate_csv_field_safety
     from config import get_drive_downloads_dir, create_download_dir
+    from error_decorators import handle_download_operations, handle_network_operations, handle_validation_errors
+    from error_messages import download_error, network_error, validation_error
 except ImportError:
     from .logging_config import get_logger
     from .validation import validate_google_drive_url, validate_file_path, ValidationError
@@ -25,6 +27,8 @@ except ImportError:
     from .row_context import RowContext, DownloadResult
     from .sanitization import sanitize_error_message, SafeDownloadError, validate_csv_field_safety
     from .config import get_drive_downloads_dir, create_download_dir
+    from .error_decorators import handle_download_operations, handle_network_operations, handle_validation_errors
+    from .error_messages import download_error, network_error, validation_error
 
 # Setup module logger
 logger = get_logger(__name__)
@@ -152,6 +156,7 @@ def is_folder_url(url):
     return '/drive/folders/' in url or 'folders/' in url
 
 
+@handle_network_operations("Google Drive folder listing", retry_count=3)
 def list_folder_files(folder_url, logger=None):
     """
     List files in a Google Drive folder by scraping the public folder page
@@ -260,6 +265,7 @@ def list_folder_files(folder_url, logger=None):
         return []
 
 
+@handle_download_operations("Google Drive folder download", download_type='drive', retry_count=2)
 def download_folder_files(folder_url, row_context, logger=None):
     """
     Download all files from a Google Drive folder
@@ -444,6 +450,7 @@ def get_folder_contents(folder_id, logger=None):
     exceptions=(requests.RequestException, IOError)
 )
 @rate_limit('google_drive')
+@handle_download_operations("Google Drive file download", download_type='drive', retry_count=3)
 def download_drive_file(file_id, output_filename=None, logger=None):
     """Download a file from Google Drive using file ID"""
     if not logger:

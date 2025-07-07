@@ -20,8 +20,9 @@ def cleanup_csv():
     logger = get_logger(__name__)
     config = get_config()
     
-    # Set maximum CSV field size to handle existing large fields
-    csv.field_size_limit(sys.maxsize)
+    # DRY: Use consolidated CSV setup
+    from utils.config import setup_csv_environment
+    setup_csv_environment()
     
     # Get file paths
     input_file = "outputs/output.csv"  # Current location

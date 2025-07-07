@@ -3,10 +3,14 @@
 Monitor download progress for YouTube and Drive downloads
 """
 import os
+import sys
 import time
 import subprocess
 from datetime import datetime
 import glob
+
+# Add parent directory to path to import utils
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 def count_files(directory, pattern):
     """Count files matching pattern in directory"""
@@ -83,9 +87,10 @@ def monitor_downloads():
     print("\n" + "=" * 80)
 
 if __name__ == "__main__":
-    import argparse
+    # DRY: Use standardized CLI arguments from utils/config.py
+    from utils.config import create_standard_parser, StandardCLIArguments
     
-    parser = argparse.ArgumentParser(description='Monitor download progress')
+    parser = create_standard_parser('Monitor download progress', ['monitoring'])
     parser.add_argument('--watch', action='store_true', 
                        help='Continuously monitor (updates every 30 seconds)')
     parser.add_argument('--interval', type=int, default=30,

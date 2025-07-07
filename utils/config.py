@@ -114,12 +114,42 @@ def get_drive_downloads_dir() -> str:
 
 def get_output_csv_path() -> str:
     """Get output CSV file path."""
-    return get_config().get("paths.output_csv", "output.csv")
+    return get_config().get("paths.output_csv", "simple_output.csv")
 
 
 def get_google_sheets_url() -> str:
     """Get Google Sheets URL."""
-    return get_config().get("google_sheets.url", "")
+    return get_config().get("google_sheets.url", "https://docs.google.com/spreadsheets/u/1/d/e/2PACX-1vRqqjqoaj8sEZBfZRw0Og7g8ms_0yTL2MsegTubcjhhBnXr1s1jFBwIVAsbkyj1xD0TMj06LvGTQIHU/pubhtml?pli=1#")
+
+
+def get_target_div_id() -> str:
+    """Get target div ID for Google Sheets parsing."""
+    return get_config().get("google_sheets.target_div_id", "1159146182")
+
+
+def get_database_path() -> str:
+    """Get database file path."""
+    return get_config().get("database.path", "xenodx.db")
+
+
+def get_batch_size() -> int:
+    """Get processing batch size."""
+    return get_config().get("processing.batch_size", 10)
+
+
+def get_max_retries() -> int:
+    """Get maximum retry attempts."""
+    return get_config().get("processing.max_retries", 3)
+
+
+def get_progress_file() -> str:
+    """Get progress tracking file path."""
+    return get_config().get("files.progress", "extraction_progress.json")
+
+
+def get_failed_docs_file() -> str:
+    """Get failed documents tracking file path."""
+    return get_config().get("files.failed_docs", "failed_extractions.json")
 
 
 def get_retry_config() -> Dict[str, Any]:
@@ -221,6 +251,73 @@ class StandardCLIArguments:
             parser.add_argument('--alerts', action='store_true',
                               help='Check alert conditions')
 
+
+def get_standard_components(module_name: str):
+    """
+    Get standard logger and config for a module
+    DRY: Consolidates duplicate initialization patterns across 16+ files
+    
+    Args:
+        module_name: Usually __name__ from the calling module
+        
+    Returns:
+        tuple: (logger, config)
+    """
+    from utils.logging_config import get_logger
+    logger = get_logger(module_name)
+    config = get_config()
+    return logger, config
+
+def setup_csv_environment():
+    """
+    Setup CSV processing environment with proper field size limits
+    DRY: Consolidates duplicate CSV setup across multiple scripts
+    """
+    import csv
+    import sys
+    config = get_config()
+    csv.field_size_limit(config.get('file_processing.max_csv_field_size', sys.maxsize))
+
+def parse_file_size_from_html(html_content: str, target_unit: str = 'GB') -> float:
+    """
+    Parse file size from Google Drive HTML content (e.g., '4.8G', '100M', '2K')
+    DRY: Consolidates duplicate logic from download_large_drive_files.py and download_small_drive_files.py
+    
+    Args:
+        html_content: HTML containing size info like "(4.8G)"
+        target_unit: Target unit ('GB', 'MB', 'KB')
+    
+    Returns:
+        Size in target unit, or 0 if not found
+    """
+    import re
+    size_match = re.search(r'\(([0-9.]+)([GMK])\)', html_content)
+    
+    if not size_match:
+        return 0
+        
+    size_value = float(size_match.group(1))
+    size_unit = size_match.group(2)
+    
+    # Convert to bytes first
+    if size_unit == 'G':
+        bytes_value = size_value * 1024 * 1024 * 1024
+    elif size_unit == 'M':
+        bytes_value = size_value * 1024 * 1024
+    elif size_unit == 'K':
+        bytes_value = size_value * 1024
+    else:
+        return 0
+    
+    # Convert to target unit
+    if target_unit.upper() == 'GB':
+        return bytes_value / (1024 * 1024 * 1024)
+    elif target_unit.upper() == 'MB':
+        return bytes_value / (1024 * 1024)
+    elif target_unit.upper() == 'KB':
+        return bytes_value / 1024
+    else:
+        return bytes_value
 
 def create_standard_parser(description: str, 
                          argument_groups: Optional[List[str]] = None) -> argparse.ArgumentParser:
