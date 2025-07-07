@@ -158,6 +158,35 @@ def wait_and_scroll_page(driver, wait_timeout: int = 30, scroll_delay: float = 0
     time.sleep(1)
 
 
+# Global selenium driver
+_driver = None
+
+def get_selenium_driver():
+    """Get initialized Selenium WebDriver with standardized options (DRY)"""
+    global _driver
+    if _driver is None:
+        print("Initializing Selenium Chrome driver...")
+        chrome_options = get_chrome_options()
+        try:
+            from selenium import webdriver
+            _driver = webdriver.Chrome(options=chrome_options)
+        except Exception as e:
+            print(f"Could not initialize Selenium driver: {str(e)}")
+            return None
+    return _driver
+
+def cleanup_selenium_driver():
+    """Cleanup global Selenium driver (DRY)"""
+    global _driver
+    if _driver is not None:
+        try:
+            _driver.quit()
+            _driver = None
+            print("Selenium driver cleaned up")
+        except Exception as e:
+            print(f"Error cleaning up Selenium driver: {e}")
+
+
 # Example usage
 if __name__ == "__main__":
     # Test pattern registry

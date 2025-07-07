@@ -1,0 +1,211 @@
+[
+  {
+    "row_id": 501,
+    "name": "Dmitriy Golovko",
+    "skipped": true,
+    "reason": "No Google Doc or no expected links"
+  },
+  {
+    "row_id": 500,
+    "name": "Seth Dossett",
+    "skipped": true,
+    "reason": "No Google Doc or no expected links"
+  },
+  {
+    "row_id": 499,
+    "name": "Carlos Arthur",
+    "skipped": true,
+    "reason": "No document URL available"
+  },
+  {
+    "row_id": 498,
+    "name": "Caroline Chiu",
+    "type": "Google Doc \u2192 Google Drive video file",
+    "success": true,
+    "extraction_time": 1.4522135257720947,
+    "expected_count": 1,
+    "found_count": 2,
+    "matches": 1,
+    "missing": [],
+    "extra": [
+      "https://drive.google.com/file/d/1c13knvRxfF-HrQhyBOfGIZpcrY-OR3_A/view?usp"
+    ],
+    "match_details": [
+      {
+        "expected": "https://drive.google.com/file/d/1c13knvRxfF-HrQhyBOfGIZpcrY-OR3_A/view",
+        "found": "https://drive.google.com/file/d/1c13knvRxfF-HrQhyBOfGIZpcrY-OR3_A/view",
+        "exact": true
+      }
+    ]
+  },
+  {
+    "row_id": 497,
+    "name": "James Kirton",
+    "type": "Google Doc \u2192 2 YouTube playlists",
+    "success": false,
+    "extraction_time": 1.313399076461792,
+    "expected_count": 2,
+    "found_count": 3,
+    "matches": 0,
+    "missing": [
+      "https://youtube.com/playlist?list=PLp0u93QMy5vCYzE4OQydGEMEJjRizGDA",
+      "https://youtube.com/playlist?list=PLu9i8x5U9PHhmD9K-5WY4EB12vyhL"
+    ],
+    "extra": [
+      "https://youtube.com/playlist?list",
+      "https://www.youtube.com/playlist?list=PLJu98jx5U9PHhImDP9K-5WrV4EB12wyhL",
+      "https://www.youtube.com/playlist?list=PLpOu93QMy5fVCzxYe4OOydGEMEjlRziGD"
+    ],
+    "match_details": []
+  },
+  {
+    "row_id": 496,
+    "name": "Florence",
+    "skipped": true,
+    "reason": "No Google Doc or no expected links"
+  },
+  {
+    "row_id": 495,
+    "name": "John Williams",
+    "skipped": true,
+    "reason": "No document URL available"
+  },
+  {
+    "row_id": 494,
+    "name": "Maddie Boyle",
+    "skipped": true,
+    "reason": "No document URL available"
+  },
+  {
+    "row_id": 493,
+    "name": "Kiko",
+    "skipped": true,
+    "reason": "No document URL available"
+  },
+  {
+    "row_id": 492,
+    "name": "Susan Surovik",
+    "skipped": true,
+    "reason": "No Google Doc or no expected links"
+  },
+  {
+    "row_id": 491,
+    "name": "Brett Shead",
+    "skipped": true,
+    "reason": "No Google Doc or no expected links"
+  },
+  {
+    "row_id": 490,
+    "name": "Dan Jane",
+    "skipped": true,
+    "reason": "No document URL available"
+  },
+  {
+    "row_id": 489,
+    "name": "Jeremy May",
+    "skipped": true,
+    "reason": "No document URL available"
+  },
+  {
+    "row_id": 488,
+    "name": "Olivia Tomlinson",
+    "skipped": true,
+    "reason": "No document URL available"
+  },
+  {
+    "row_id": 487,
+    "name": "Shelesea Evans",
+    "skipped": true,
+    "reason": "No document URL available"
+  },
+  {
+    "row_id": 486,
+    "name": "Brandon Donahue",
+    "skipped": true,
+    "reason": "No Google Doc or no expected links"
+  },
+  {
+    "row_id": 485,
+    "name": "Emilie",
+    "skipped": true,
+    "reason": "No document URL available"
+  },
+  {
+    "row_id": 484,
+    "name": "Taro",
+    "skipped": true,
+    "reason": "No Google Doc or no expected links"
+  },
+  {
+    "row_id": 483,
+    "name": "Brandon Donahue",
+    "skipped": true,
+    "reason": "No document URL available"
+  },
+  {
+    "row_id": 482,
+    "name": "Joseph Cortone",
+    "skipped": true,
+    "reason": "No document URL available"
+  },
+  {
+    "row_id": 481,
+    "name": "Austyn Brown",
+    "skipped": true,
+    "reason": "No document URL available"
+  },
+  {
+    "row_id": 480,
+    "name": "ISTPS",
+    "skipped": true,
+    "reason": "No Google Doc or no expected links"
+  },
+  {
+    "row_id": 479,
+    "name": "Taryn Hanes",
+    "skipped": true,
+    "reason": "No Google Doc or no expected links"
+  },
+  {
+    "row_id": 478,
+    "name": "Shelly Chen",
+    "skipped": true,
+    "reason": "No Google Doc or no expected links"
+  },
+  {
+    "row_id": 477,
+    "name": "Patryk Makara",
+    "skipped": true,
+    "reason": "No Google Doc or no expected links"
+  },
+  {
+    "row_id": 476,
+    "name": "Michele Q",
+    "skipped": true,
+    "reason": "No Google Doc or no expected links"
+  },
+  {
+    "row_id": 475,
+    "name": "Brenden Ohlsson",
+    "skipped": true,
+    "reason": "No document URL available"
+  },
+  {
+    "row_id": 474,
+    "name": "Nathalie Bauer",
+    "skipped": true,
+    "reason": "No document URL available"
+  },
+  {
+    "row_id": 473,
+    "name": "Kaioxx DarkMacro",
+    "skipped": true,
+    "reason": "No Google Doc or no expected links"
+  },
+  {
+    "row_id": 472,
+    "name": "James Yu",
+    "skipped": true,
+    "reason": "No document URL available"
+  }
+]

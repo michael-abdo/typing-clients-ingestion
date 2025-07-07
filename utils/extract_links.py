@@ -17,11 +17,13 @@ try:
     from config import get_config
     from logging_config import get_logger
     from rate_limiter import rate_limit, wait_for_rate_limit
+    from patterns import clean_url
 except ImportError:
     from .http_pool import get as http_get
     from .config import get_config
     from .logging_config import get_logger
     from .rate_limiter import rate_limit, wait_for_rate_limit
+    from .patterns import clean_url
 
 # Setup module logger
 logger = get_logger(__name__)
@@ -53,100 +55,6 @@ def cleanup_driver():
         except Exception as e:
             logger.error(f"Error cleaning up Selenium driver: {e}")
 
-def clean_url(url):
-    """Clean up a URL by removing trailing junk and escape sequences"""
-    if not url:
-        return url
-    
-    original_url = url
-    
-    # First, decode unicode escape sequences like \u000b to actual characters
-    # This handles cases like \u003d becoming =
-    try:
-        # Decode unicode escapes
-        if '\\u' in url:
-            url = url.encode('utf-8').decode('unicode_escape')
-    except:
-        # If decoding fails, continue with original
-        pass
-    
-    # Special handling for YouTube playlist URLs that might have control chars in the middle
-    if 'youtube.com/playlist?list' in url:
-        # Try to extract the playlist ID even if there are control characters
-        # Look for pattern: list[any char]=PLAYLIST_ID
-        match = re.search(r'youtube\.com/playlist\?list.{0,5}=([a-zA-Z0-9_-]+)', url)
-        if match:
-            playlist_id = match.group(1)
-            # Check if there's also an si parameter
-            si_match = re.search(r'[&?]si.{0,5}=([a-zA-Z0-9_-]+)', url)
-            if si_match:
-                return f'https://www.youtube.com/playlist?list={playlist_id}&si={si_match.group(1)}'
-            return f'https://www.youtube.com/playlist?list={playlist_id}'
-    
-    # Find where the URL should end by looking for control characters or certain text patterns
-    # This is crucial - we want to cut off anything after control characters
-    control_char_pos = float('inf')
-    for i, char in enumerate(url):
-        if ord(char) < 32 or ord(char) > 126:  # Control chars or non-ASCII
-            control_char_pos = i
-            break
-    
-    # Truncate at the first control character
-    if control_char_pos < len(url):
-        url = url[:control_char_pos]
-    
-    # Remove common escape sequences that might remain
-    url = url.replace('\\n', '').replace('\\r', '').replace('\\t', '')
-    
-    # Remove trailing punctuation that's not part of a URL
-    # But keep trailing slashes and common URL endings
-    url = re.sub(r'[.,;:!?\)\]\}"\'>]+$', '', url)
-    
-    # Handle YouTube URLs specifically
-    if 'youtube.com' in url or 'youtu.be' in url:
-        # For youtu.be links, extract just the video ID
-        match = re.search(r'youtu\.be/([a-zA-Z0-9_-]{11})', url)
-        if match:
-            # Check if there's a trailing slash in the original
-            if original_url.rstrip().endswith(match.group(0) + '/'):
-                return f'https://youtu.be/{match.group(1)}/'
-            return f'https://youtu.be/{match.group(1)}'
-        # For youtube.com watch links
-        match = re.search(r'((?:www\.)?youtube\.com)/watch\?v=([a-zA-Z0-9_-]{11})', url)
-        if match:
-            # Preserve www. if it was in the original
-            domain = match.group(1)
-            video_id = match.group(2)
-            
-            # Check for additional parameters
-            params = []
-            list_match = re.search(r'[&?]list=([a-zA-Z0-9_-]+)', url)
-            if list_match:
-                params.append(f'list={list_match.group(1)}')
-            
-            base_url = f'https://{domain}/watch?v={video_id}'
-            if params:
-                return base_url + '&' + '&'.join(params)
-            return base_url
-        # For youtube.com playlist links
-        match = re.search(r'youtube\.com/playlist\?list=([a-zA-Z0-9_-]+)', url)
-        if match:
-            # Extract list ID and any additional parameters
-            list_id = match.group(1)
-            # Check for si parameter
-            si_match = re.search(r'[&?]si=([a-zA-Z0-9_-]+)', url)
-            if si_match:
-                return f'https://youtube.com/playlist?list={list_id}&si={si_match.group(1)}'
-            return f'https://youtube.com/playlist?list={list_id}'
-    
-    # For non-YouTube URLs, just clean and return
-    url = url.strip()
-    
-    # If it's a valid URL, return it as-is
-    if url.startswith('http://') or url.startswith('https://'):
-        return url
-    
-    return url
 
 def get_selenium_driver():
     """Initialize and return a Selenium WebDriver instance"""
