@@ -81,9 +81,8 @@ class ErrorMessages:
         'INITIALIZATION_FAILED': "Failed to initialize {component}: {error}"
     }
     
-    # Database/persistence errors
+    # Persistence errors
     PERSISTENCE = {
-        'DATABASE_ERROR': "Database error: {details}",
         'BACKUP_FAILED': "Backup operation failed: {details}",
         'RESTORE_FAILED': "Restore operation failed: {details}",
         'SYNC_ERROR': "Synchronization error: {details}",

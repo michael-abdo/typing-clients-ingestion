@@ -133,11 +133,6 @@ def test_file_operations():
     results.append(csv_exists)
     print_result("CSV File Readable", csv_exists, details if not csv_exists else f"✓ {details}")
     
-    # Test 2: Check database file
-    db_path = "data/file_row_mappings.db"
-    db_exists = os.path.exists(db_path)
-    results.append(db_exists)
-    print_result("Database File Exists", db_exists, f"Path: {db_path}")
     
     # Test 3: Check config file
     config_path = "config/config.yaml"

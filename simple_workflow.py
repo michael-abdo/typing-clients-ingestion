@@ -28,8 +28,6 @@ from utils.extract_links import extract_google_doc_text, extract_actual_url, ext
 from utils.csv_manager import CSVManager
 from utils.http_pool import get as http_get  # Centralized HTTP requests (DRY)
 
-# Import database operations for dual-write functionality
-from database.models.person import Person, PersonOperations
 
 # Configuration - centralized in config.yaml (DRY)
 config = get_config()
@@ -316,8 +314,8 @@ def step5_process_extracted_data(person, links, doc_text=""):
 # extract_text_with_retry function moved to utils/extract_links.py (DRY consolidation)
 
 def step6_map_data(processed_records, basic_mode=False, text_mode=False, output_file=None):
-    """Step 6: Map data to CSV and Database (dual-write for migration)"""
-    print("Step 6: Mapping data to CSV and Database (dual-write)...")
+    """Step 6: Map data to CSV"""
+    print("Step 6: Mapping data to CSV...")
     
     # Handle different column sets based on processing mode (DRY: use config)
     if basic_mode:
@@ -354,71 +352,15 @@ def step6_map_data(processed_records, basic_mode=False, text_mode=False, output_
     # Create DataFrame for CSV operations
     df = pd.DataFrame(filtered_records)
     
-    # DUAL-WRITE: Write to both CSV and Database
-    csv_success = False
-    db_success = False
-    
-    # 1. Write to CSV (existing functionality)
+    # Write to CSV
     print("  📄 Writing to CSV...")
     csv_manager = CSVManager(csv_path=output_file)
     csv_success = csv_manager.safe_csv_write(df, operation_name="step6_workflow_output")
     
     if csv_success:
-        print(f"  ✅ CSV: Data saved to {output_file}")
+        print(f"  ✅ Data saved to {output_file}")
     else:
-        print(f"  ❌ CSV: Failed to save data to {output_file}")
-    
-    # 2. Write to Database (new functionality)
-    print("  🗄️  Writing to Database...")
-    try:
-        # Initialize database operations
-        person_ops = PersonOperations()
-        
-        # Create tables if they don't exist
-        if not person_ops.create_table():
-            print("  ❌ DB: Failed to create/verify people table")
-            db_success = False
-        else:
-            # Insert/update each person record
-            db_insert_count = 0
-            db_error_count = 0
-            
-            for record in filtered_records:
-                # Create Person object with core fields
-                person = Person(
-                    row_id=record['row_id'],
-                    name=record['name'],
-                    email=record['email'] if record['email'] else None,
-                    personality_type=record['type'] if record['type'] else None,
-                    source_link=record['link'] if record['link'] else None
-                )
-                
-                # Insert person (with ON CONFLICT UPDATE)
-                if person_ops.insert_person(person):
-                    db_insert_count += 1
-                else:
-                    db_error_count += 1
-            
-            if db_error_count == 0:
-                print(f"  ✅ DB: Successfully inserted/updated {db_insert_count} people")
-                db_success = True
-            else:
-                print(f"  ⚠️  DB: {db_insert_count} successful, {db_error_count} failed")
-                db_success = False
-    
-    except Exception as e:
-        print(f"  ❌ DB: Database write failed: {e}")
-        db_success = False
-    
-    # Evaluate overall success
-    if csv_success and db_success:
-        print("  🎉 DUAL-WRITE SUCCESS: Both CSV and Database updated")
-    elif csv_success:
-        print("  ⚠️  PARTIAL SUCCESS: CSV updated, Database failed")
-    elif db_success:
-        print("  ⚠️  PARTIAL SUCCESS: Database updated, CSV failed")
-    else:
-        print("  ❌ DUAL-WRITE FAILED: Both CSV and Database failed")
+        print(f"  ❌ Failed to save data to {output_file}")
         return None
     
     print(f"  📊 Total records: {len(df)}")

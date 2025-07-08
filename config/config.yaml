@@ -7,25 +7,6 @@ google_sheets:
   cache_file: "cache/google_sheet_cache.html"
   target_div_id: 1159146182
 
-# Database Configuration
-database:
-  # Connection settings
-  driver: "postgresql"
-  host: "localhost"
-  port: 5432
-  database: "typing_clients"
-  username: "typing_user"
-  password: "typing_pass"
-  
-  # Connection pool settings
-  pool_size: 5
-  max_overflow: 10
-  pool_timeout: 30
-  pool_recycle: 3600
-  
-  # Migration settings
-  auto_create_tables: true
-  backup_csv_on_migration: true
 
 # File Paths and Directories
 paths:
