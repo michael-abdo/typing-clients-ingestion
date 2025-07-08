@@ -1,0 +1,18 @@
+{
+  "timestamp": "2025-07-06T00:26:56.722123",
+  "statistics": {
+    "total_files": 93,
+    "total_lines": 22187,
+    "total_size_bytes": 868641,
+    "files_with_path_setup": 19,
+    "files_with_makedirs": 14,
+    "files_with_csv_ops": 46,
+    "files_with_try_except": 73
+  },
+  "import_performance": {
+    "utils.config": 0.030514955520629883,
+    "utils.csv_tracker": 0.7071430683135986,
+    "utils.error_handling": 0.002497434616088867,
+    "utils.logger": 0.0005657672882080078
+  }
+}

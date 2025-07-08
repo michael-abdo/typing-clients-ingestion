@@ -1,0 +1,212 @@
+# DRY Refactoring Report
+Generated: 2025-07-06 00:27:19.106739
+
+## DRY RUN MODE - No files were modified
+
+### Error handling to refactor (47 files)
+- /home/Mike/projects/xenodex/typing-clients-ingestion/simple_cleanup.py
+  - Contains 3 try/except blocks that could use error decorators
+- /home/Mike/projects/xenodex/typing-clients-ingestion/final_remove.py
+  - Contains 1 try/except blocks that could use error decorators
+- /home/Mike/projects/xenodex/typing-clients-ingestion/simple_workflow.py
+  - Contains 1 try/except blocks that could use error decorators
+- /home/Mike/projects/xenodex/typing-clients-ingestion/run_complete_workflow.py
+  - Contains 1 try/except blocks that could use error decorators
+- /home/Mike/projects/xenodex/typing-clients-ingestion/final_cleanup.py
+  - Contains 2 try/except blocks that could use error decorators
+- /home/Mike/projects/xenodex/typing-clients-ingestion/run_all_tests.py
+  - Contains 3 try/except blocks that could use error decorators
+- /home/Mike/projects/xenodex/typing-clients-ingestion/download_emilie_folder.py
+  - Contains 1 try/except blocks that could use error decorators
+- /home/Mike/projects/xenodex/typing-clients-ingestion/execute_cleanup.py
+  - Contains 2 try/except blocks that could use error decorators
+- /home/Mike/projects/xenodex/typing-clients-ingestion/create_snapshot.py
+  - Contains 1 try/except blocks that could use error decorators
+- /home/Mike/projects/xenodex/typing-clients-ingestion/temp_cleanup.py
+  - Contains 3 try/except blocks that could use error decorators
+- /home/Mike/projects/xenodex/typing-clients-ingestion/run_cleanup.py
+  - Contains 1 try/except blocks that could use error decorators
+- /home/Mike/projects/xenodex/typing-clients-ingestion/utils/row_context.py
+  - Contains 1 try/except blocks that could use error decorators
+- /home/Mike/projects/xenodex/typing-clients-ingestion/utils/sanitization.py
+  - Contains 1 try/except blocks that could use error decorators
+- /home/Mike/projects/xenodex/typing-clients-ingestion/utils/extract_links.py
+  - Contains 9 try/except blocks that could use error decorators
+- /home/Mike/projects/xenodex/typing-clients-ingestion/utils/organize_by_type_final.py
+  - Contains 1 try/except blocks that could use error decorators
+- /home/Mike/projects/xenodex/typing-clients-ingestion/utils/streaming_csv.py
+  - Contains 1 try/except blocks that could use error decorators
+- /home/Mike/projects/xenodex/typing-clients-ingestion/utils/validation.py
+  - Contains 2 try/except blocks that could use error decorators
+- /home/Mike/projects/xenodex/typing-clients-ingestion/utils/file_lock.py
+  - Contains 3 try/except blocks that could use error decorators
+- /home/Mike/projects/xenodex/typing-clients-ingestion/utils/monitoring.py
+  - Contains 6 try/except blocks that could use error decorators
+- /home/Mike/projects/xenodex/typing-clients-ingestion/utils/comprehensive_file_mapper.py
+  - Contains 4 try/except blocks that could use error decorators
+- /home/Mike/projects/xenodex/typing-clients-ingestion/utils/master_scraper.py
+  - Contains 2 try/except blocks that could use error decorators
+- /home/Mike/projects/xenodex/typing-clients-ingestion/utils/logger.py
+  - Contains 1 try/except blocks that could use error decorators
+- /home/Mike/projects/xenodex/typing-clients-ingestion/utils/error_handling.py
+  - Contains 3 try/except blocks that could use error decorators
+- /home/Mike/projects/xenodex/typing-clients-ingestion/utils/clean_file_mapper.py
+  - Contains 2 try/except blocks that could use error decorators
+- /home/Mike/projects/xenodex/typing-clients-ingestion/utils/import_utils.py
+  - Contains 3 try/except blocks that could use error decorators
+- /home/Mike/projects/xenodex/typing-clients-ingestion/utils/download_drive.py
+  - Contains 7 try/except blocks that could use error decorators
+- /home/Mike/projects/xenodex/typing-clients-ingestion/utils/parallel_processor.py
+  - Contains 2 try/except blocks that could use error decorators
+- /home/Mike/projects/xenodex/typing-clients-ingestion/utils/cleanup_manager.py
+  - Contains 4 try/except blocks that could use error decorators
+- /home/Mike/projects/xenodex/typing-clients-ingestion/tests/test_file_lock.py
+  - Contains 1 try/except blocks that could use error decorators
+- /home/Mike/projects/xenodex/typing-clients-ingestion/minimal/simple_workflow.py
+  - Contains 6 try/except blocks that could use error decorators
+- /home/Mike/projects/xenodex/typing-clients-ingestion/minimal/csv_to_sqlite_migration.py
+  - Contains 1 try/except blocks that could use error decorators
+- /home/Mike/projects/xenodex/typing-clients-ingestion/minimal/csv_to_mysql_migration.py
+  - Contains 1 try/except blocks that could use error decorators
+- /home/Mike/projects/xenodex/typing-clients-ingestion/scripts/run_drive_downloads_async.py
+  - Contains 1 try/except blocks that could use error decorators
+- /home/Mike/projects/xenodex/typing-clients-ingestion/scripts/run_youtube_downloads_async.py
+  - Contains 1 try/except blocks that could use error decorators
+- /home/Mike/projects/xenodex/typing-clients-ingestion/scripts/download_large_drive_file_direct.py
+  - Contains 1 try/except blocks that could use error decorators
+- /home/Mike/projects/xenodex/typing-clients-ingestion/scripts/download_drive_files_from_html.py
+  - Contains 1 try/except blocks that could use error decorators
+- /home/Mike/projects/xenodex/typing-clients-ingestion/utilities/alternative_workflows/update_empty_links.py
+  - Contains 1 try/except blocks that could use error decorators
+- /home/Mike/projects/xenodex/typing-clients-ingestion/utilities/alternative_workflows/download_all_media.py
+  - Contains 2 try/except blocks that could use error decorators
+- /home/Mike/projects/xenodex/typing-clients-ingestion/utilities/alternative_workflows/process_unprocessed_rows.py
+  - Contains 1 try/except blocks that could use error decorators
+- /home/Mike/projects/xenodex/typing-clients-ingestion/utilities/maintenance/normalize_transcript_names.py
+  - Contains 1 try/except blocks that could use error decorators
+- /home/Mike/projects/xenodex/typing-clients-ingestion/utilities/maintenance/remove_duplicate_transcripts.py
+  - Contains 1 try/except blocks that could use error decorators
+- /home/Mike/projects/xenodex/typing-clients-ingestion/utilities/maintenance/clean_transcript_files.py
+  - Contains 1 try/except blocks that could use error decorators
+- /home/Mike/projects/xenodex/typing-clients-ingestion/utilities/maintenance/cleanup_malformed_urls.py
+  - Contains 1 try/except blocks that could use error decorators
+- /home/Mike/projects/xenodex/typing-clients-ingestion/utilities/maintenance/fix_transcript_extensions.py
+  - Contains 1 try/except blocks that could use error decorators
+- /home/Mike/projects/xenodex/typing-clients-ingestion/utilities/scripts/run_extract_links.py
+  - Contains 1 try/except blocks that could use error decorators
+- /home/Mike/projects/xenodex/typing-clients-ingestion/utilities/scripts/update_extract_results.py
+  - Contains 1 try/except blocks that could use error decorators
+- /home/Mike/projects/xenodex/typing-clients-ingestion/utilities/scripts/update_drive_links_all.py
+  - Contains 1 try/except blocks that could use error decorators
+
+### CSV operations to refactor (32 files)
+- /home/Mike/projects/xenodex/typing-clients-ingestion/simple_workflow.py
+  - Uses pandas CSV operations instead of CSVManager
+- /home/Mike/projects/xenodex/typing-clients-ingestion/run_complete_workflow.py
+  - Uses direct csv.Reader/Writer instead of CSVManager
+- /home/Mike/projects/xenodex/typing-clients-ingestion/run_all_tests.py
+  - Uses pandas CSV operations instead of CSVManager
+- /home/Mike/projects/xenodex/typing-clients-ingestion/create_snapshot.py
+  - Uses pandas CSV operations instead of CSVManager
+- /home/Mike/projects/xenodex/typing-clients-ingestion/check_doc_links.py
+  - Uses pandas CSV operations instead of CSVManager
+- /home/Mike/projects/xenodex/typing-clients-ingestion/utils/create_definitive_mapping.py
+  - Uses pandas CSV operations instead of CSVManager
+- /home/Mike/projects/xenodex/typing-clients-ingestion/utils/fix_csv_file_mappings.py
+  - Uses pandas CSV operations instead of CSVManager
+- /home/Mike/projects/xenodex/typing-clients-ingestion/utils/scrape_google_sheets.py
+  - Uses direct csv.Reader/Writer instead of CSVManager
+- /home/Mike/projects/xenodex/typing-clients-ingestion/utils/comprehensive_file_mapper.py
+  - Uses pandas CSV operations instead of CSVManager
+- /home/Mike/projects/xenodex/typing-clients-ingestion/utils/recover_unmapped_files.py
+  - Uses pandas CSV operations instead of CSVManager
+- /home/Mike/projects/xenodex/typing-clients-ingestion/utils/map_files_to_types.py
+  - Uses pandas CSV operations instead of CSVManager
+- /home/Mike/projects/xenodex/typing-clients-ingestion/utils/clean_file_mapper.py
+  - Uses pandas CSV operations instead of CSVManager
+- /home/Mike/projects/xenodex/typing-clients-ingestion/utils/error_decorators.py
+  - Uses pandas CSV operations instead of CSVManager
+- /home/Mike/projects/xenodex/typing-clients-ingestion/utils/csv_file_integrity_mapper.py
+  - Uses pandas CSV operations instead of CSVManager
+- /home/Mike/projects/xenodex/typing-clients-ingestion/utils/fix_mapping_issues.py
+  - Uses pandas CSV operations instead of CSVManager
+- /home/Mike/projects/xenodex/typing-clients-ingestion/minimal/simple_workflow.py
+  - Uses pandas CSV operations instead of CSVManager
+- /home/Mike/projects/xenodex/typing-clients-ingestion/minimal/csv_to_sqlite_migration.py
+  - Uses direct csv.Reader/Writer instead of CSVManager
+- /home/Mike/projects/xenodex/typing-clients-ingestion/minimal/csv_to_mysql_migration.py
+  - Uses direct csv.Reader/Writer instead of CSVManager
+- /home/Mike/projects/xenodex/typing-clients-ingestion/minimal/analyze_csv.py
+  - Uses pandas CSV operations instead of CSVManager
+- /home/Mike/projects/xenodex/typing-clients-ingestion/scripts/run_drive_downloads_async.py
+  - Uses direct csv.Reader/Writer instead of CSVManager
+- /home/Mike/projects/xenodex/typing-clients-ingestion/scripts/run_youtube_downloads_async.py
+  - Uses direct csv.Reader/Writer instead of CSVManager
+- /home/Mike/projects/xenodex/typing-clients-ingestion/scripts/migrate_placeholders.py
+  - Uses pandas CSV operations instead of CSVManager
+- /home/Mike/projects/xenodex/typing-clients-ingestion/scripts/cleanup_csv_fields.py
+  - Uses direct csv.Reader/Writer instead of CSVManager
+- /home/Mike/projects/xenodex/typing-clients-ingestion/scripts/download_drive_files_from_html.py
+  - Uses direct csv.Reader/Writer instead of CSVManager
+- /home/Mike/projects/xenodex/typing-clients-ingestion/utilities/alternative_workflows/update_empty_links.py
+  - Uses direct csv.Reader/Writer instead of CSVManager
+- /home/Mike/projects/xenodex/typing-clients-ingestion/utilities/alternative_workflows/download_all_media.py
+  - Uses direct csv.Reader/Writer instead of CSVManager
+- /home/Mike/projects/xenodex/typing-clients-ingestion/utilities/alternative_workflows/process_unprocessed_rows.py
+  - Uses direct csv.Reader/Writer instead of CSVManager
+- /home/Mike/projects/xenodex/typing-clients-ingestion/utilities/maintenance/cleanup_malformed_urls.py
+  - Uses direct csv.Reader/Writer instead of CSVManager
+- /home/Mike/projects/xenodex/typing-clients-ingestion/utilities/scripts/run_extract_links.py
+  - Uses direct csv.Reader/Writer instead of CSVManager
+- /home/Mike/projects/xenodex/typing-clients-ingestion/utilities/scripts/update_extract_results.py
+  - Uses direct csv.Reader/Writer instead of CSVManager
+- /home/Mike/projects/xenodex/typing-clients-ingestion/utilities/scripts/update_drive_links.py
+  - Uses direct csv.Reader/Writer instead of CSVManager
+- /home/Mike/projects/xenodex/typing-clients-ingestion/utilities/scripts/update_drive_links_all.py
+  - Uses direct csv.Reader/Writer instead of CSVManager
+
+### Path setup refactored (13 files)
+- /home/Mike/projects/xenodex/typing-clients-ingestion/run_complete_workflow.py
+  - Replaced sys.path.insert with init_project_imports()
+- /home/Mike/projects/xenodex/typing-clients-ingestion/tests/test_file_lock.py
+  - Replaced sys.path.insert with init_project_imports()
+- /home/Mike/projects/xenodex/typing-clients-ingestion/tests/test_url_cleaning.py
+  - Replaced sys.path.insert with init_project_imports()
+- /home/Mike/projects/xenodex/typing-clients-ingestion/tests/test_validation.py
+  - Replaced sys.path.insert with init_project_imports()
+- /home/Mike/projects/xenodex/typing-clients-ingestion/tests/test_youtube_validation.py
+  - Replaced sys.path.insert with init_project_imports()
+- /home/Mike/projects/xenodex/typing-clients-ingestion/scripts/test_single_download.py
+  - Replaced sys.path.insert with init_project_imports()
+- /home/Mike/projects/xenodex/typing-clients-ingestion/scripts/run_drive_downloads_async.py
+  - Replaced sys.path.insert with init_project_imports()
+- /home/Mike/projects/xenodex/typing-clients-ingestion/scripts/run_youtube_downloads_async.py
+  - Replaced sys.path.insert with init_project_imports()
+- /home/Mike/projects/xenodex/typing-clients-ingestion/scripts/download_large_drive_file_direct.py
+  - Replaced sys.path.insert with init_project_imports()
+- /home/Mike/projects/xenodex/typing-clients-ingestion/scripts/download_small_drive_files.py
+  - Replaced sys.path.insert with init_project_imports()
+- /home/Mike/projects/xenodex/typing-clients-ingestion/scripts/cleanup_csv_fields.py
+  - Replaced sys.path.insert with init_project_imports()
+- /home/Mike/projects/xenodex/typing-clients-ingestion/scripts/download_large_drive_files.py
+  - Replaced sys.path.insert with init_project_imports()
+- /home/Mike/projects/xenodex/typing-clients-ingestion/scripts/download_drive_files_from_html.py
+  - Replaced sys.path.insert with init_project_imports()
+
+### Directory creation refactored (8 files)
+- /home/Mike/projects/xenodex/typing-clients-ingestion/run_complete_workflow.py
+  - Replaced 1 os.makedirs calls
+- /home/Mike/projects/xenodex/typing-clients-ingestion/utils/row_context.py
+  - Replaced 1 os.makedirs calls
+- /home/Mike/projects/xenodex/typing-clients-ingestion/utils/organize_by_type_final.py
+  - Replaced 3 os.makedirs calls
+- /home/Mike/projects/xenodex/typing-clients-ingestion/utils/comprehensive_file_mapper.py
+  - Replaced 3 os.makedirs calls
+- /home/Mike/projects/xenodex/typing-clients-ingestion/utils/error_handling.py
+  - Replaced 1 os.makedirs calls
+- /home/Mike/projects/xenodex/typing-clients-ingestion/utils/map_files_to_types.py
+  - Replaced 2 os.makedirs calls
+- /home/Mike/projects/xenodex/typing-clients-ingestion/utils/fix_mapping_issues.py
+  - Replaced 1 os.makedirs calls
+- /home/Mike/projects/xenodex/typing-clients-ingestion/scripts/download_large_drive_file_direct.py
+  - Replaced 1 os.makedirs calls

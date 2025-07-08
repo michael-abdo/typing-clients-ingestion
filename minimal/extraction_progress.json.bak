@@ -1,0 +1,12 @@
+{
+  "completed": [
+    "https://docs.google.com/document/d/1Ael_iSce9tO3SECHp5X5N0yYgahDnnCY837aYsC21PE/edit?tab=t.0"
+  ],
+  "failed": [
+    "https://www.youtube.com/watch?v=UD2X2hJTq4Y"
+  ],
+  "last_batch": 10,
+  "total_processed": 2,
+  "mode": "text",
+  "last_run": "2025-07-07T19:13:00.204138"
+}

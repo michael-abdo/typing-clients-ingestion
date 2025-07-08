@@ -572,7 +572,7 @@ def filter_meaningful_links(links: Dict[str, List[str]]) -> Dict[str, List[str]]
     }
 
 def extract_people_from_sheet_html(html_content: str, target_div_id: str = "1159146182") -> List[Dict]:
-    """Extract people data from Google Sheet HTML"""
+    """Extract people data from Google Sheet HTML including direct links"""
     print("Extracting people data from sheet...")
     
     soup = BeautifulSoup(html_content, "html.parser")
@@ -616,23 +616,52 @@ def extract_people_from_sheet_html(html_content: str, target_div_id: str = "1159
             if any(["Name" in str(cell.get_text(strip=True)) and "Email" in str(cells[3].get_text(strip=True)) and "Type" in str(cells[4].get_text(strip=True)) for cell in cells]):
                 continue
             
-            # Look for Google Doc link in the name cell
+            # Look for ALL links in the entire row (not just name column)
             doc_link = None
-            name_cell = cells[2]
-            a_tags = name_cell.find_all("a")
-            if a_tags:
-                a_tag = a_tags[0]
-                if a_tag.has_attr("href"):
-                    href = a_tag["href"]
-                    if href.startswith("https://www.google.com/url?q="):
-                        doc_link = extract_actual_url(href)
+            direct_youtube_links = []
+            direct_drive_files = []
+            direct_drive_folders = []
+            
+            # Check ALL cells for links (including cells beyond column 4)
+            for cell_idx, cell in enumerate(cells):
+                a_tags = cell.find_all("a")
+                for a_tag in a_tags:
+                    if a_tag.has_attr("href"):
+                        href = a_tag["href"]
+                        # Decode Google redirect URL
+                        if href.startswith("https://www.google.com/url?q="):
+                            actual_url = extract_actual_url(href)
+                        else:
+                            actual_url = href
+                        
+                        # Categorize the link
+                        if 'docs.google.com/document' in actual_url:
+                            # Google Doc - store for later processing
+                            if not doc_link and cell_idx == 2:  # Prioritize name column doc links
+                                doc_link = actual_url
+                        elif 'youtube.com' in actual_url or 'youtu.be' in actual_url:
+                            # Direct YouTube link in sheet
+                            direct_youtube_links.append(actual_url)
+                        elif 'drive.google.com/file' in actual_url:
+                            # Direct Drive file link
+                            direct_drive_files.append(actual_url)
+                        elif 'drive.google.com/drive/folders' in actual_url:
+                            # Direct Drive folder link
+                            direct_drive_folders.append(actual_url)
+            
+            # Combine all direct links into extracted_links format
+            all_direct_links = direct_youtube_links + direct_drive_files + direct_drive_folders
             
             people_data.append({
                 "row_id": row_id,
                 "name": name,
                 "email": email,
                 "type": type_val,
-                "doc_link": doc_link if doc_link else ""
+                "doc_link": doc_link if doc_link else "",
+                "direct_youtube": direct_youtube_links,
+                "direct_drive_files": direct_drive_files,
+                "direct_drive_folders": direct_drive_folders,
+                "extracted_links": all_direct_links  # All direct links from sheet
             })
     
     print(f"✓ Found {len(people_data)} people records")

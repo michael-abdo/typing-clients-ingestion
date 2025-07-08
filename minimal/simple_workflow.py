@@ -305,16 +305,53 @@ def create_record(person, mode="basic", doc_text="", links=None):
         'link': person.get('doc_link', '')
     }
     
+    # Handle direct links from sheet (for rows like Carlos Arthur, Kiko, Dan Jane)
+    has_direct_links = False
+    if person.get('direct_youtube') or person.get('direct_drive_files') or person.get('direct_drive_folders'):
+        has_direct_links = True
+        # Merge direct links into links structure
+        if not links:
+            links = {'youtube': [], 'drive_files': [], 'drive_folders': [], 'all_links': []}
+        
+        # Add direct YouTube links
+        if person.get('direct_youtube'):
+            links['youtube'].extend(person['direct_youtube'])
+            links['all_links'].extend(person['direct_youtube'])
+        
+        # Add direct Drive file links
+        if person.get('direct_drive_files'):
+            links['drive_files'].extend(person['direct_drive_files'])
+            links['all_links'].extend(person['direct_drive_files'])
+        
+        # Add direct Drive folder links
+        if person.get('direct_drive_folders'):
+            links['drive_folders'].extend(person['direct_drive_folders'])
+            links['all_links'].extend(person['direct_drive_folders'])
+    
     # Add fields based on mode
     if mode == "text":
-        record.update({
-            'document_text': doc_text,
-            'processed': 'yes' if doc_text and not doc_text.startswith('[') else 'no',
-            'extraction_date': datetime.now().isoformat()
-        })
+        # Include extracted links in text mode for direct sheet links
+        if has_direct_links and links:
+            all_youtube = list(set(links.get('youtube', [])))
+            all_drive = links.get('drive_files', []) + links.get('drive_folders', [])
+            
+            record.update({
+                'document_text': doc_text,
+                'processed': 'yes' if doc_text and not doc_text.startswith('[') else 'yes' if has_direct_links else 'no',
+                'extraction_date': datetime.now().isoformat(),
+                'extracted_links': '|'.join(links.get('all_links', [])),
+                'youtube_playlist': '|'.join(all_youtube),
+                'google_drive': '|'.join(all_drive)
+            })
+        else:
+            record.update({
+                'document_text': doc_text,
+                'processed': 'yes' if doc_text and not doc_text.startswith('[') else 'no',
+                'extraction_date': datetime.now().isoformat()
+            })
     elif mode == "full":
         # Full mode with all fields
-        if links:
+        if links or has_direct_links:
             record = create_full_record(person, links, doc_text)
         else:
             # No links - create empty full record

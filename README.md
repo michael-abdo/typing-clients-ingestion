@@ -115,9 +115,20 @@ This codebase has undergone a comprehensive DRY (Don't Repeat Yourself) refactor
 
 ```
 .
+├── README.md                   # Project documentation
+├── LICENSE                     # License file
+├── requirements.txt            # Python dependencies
+├── CHANGELOG.md               # Project changelog
+├── .gitignore                 # Git ignore rules
 ├── run_complete_workflow.py    # Main entry point
-├── minimal/
-│   └── simple_workflow.py      # 🔄 UNIFIED: CSV + Database workflow
+├── run_all_tests.py           # Test runner
+│
+├── minimal/                    # Core workflow implementation
+│   ├── simple_workflow.py      # 🔄 UNIFIED: CSV + Database workflow
+│   ├── database_manager.py     # Database operations
+│   ├── extraction_utils.py     # Document extraction utilities
+│   └── CLAUDE.md              # Workflow documentation
+│
 ├── utils/                      # Core utilities
 │   ├── download_youtube.py     # ✅ Enhanced with error decorators
 │   ├── download_drive.py       # ✅ Enhanced with error decorators
@@ -127,15 +138,49 @@ This codebase has undergone a comprehensive DRY (Don't Repeat Yourself) refactor
 │   ├── config.py               # ✅ StandardCLIArguments for consistent CLI
 │   ├── monitoring.py           # System monitoring
 │   └── ...                     # Other utilities
-├── scripts/                    # ✅ Standardized CLI arguments
+│
+├── scripts/                    # Utility scripts
 │   ├── migrate_placeholders.py # ✅ Uses StandardCLIArguments
 │   ├── download_*.py           # ✅ Enhanced with error decorators
-│   └── monitor_downloads.py    # ✅ Uses StandardCLIArguments
+│   ├── monitor_downloads.py    # ✅ Uses StandardCLIArguments
+│   └── run_*.py               # Various runner scripts
+│
+├── docs/                       # Documentation
+│   ├── refactoring/           # DRY refactoring documentation
+│   │   ├── DRY_*.md           # DRY refactoring guides
+│   │   ├── PHASE*.md          # Phase completion reports
+│   │   └── ...                # Other refactoring docs
+│   ├── API_REFERENCE.md       # API documentation
+│   ├── DEPLOYMENT_INSTRUCTIONS.md  # Deployment guide
+│   └── ...                    # Other documentation
+│
+├── tests/                      # Test suite
+│   ├── test_*.py              # Unit tests
+│   └── __init__.py            # Test package
+│
+├── tools/                      # Development tools
+│   ├── apply_dry_refactoring.py    # Refactoring tool
+│   ├── dry_refactoring_verifier.py  # Verification tool
+│   └── create_snapshot.py          # Snapshot tool
+│
 ├── config/                     # Configuration files
+│   └── config.yaml            # Main configuration
+│
+├── data/                       # Data files
+│   ├── *.db                   # Database files
+│   ├── *.json                 # JSON data
+│   └── sheet.html             # Cached sheet data
+│
+├── reports/                    # Analysis reports
+│   ├── refactoring/           # Refactoring reports
+│   └── csv_placeholder_analysis.md
+│
 ├── outputs/                    # CSV output files
 ├── youtube_downloads/          # Downloaded videos
 ├── drive_downloads/            # Downloaded documents
 └── logs/                       # System logs
+    ├── history.csv            # Operation history
+    └── runs/                  # Run-specific logs
 ```
 
 ### 🏆 Benefits Achieved
