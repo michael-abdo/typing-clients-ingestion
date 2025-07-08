@@ -1,0 +1,4 @@
+Traceback (most recent call last):
+  File "/home/Mike/projects/xenodex/typing-clients-ingestion-minimal/download_all_links.py", line 17, in <module>
+    from utils.config import config
+ImportError: cannot import name 'config' from 'utils.config' (/home/Mike/projects/xenodex/typing-clients-ingestion-minimal/utils/config.py)

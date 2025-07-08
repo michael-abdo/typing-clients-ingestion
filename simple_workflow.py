@@ -135,9 +135,24 @@ def step2_extract_people_and_docs(html_content):
     
     print(f"✓ Found {len(people_data)} people records")
     
-    # Filter to only those with Google Doc links
-    people_with_docs = [person for person in people_data if person["doc_link"]]
+    # Filter to only those with actual Google Doc links (not direct YouTube/Drive links)
+    people_with_docs = []
+    people_with_direct_links = []
+    
+    for person in people_data:
+        if person["doc_link"]:
+            # Check if it's a Google Doc or a direct YouTube/Drive link
+            link = person["doc_link"].lower()
+            if "docs.google.com/document" in link:
+                people_with_docs.append(person)
+            elif "youtube.com" in link or "youtu.be" in link or "drive.google.com/file" in link:
+                people_with_direct_links.append(person)
+            else:
+                # Unknown link type, treat as doc for safety
+                people_with_docs.append(person)
+    
     print(f"✓ Found {len(people_with_docs)} people with Google Doc links")
+    print(f"✓ Found {len(people_with_direct_links)} people with direct YouTube/Drive links")
     
     return people_data, people_with_docs
 
@@ -178,6 +193,13 @@ def step4_extract_links(doc_content, doc_text=""):
     # Combine HTML content and plain text for comprehensive link extraction
     combined_content = doc_content + " " + doc_text
     
+    # Decode Unicode escapes commonly found in Google Docs HTML
+    try:
+        combined_content = combined_content.encode('utf-8').decode('unicode-escape')
+    except:
+        # If decoding fails, continue with original content
+        pass
+    
     links = {
         'youtube': [],
         'drive_files': [],
@@ -202,6 +224,15 @@ def step4_extract_links(doc_content, doc_text=""):
             
             if clean_link not in links['youtube']:
                 links['youtube'].append(clean_link)
+    
+    # Also try to find YouTube playlists with Unicode escapes (common in Google Docs)
+    import re
+    escaped_playlist_pattern = re.compile(r'youtube\.com/playlist\?list\\u003d([a-zA-Z0-9_-]+)')
+    escaped_matches = escaped_playlist_pattern.findall(combined_content)
+    for match in escaped_matches:
+        clean_link = f'https://www.youtube.com/playlist?list={match}'
+        if clean_link not in links['youtube']:
+            links['youtube'].append(clean_link)
     
     # Use centralized Google Drive patterns (DRY)
     drive_patterns = [
@@ -251,26 +282,87 @@ def step4_extract_links(doc_content, doc_text=""):
     
     return links
 
-def step5_process_extracted_data(person, links, doc_text=""):
-    """Step 5: Process extracted data and format for CSV matching main system"""
-    print("Step 5: Processing extracted data...")
+def filter_meaningful_links(links):
+    """Filter extracted links to only meaningful content links (like operators do)"""
+    print("  Filtering meaningful links...")
     
-    # Use centralized path utility (DRY)
-    ensure_directory(config.get("paths.output_dir", "simple_downloads"))
+    # Define infrastructure/noise patterns to exclude
+    noise_patterns = [
+        # Google infrastructure
+        r'accounts\.google\.com',
+        r'apis\.google\.com', 
+        r'clients6\.google\.com',
+        r'gstatic\.com',
+        r'googleapis\.com',
+        r'googleusercontent\.com',
+        r'ogs\.google\.com',
+        r'ogads-pa\.clients6\.google\.com',
+        r'people-pa\.clients6\.google\.com',
+        r'addons.*\.google\.com',
+        r'workspace\.google\.com',
+        r'myaccount\.google\.com',
+        r'contacts\.google\.com',
+        r'script\.google\.com',
+        r'drivefrontend-pa\.clients6\.google\.com',
+        
+        # Chrome extensions and static resources
+        r'chrome\.google\.com/webstore',
+        r'docs\.google\.com/static/',
+        r'docs\.google\.com/persistent/',
+        r'docs\.google\.com/relay\.html',
+        r'docs\.google\.com/picker',
+        r'docs\.google\.com/drawings',
+        
+        # Document-specific URLs (not content)
+        r'docs\.google\.com/document/.*edit',
+        r'docs\.google\.com/document/.*preview',
+        r'docs\.google\.com/document/\?usp=docs_web',
+        r'&amp;usp=embed_',
+        r'\?tab=t\.',
+        
+        # Schema.org and other metadata
+        r'schema\.org',
+        r'meet\.google\.com',
+        
+        # Non-content file extensions
+        r'\.js$',
+        r'\.css$',
+        r'\.woff2?$',
+        r'\.ico$',
+        r'\.gif$',
+        r'\.binarypb$',
+        r'\.model$'
+    ]
     
-    # Filter links to get only meaningful content links, not infrastructure
+    def is_meaningful_link(link):
+        """Check if a link is meaningful content vs infrastructure noise"""
+        link_lower = link.lower()
+        
+        # Check against noise patterns
+        for pattern in noise_patterns:
+            if re.search(pattern, link):
+                return False
+        
+        # Keep YouTube content links
+        if any(domain in link_lower for domain in ['youtube.com', 'youtu.be']):
+            # Must be actual video or playlist, not just any YouTube URL
+            return bool(re.search(r'(watch\?v=|playlist\?list=|youtu\.be/[a-zA-Z0-9_-]{11})', link))
+        
+        # Keep Drive files and folders (but not just drive.google.com root)
+        if 'drive.google.com' in link_lower:
+            return bool(re.search(r'(file/d/[a-zA-Z0-9_-]+|drive/folders/[a-zA-Z0-9_-]+)', link))
+        
+        return False
+    
+    # Filter all link categories
     meaningful_youtube = []
     meaningful_drive_files = []
     meaningful_drive_folders = []
     
-    # Filter YouTube links - only keep actual video/playlist content
-    for link in links['youtube']:
-        if any([
-            '/watch?v=' in link and len(re.findall(r'v=([a-zA-Z0-9_-]{11})', link)) > 0,
-            '/playlist?list=' in link,
-            'youtu.be/' in link and len(link.split('/')[-1]) == 11
-        ]):
-            # Clean the link to get just the essential content
+    # Process YouTube links
+    for link in links.get('youtube', []):
+        if is_meaningful_link(link):
+            # Normalize YouTube URLs to standard format
             if '/watch?v=' in link:
                 match = re.search(r'v=([a-zA-Z0-9_-]{11})', link)
                 if match:
@@ -280,32 +372,90 @@ def step5_process_extracted_data(person, links, doc_text=""):
                 if match:
                     meaningful_youtube.append(f"https://www.youtube.com/playlist?list={match.group(1)}")
             elif 'youtu.be/' in link:
-                video_id = link.split('/')[-1]
+                video_id = link.split('/')[-1].split('?')[0]  # Remove parameters
                 if len(video_id) == 11:
                     meaningful_youtube.append(f"https://www.youtube.com/watch?v={video_id}")
     
-    # Keep all Drive links as they're likely meaningful
-    meaningful_drive_files = links['drive_files']
-    meaningful_drive_folders = links['drive_folders']
+    # Process Drive files
+    for link in links.get('drive_files', []):
+        if is_meaningful_link(link):
+            # Normalize Drive file URLs
+            match = re.search(r'file/d/([a-zA-Z0-9_-]+)', link)
+            if match:
+                meaningful_drive_files.append(f"https://drive.google.com/file/d/{match.group(1)}/view")
     
-    # Remove duplicates
-    meaningful_youtube = list(set(meaningful_youtube))
+    # Process Drive folders  
+    for link in links.get('drive_folders', []):
+        if is_meaningful_link(link):
+            # Normalize Drive folder URLs
+            match = re.search(r'drive/folders/([a-zA-Z0-9_-]+)', link)
+            if match:
+                meaningful_drive_folders.append(f"https://drive.google.com/drive/folders/{match.group(1)}")
+    
+    # Also check all_links for any missed content links
+    for link in links.get('all_links', []):
+        if is_meaningful_link(link):
+            if any(pattern in link.lower() for pattern in ['youtube.com', 'youtu.be']) and link not in meaningful_youtube:
+                # Process as YouTube
+                if '/watch?v=' in link:
+                    match = re.search(r'v=([a-zA-Z0-9_-]{11})', link)
+                    if match:
+                        meaningful_youtube.append(f"https://www.youtube.com/watch?v={match.group(1)}")
+                elif '/playlist?list=' in link:
+                    match = re.search(r'list=([a-zA-Z0-9_-]+)', link)
+                    if match:
+                        meaningful_youtube.append(f"https://www.youtube.com/playlist?list={match.group(1)}")
+                elif 'youtu.be/' in link:
+                    video_id = link.split('/')[-1].split('?')[0]
+                    if len(video_id) == 11:
+                        meaningful_youtube.append(f"https://www.youtube.com/watch?v={video_id}")
+            elif 'drive.google.com/file' in link and link not in meaningful_drive_files:
+                match = re.search(r'file/d/([a-zA-Z0-9_-]+)', link)
+                if match:
+                    meaningful_drive_files.append(f"https://drive.google.com/file/d/{match.group(1)}/view")
+            elif 'drive.google.com/drive/folders' in link and link not in meaningful_drive_folders:
+                match = re.search(r'drive/folders/([a-zA-Z0-9_-]+)', link)
+                if match:
+                    meaningful_drive_folders.append(f"https://drive.google.com/drive/folders/{match.group(1)}")
+    
+    # Remove duplicates and sort
+    meaningful_youtube = sorted(list(set(meaningful_youtube)))
+    meaningful_drive_files = sorted(list(set(meaningful_drive_files))) 
+    meaningful_drive_folders = sorted(list(set(meaningful_drive_folders)))
+    
+    print(f"    Filtered: {len(meaningful_youtube)} YouTube, {len(meaningful_drive_files)} Drive files, {len(meaningful_drive_folders)} Drive folders")
+    
+    return {
+        'youtube': meaningful_youtube,
+        'drive_files': meaningful_drive_files,
+        'drive_folders': meaningful_drive_folders
+    }
+
+def step5_process_extracted_data(person, links, doc_text=""):
+    """Step 5: Process extracted data and format for CSV matching main system"""
+    print("Step 5: Processing extracted data...")
+    
+    # Use centralized path utility (DRY)
+    ensure_directory(config.get("paths.output_dir", "simple_downloads"))
+    
+    # Filter links to get only meaningful content links (like operators do)
+    meaningful_links = filter_meaningful_links(links)
     
     # Create record using centralized factory (DRY)
     # Prepare links data for factory
     links_data = {
-        'youtube': meaningful_youtube,
-        'drive_files': meaningful_drive_files,
-        'drive_folders': meaningful_drive_folders,
+        'youtube': meaningful_links['youtube'],
+        'drive_files': meaningful_links['drive_files'],
+        'drive_folders': meaningful_links['drive_folders'],
         'all_links': links['all_links']
     }
     
     record = CSVManager.create_record(person, mode='full', doc_text=doc_text, links=links_data)
     
     print(f"✓ Processed record for {person['name']}")
-    print(f"  Meaningful YouTube links: {len(meaningful_youtube)}")
-    print(f"  Drive Files: {len(meaningful_drive_files)}")
-    print(f"  Drive Folders: {len(meaningful_drive_folders)}")
+    print(f"  Meaningful YouTube links: {len(meaningful_links['youtube'])}")
+    print(f"  Drive Files: {len(meaningful_links['drive_files'])}")
+    print(f"  Drive Folders: {len(meaningful_links['drive_folders'])}")
     print(f"  Total links extracted: {len(links['all_links'])}")
     
     return record
@@ -555,19 +705,55 @@ def main():
         for i, person in enumerate(people_to_process):
             print(f"\nProcessing person {i+1}/{len(people_to_process)}: {person['name']} (Row {person.get('row_id', 'Unknown')})")
             
-            # Check if this person has a document
-            if person.get('row_id') in people_with_docs_dict and person.get('doc_link'):
-                print(f"  → Has document: {person['doc_link']}")
+            # Check if this person has a link
+            if person.get('doc_link'):
+                link = person['doc_link'].lower()
                 
-                # Step 3: Scrape doc content and text
-                doc_content, doc_text = step3_scrape_doc_contents(person['doc_link'])
+                # Check if it's a Google Doc that needs scraping
+                if person.get('row_id') in people_with_docs_dict:
+                    print(f"  → Has Google Doc: {person['doc_link']}")
+                    
+                    # Step 3: Scrape doc content and text
+                    doc_content, doc_text = step3_scrape_doc_contents(person['doc_link'])
+                    
+                    # Step 4: Extract links from HTML content and document text
+                    links = step4_extract_links(doc_content, doc_text)
+                    
+                    # Step 5: Process extracted data
+                    record = step5_process_extracted_data(person, links, doc_text)
+                    processed_records.append(record)
                 
-                # Step 4: Extract links from HTML content and document text
-                links = step4_extract_links(doc_content, doc_text)
+                # Handle direct YouTube/Drive links (Case 2)
+                elif "youtube.com" in link or "youtu.be" in link or "drive.google.com/file" in link:
+                    print(f"  → Has direct link: {person['doc_link']}")
+                    
+                    # For direct links, create the links structure directly without scraping
+                    links = {
+                        'youtube': [],
+                        'drive_files': [],
+                        'drive_folders': [],
+                        'all_links': []
+                    }
+                    
+                    # Add the direct link to appropriate category
+                    if "youtube.com" in link or "youtu.be" in link:
+                        links['youtube'].append(person['doc_link'])
+                    elif "drive.google.com/file" in link:
+                        links['drive_files'].append(person['doc_link'])
+                    
+                    links['all_links'].append(person['doc_link'])
+                    
+                    # Process without doc scraping
+                    record = step5_process_extracted_data(person, links, '')
+                    processed_records.append(record)
                 
-                # Step 5: Process extracted data
-                record = step5_process_extracted_data(person, links, doc_text)
-                processed_records.append(record)
+                else:
+                    print(f"  → Has unknown link type: {person['doc_link']}")
+                    # Unknown link type, process as doc for safety
+                    doc_content, doc_text = step3_scrape_doc_contents(person['doc_link'])
+                    links = step4_extract_links(doc_content, doc_text)
+                    record = step5_process_extracted_data(person, links, doc_text)
+                    processed_records.append(record)
             else:
                 print(f"  → No document")
                 # Create record for person without document using factory (DRY)

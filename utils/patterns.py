@@ -123,11 +123,49 @@ def is_drive_url(url: str) -> bool:
 def get_chrome_options() -> Options:
     """Get standardized Chrome options for Selenium WebDriver (DRY)"""
     chrome_options = Options()
-    chrome_options.add_argument("--headless")  # Run in headless mode
+    chrome_options.add_argument("--headless=new")  # Use new headless mode
     chrome_options.add_argument("--disable-gpu")
     chrome_options.add_argument("--window-size=1920,1080")
     chrome_options.add_argument("--disable-dev-shm-usage")
     chrome_options.add_argument("--no-sandbox")
+    
+    # Additional options to fix Chrome crashes
+    chrome_options.add_argument("--disable-setuid-sandbox")
+    chrome_options.add_argument("--disable-extensions")
+    chrome_options.add_argument("--disable-plugins")
+    chrome_options.add_argument("--disable-images")
+    chrome_options.add_argument("--disable-blink-features=AutomationControlled")
+    
+    # Use temporary directory in /tmp for Chrome user data
+    import tempfile
+    import os
+    temp_dir = tempfile.mkdtemp(prefix="chrome_temp_", dir="/tmp")
+    chrome_options.add_argument(f"--user-data-dir={temp_dir}")
+    chrome_options.add_argument(f"--crash-dumps-dir={temp_dir}")
+    
+    # Try to find Chrome binary
+    chrome_paths = [
+        "/usr/bin/google-chrome",
+        "/usr/bin/google-chrome-stable",
+        "/usr/bin/chromium",
+        "/usr/bin/chromium-browser",
+        "/snap/bin/chromium",
+        "/usr/local/bin/google-chrome"
+    ]
+    
+    for path in chrome_paths:
+        if os.path.exists(path):
+            chrome_options.binary_location = path
+            break
+    
+    # Additional stability options
+    chrome_options.add_experimental_option("excludeSwitches", ["enable-logging", "enable-automation"])
+    chrome_options.add_experimental_option("useAutomationExtension", False)
+    chrome_options.add_experimental_option('prefs', {
+        'profile.default_content_setting_values.notifications': 2,
+        'profile.default_content_settings.popups': 0
+    })
+    
     return chrome_options
 
 
