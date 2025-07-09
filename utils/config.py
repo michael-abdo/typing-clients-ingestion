@@ -678,3 +678,415 @@ def bytes_to_gb(bytes_value: int) -> float:
     """Convert bytes to gigabytes (DRY utility)."""
     return bytes_value / Constants.BYTES_PER_GB
 
+
+# ============================================================================
+# CONSOLIDATED CONFIGURATION VALUES (DRY Phase 2)
+# ============================================================================
+
+# AWS S3 Configuration
+def get_s3_config() -> Dict[str, Any]:
+    """Get S3 configuration with fallback defaults."""
+    return {
+        'bucket_name': get_config().get('aws.s3.bucket_name', 'typing-clients-storage-2025'),
+        'region': get_config().get('aws.s3.region', 'us-east-1'),
+        'create_public_urls': get_config().get('aws.s3.create_public_urls', True),
+        'organize_by_person': get_config().get('aws.s3.organize_by_person', True),
+        'add_metadata': get_config().get('aws.s3.add_metadata', True)
+    }
+
+
+def get_s3_bucket_name() -> str:
+    """Get S3 bucket name."""
+    return get_config().get('aws.s3.bucket_name', 'typing-clients-storage-2025')
+
+
+def get_s3_region() -> str:
+    """Get S3 region."""
+    return get_config().get('aws.s3.region', 'us-east-1')
+
+
+# Download Configuration
+def get_download_config() -> Dict[str, Any]:
+    """Get download configuration with all consolidated settings."""
+    return {
+        'output_dir': get_config().get('downloads.output_dir', 'downloads'),
+        'timeout': get_config().get('downloads.timeout', 120),
+        'max_retries': get_config().get('downloads.max_retries', 3),
+        'retry_delay': get_config().get('downloads.retry_delay', 2),
+        'create_metadata': get_config().get('downloads.create_metadata', True),
+        'show_progress': get_config().get('downloads.show_progress', True),
+        'youtube': get_youtube_download_config(),
+        'drive': get_drive_download_config()
+    }
+
+
+def get_youtube_download_config() -> Dict[str, Any]:
+    """Get YouTube-specific download configuration."""
+    return {
+        'default_format': get_config().get('downloads.youtube.default_format', 'mp3'),
+        'default_quality': get_config().get('downloads.youtube.default_quality', '128K'),
+        'audio_format': get_config().get('downloads.youtube.audio_format', 'mp3'),
+        'video_format': get_config().get('downloads.youtube.video_format', 'mp4'),
+        'extract_audio': get_config().get('downloads.youtube.extract_audio', True),
+        'no_playlist': get_config().get('downloads.youtube.no_playlist', True),
+        'quiet': get_config().get('downloads.youtube.quiet', True),
+        'no_warnings': get_config().get('downloads.youtube.no_warnings', True),
+        'timeout': get_config().get('downloads.youtube.timeout', 60)
+    }
+
+
+def get_drive_download_config() -> Dict[str, Any]:
+    """Get Google Drive download configuration."""
+    return {
+        'use_gdown': get_config().get('downloads.drive.use_gdown', True),
+        'fuzzy_matching': get_config().get('downloads.drive.fuzzy_matching', True),
+        'save_info_only': get_config().get('downloads.drive.save_info_only', False),
+        'timeout': get_config().get('downloads.drive.timeout', 120),
+        'chunk_size': get_config().get('downloads.drive.chunk_size', 1024*1024)
+    }
+
+
+# CSV Configuration
+def get_csv_config() -> Dict[str, Any]:
+    """Get CSV file configuration."""
+    return {
+        'input_file': get_config().get('csv.input_file', 'outputs/output.csv'),
+        'output_file': get_config().get('csv.output_file', 'outputs/output.csv'),
+        'backup_enabled': get_config().get('csv.backup_enabled', True),
+        'backup_dir': get_config().get('csv.backup_dir', 'backups'),
+        'columns': get_csv_columns_config()
+    }
+
+
+def get_csv_columns_config() -> Dict[str, Any]:
+    """Get CSV column configuration."""
+    return {
+        'youtube_column': get_config().get('csv.columns.youtube', 'youtube_playlist'),
+        'drive_column': get_config().get('csv.columns.drive', 'google_drive'),
+        's3_youtube_column': get_config().get('csv.columns.s3_youtube', 's3_youtube_urls'),
+        's3_drive_column': get_config().get('csv.columns.s3_drive', 's3_drive_urls'),
+        's3_all_column': get_config().get('csv.columns.s3_all', 's3_all_files'),
+        'delimiter': get_config().get('csv.columns.delimiter', '|')
+    }
+
+
+# Retry Strategy Configuration
+def get_retry_strategies() -> Dict[str, Any]:
+    """Get retry strategies configuration."""
+    return {
+        'no_retry': {
+            'max_attempts': 1,
+            'delay': 0,
+            'backoff_factor': 1.0
+        },
+        'basic_retry': {
+            'max_attempts': get_config().get('retry.basic.max_attempts', 3),
+            'delay': get_config().get('retry.basic.delay', 2),
+            'backoff_factor': get_config().get('retry.basic.backoff_factor', 1.0)
+        },
+        'aggressive_retry': {
+            'max_attempts': get_config().get('retry.aggressive.max_attempts', 5),
+            'delay': get_config().get('retry.aggressive.delay', 5),
+            'backoff_factor': get_config().get('retry.aggressive.backoff_factor', 2.0)
+        },
+        'no_timeout': {
+            'max_attempts': get_config().get('retry.no_timeout.max_attempts', 3),
+            'delay': get_config().get('retry.no_timeout.delay', 2),
+            'timeout': None
+        }
+    }
+
+
+# Error Handling Configuration
+def get_error_handling_config() -> Dict[str, Any]:
+    """Get error handling configuration."""
+    return {
+        'max_error_length': get_config().get('error_handling.max_error_length', 100),
+        'sanitize_errors': get_config().get('error_handling.sanitize_errors', True),
+        'log_full_errors': get_config().get('error_handling.log_full_errors', True),
+        'continue_on_error': get_config().get('error_handling.continue_on_error', True)
+    }
+
+
+# Progress Reporting Configuration
+def get_progress_config() -> Dict[str, Any]:
+    """Get progress reporting configuration."""
+    return {
+        'show_progress_bars': get_config().get('progress.show_bars', True),
+        'show_file_sizes': get_config().get('progress.show_file_sizes', True),
+        'show_download_speeds': get_config().get('progress.show_speeds', True),
+        'update_interval': get_config().get('progress.update_interval', 1.0),
+        'bar_width': get_config().get('progress.bar_width', 40)
+    }
+
+
+# Metadata Configuration
+def get_metadata_config() -> Dict[str, Any]:
+    """Get metadata configuration."""
+    return {
+        'create_metadata': get_config().get('metadata.create_metadata', True),
+        'include_timestamps': get_config().get('metadata.include_timestamps', True),
+        'include_file_sizes': get_config().get('metadata.include_file_sizes', True),
+        'include_source_urls': get_config().get('metadata.include_source_urls', True),
+        'include_download_config': get_config().get('metadata.include_download_config', True)
+    }
+
+
+# Directory Structure Configuration
+def get_directory_config() -> Dict[str, Any]:
+    """Get directory structure configuration."""
+    return {
+        'downloads_dir': get_config().get('directories.downloads', 'downloads'),
+        'outputs_dir': get_config().get('directories.outputs', 'outputs'),
+        'logs_dir': get_config().get('directories.logs', 'logs'),
+        'backups_dir': get_config().get('directories.backups', 'backups'),
+        'temp_dir': get_config().get('directories.temp', '/tmp'),
+        'organize_by_person': get_config().get('directories.organize_by_person', True),
+        'sanitize_names': get_config().get('directories.sanitize_names', True)
+    }
+
+
+# File Pattern Configuration
+def get_file_patterns() -> Dict[str, Any]:
+    """Get file patterns for different operations."""
+    return {
+        'youtube_video_pattern': get_config().get('patterns.youtube_video', r'youtube_([a-zA-Z0-9_-]{11})\.'),
+        'youtube_playlist_pattern': get_config().get('patterns.youtube_playlist', r'playlist_([a-zA-Z0-9_-]+)_info\.json'),
+        'drive_file_pattern': get_config().get('patterns.drive_file', r'drive_file_([a-zA-Z0-9_-]+)'),
+        'drive_folder_pattern': get_config().get('patterns.drive_folder', r'drive_folder_([a-zA-Z0-9_-]+)_info\.json'),
+        's3_key_pattern': get_config().get('patterns.s3_key', r'{row_id}/{person_name}/{filename}'),
+        'metadata_suffix': get_config().get('patterns.metadata_suffix', '_metadata.json')
+    }
+
+
+# Quality and Format Options
+def get_quality_options() -> Dict[str, Any]:
+    """Get quality and format options."""
+    return {
+        'youtube_audio_qualities': get_config().get('quality.youtube.audio', ['128K', '192K', '256K', '320K']),
+        'youtube_video_qualities': get_config().get('quality.youtube.video', ['720p', '1080p', '480p', '360p']),
+        'audio_formats': get_config().get('quality.audio_formats', ['mp3', 'm4a', 'wav']),
+        'video_formats': get_config().get('quality.video_formats', ['mp4', 'webm', 'mkv']),
+        'default_audio_quality': get_config().get('quality.default_audio', '128K'),
+        'default_video_quality': get_config().get('quality.default_video', '720p')
+    }
+
+
+# Utility Functions for Configuration Access
+def get_default_downloads_dir() -> str:
+    """Get default downloads directory."""
+    return get_config().get('directories.downloads', 'downloads')
+
+
+def get_default_csv_file() -> str:
+    """Get default CSV file path."""
+    return get_config().get('csv.input_file', 'outputs/output.csv')
+
+
+def get_default_timeout() -> int:
+    """Get default timeout in seconds."""
+    return get_config().get('downloads.timeout', 120)
+
+
+def get_youtube_audio_format() -> str:
+    """Get YouTube audio format."""
+    return get_config().get('downloads.youtube.audio_format', 'mp3')
+
+
+def get_youtube_audio_quality() -> str:
+    """Get YouTube audio quality."""
+    return get_config().get('downloads.youtube.default_quality', '128K')
+
+
+def get_drive_chunk_size() -> int:
+    """Get Drive download chunk size."""
+    return get_config().get('downloads.drive.chunk_size', 1024*1024)
+
+
+def should_create_metadata() -> bool:
+    """Check if metadata should be created."""
+    return get_config().get('metadata.create_metadata', True)
+
+
+def should_show_progress() -> bool:
+    """Check if progress should be shown."""
+    return get_config().get('progress.show_bars', True)
+
+
+def should_organize_by_person() -> bool:
+    """Check if files should be organized by person."""
+    return get_config().get('directories.organize_by_person', True)
+
+
+def get_csv_delimiter() -> str:
+    """Get CSV column delimiter for multiple values."""
+    return get_config().get('csv.columns.delimiter', '|')
+
+
+# Configuration Validation
+def validate_config() -> List[str]:
+    """Validate configuration and return list of issues."""
+    issues = []
+    config = get_config()
+    
+    # Check required directories
+    required_dirs = ['downloads', 'outputs', 'logs']
+    for dir_name in required_dirs:
+        if not config.get(f'directories.{dir_name}'):
+            issues.append(f"Missing required directory configuration: directories.{dir_name}")
+    
+    # Check S3 configuration
+    if not get_s3_bucket_name():
+        issues.append("Missing S3 bucket name configuration")
+    
+    # Check timeout values
+    timeout = get_default_timeout()
+    if timeout <= 0:
+        issues.append("Invalid timeout value: must be positive")
+    
+    # Check retry configuration
+    retry_config = get_retry_strategies()
+    for strategy_name, strategy_config in retry_config.items():
+        if strategy_config.get('max_attempts', 0) <= 0:
+            issues.append(f"Invalid retry configuration for {strategy_name}: max_attempts must be positive")
+    
+    return issues
+
+
+# Configuration Defaults Creation
+def create_default_config_dict() -> Dict[str, Any]:
+    """Create default configuration dictionary for new installations."""
+    return {
+        'aws': {
+            's3': {
+                'bucket_name': 'typing-clients-storage-2025',
+                'region': 'us-east-1',
+                'create_public_urls': True,
+                'organize_by_person': True,
+                'add_metadata': True
+            }
+        },
+        'downloads': {
+            'output_dir': 'downloads',
+            'timeout': 120,
+            'max_retries': 3,
+            'retry_delay': 2,
+            'create_metadata': True,
+            'show_progress': True,
+            'youtube': {
+                'default_format': 'mp3',
+                'default_quality': '128K',
+                'audio_format': 'mp3',
+                'video_format': 'mp4',
+                'extract_audio': True,
+                'no_playlist': True,
+                'quiet': True,
+                'no_warnings': True,
+                'timeout': 60
+            },
+            'drive': {
+                'use_gdown': True,
+                'fuzzy_matching': True,
+                'save_info_only': False,
+                'timeout': 120,
+                'chunk_size': 1048576
+            }
+        },
+        'csv': {
+            'input_file': 'outputs/output.csv',
+            'output_file': 'outputs/output.csv',
+            'backup_enabled': True,
+            'backup_dir': 'backups',
+            'columns': {
+                'youtube': 'youtube_playlist',
+                'drive': 'google_drive',
+                's3_youtube': 's3_youtube_urls',
+                's3_drive': 's3_drive_urls',
+                's3_all': 's3_all_files',
+                'delimiter': '|'
+            }
+        },
+        'directories': {
+            'downloads': 'downloads',
+            'outputs': 'outputs',
+            'logs': 'logs',
+            'backups': 'backups',
+            'temp': '/tmp',
+            'organize_by_person': True,
+            'sanitize_names': True
+        },
+        'retry': {
+            'basic': {
+                'max_attempts': 3,
+                'delay': 2,
+                'backoff_factor': 1.0
+            },
+            'aggressive': {
+                'max_attempts': 5,
+                'delay': 5,
+                'backoff_factor': 2.0
+            },
+            'no_timeout': {
+                'max_attempts': 3,
+                'delay': 2,
+                'timeout': None
+            }
+        },
+        'error_handling': {
+            'max_error_length': 100,
+            'sanitize_errors': True,
+            'log_full_errors': True,
+            'continue_on_error': True
+        },
+        'progress': {
+            'show_bars': True,
+            'show_file_sizes': True,
+            'show_speeds': True,
+            'update_interval': 1.0,
+            'bar_width': 40
+        },
+        'metadata': {
+            'create_metadata': True,
+            'include_timestamps': True,
+            'include_file_sizes': True,
+            'include_source_urls': True,
+            'include_download_config': True
+        },
+        'patterns': {
+            'youtube_video': r'youtube_([a-zA-Z0-9_-]{11})\.',
+            'youtube_playlist': r'playlist_([a-zA-Z0-9_-]+)_info\.json',
+            'drive_file': r'drive_file_([a-zA-Z0-9_-]+)',
+            'drive_folder': r'drive_folder_([a-zA-Z0-9_-]+)_info\.json',
+            's3_key': '{row_id}/{person_name}/{filename}',
+            'metadata_suffix': '_metadata.json'
+        },
+        'quality': {
+            'youtube': {
+                'audio': ['128K', '192K', '256K', '320K'],
+                'video': ['720p', '1080p', '480p', '360p']
+            },
+            'audio_formats': ['mp3', 'm4a', 'wav'],
+            'video_formats': ['mp4', 'webm', 'mkv'],
+            'default_audio': '128K',
+            'default_video': '720p'
+        }
+    }
+
+
+def save_default_config(config_path: Optional[str] = None) -> bool:
+    """Save default configuration to file."""
+    if not config_path:
+        config_path = Path(__file__).parent.parent / "config" / "config.yaml"
+    
+    config_path = Path(config_path)
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    try:
+        import yaml
+        with open(config_path, 'w') as f:
+            yaml.dump(create_default_config_dict(), f, default_flow_style=False, indent=2)
+        return True
+    except Exception as e:
+        logging.error(f"Failed to save default configuration: {e}")
+        return False
+
