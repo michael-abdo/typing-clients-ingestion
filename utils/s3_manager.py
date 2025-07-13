@@ -30,11 +30,13 @@ try:
     from .config import get_config
     from .logging_config import get_logger
     from .sanitization import sanitize_error_message
+    from .database_manager import get_database_manager
 except ImportError:
     # Fallback for direct execution
     from config import get_config
     from logging_config import get_logger
     from sanitization import sanitize_error_message
+    from database_manager import get_database_manager
 
 
 class UploadMode(Enum):
@@ -47,7 +49,7 @@ class UploadMode(Enum):
 @dataclass
 class S3Config:
     """Configuration for S3 operations"""
-    bucket_name: str = 'typing-clients-storage-2025'
+    bucket_name: str = 'typing-clients-uuid-system'
     region: str = 'us-east-1'
     upload_mode: UploadMode = UploadMode.LOCAL_THEN_UPLOAD
     organize_by_person: bool = True
@@ -440,6 +442,84 @@ class UnifiedS3Manager:
         
         return person_s3_data
     
+    def sync_database_files(self, target_rows: Optional[List[int]] = None) -> Dict[int, List[str]]:
+        """Sync files from database to ensure they exist in S3"""
+        self.logger.info("🚀 Starting Database File Sync")
+        
+        db = get_database_manager()
+        person_s3_data = {}
+        
+        if target_rows:
+            # Process specific rows
+            for row_id in target_rows:
+                person = db.get_person_by_row_id(row_id)
+                if person:
+                    files = db.get_person_files(row_id)
+                    s3_urls = []
+                    
+                    self.logger.info(f"\n📤 Checking files for {person['name']} (Row {row_id})")
+                    self.logger.info(f"  📁 Found {len(files)} files in database")
+                    
+                    for file in files:
+                        s3_key = file['storage_path']
+                        
+                        # Check if file exists in S3
+                        if self.check_s3_exists(s3_key):
+                            s3_url = f"https://{self.config.bucket_name}.s3.amazonaws.com/{s3_key}"
+                            s3_urls.append(s3_url)
+                            self.logger.info(f"  ✅ Verified: {file['original_filename']}")
+                        else:
+                            self.logger.warning(f"  ⚠️  Missing in S3: {s3_key}")
+                            self.upload_report['errors'].append({
+                                'row_id': row_id,
+                                'person': person['name'],
+                                'file_id': str(file['file_id']),
+                                'error': 'File not found in S3'
+                            })
+                    
+                    person_s3_data[row_id] = s3_urls
+        else:
+            # Process all people with files
+            summary = db.get_person_file_summary()
+            
+            for entry in summary:
+                if entry['total_files'] > 0:
+                    row_id = entry['row_id']
+                    files = db.get_person_files(row_id)
+                    s3_urls = []
+                    
+                    self.logger.info(f"\n📤 Checking files for {entry['name']} (Row {row_id})")
+                    self.logger.info(f"  📁 Found {len(files)} files in database")
+                    
+                    for file in files:
+                        s3_key = file['storage_path']
+                        
+                        # Check if file exists in S3
+                        if self.check_s3_exists(s3_key):
+                            s3_url = f"https://{self.config.bucket_name}.s3.amazonaws.com/{s3_key}"
+                            s3_urls.append(s3_url)
+                            self.logger.info(f"  ✅ Verified: {file['original_filename']}")
+                        else:
+                            self.logger.warning(f"  ⚠️  Missing in S3: {s3_key}")
+                            self.upload_report['errors'].append({
+                                'row_id': row_id,
+                                'person': entry['name'],
+                                'file_id': str(file['file_id']),
+                                'error': 'File not found in S3'
+                            })
+                    
+                    person_s3_data[row_id] = s3_urls
+        
+        return person_s3_data
+    
+    def check_s3_exists(self, s3_key: str) -> bool:
+        """Check if an object exists in S3"""
+        try:
+            self.s3_client.head_object(Bucket=self.config.bucket_name, Key=s3_key)
+            return True
+        except:
+            return False
+    
     def _extract_links(self, row: pd.Series, column: str) -> List[str]:
         """Extract links from CSV row"""
         links = str(row.get(column, '')).split('|') if pd.notna(row.get(column)) else []
@@ -560,7 +640,7 @@ class UnifiedS3Manager:
             self.logger.info(f"⏱️ Average upload time: {avg_time:.2f} seconds")
 
 
-def create_local_uploader(bucket_name: str = 'typing-clients-storage-2025') -> UnifiedS3Manager:
+def create_local_uploader(bucket_name: str = 'typing-clients-uuid-system') -> UnifiedS3Manager:
     """Create S3 manager for local-then-upload mode"""
     config = S3Config(
         bucket_name=bucket_name,
@@ -571,7 +651,7 @@ def create_local_uploader(bucket_name: str = 'typing-clients-storage-2025') -> U
     return UnifiedS3Manager(config)
 
 
-def create_streaming_uploader(bucket_name: str = 'typing-clients-storage-2025') -> UnifiedS3Manager:
+def create_streaming_uploader(bucket_name: str = 'typing-clients-uuid-system') -> UnifiedS3Manager:
     """Create S3 manager for direct streaming mode"""
     config = S3Config(
         bucket_name=bucket_name,
@@ -586,24 +666,49 @@ if __name__ == "__main__":
     import argparse
     
     parser = argparse.ArgumentParser(description='Unified S3 Upload Manager')
-    parser.add_argument('--bucket', default='typing-clients-storage-2025', help='S3 bucket name')
-    parser.add_argument('--mode', choices=['local', 'streaming'], default='local', help='Upload mode')
+    parser.add_argument('--bucket', default='typing-clients-uuid-system', help='S3 bucket name')
+    parser.add_argument('--mode', choices=['local', 'streaming', 'database'], default='local', help='Upload mode')
     parser.add_argument('--csv', default='outputs/output.csv', help='CSV file to update')
     parser.add_argument('--downloads-dir', default='downloads', help='Downloads directory')
     parser.add_argument('--no-csv-update', action='store_true', help='Skip CSV update')
+    parser.add_argument('--rows', type=str, help='Specific row IDs to process (comma-separated)')
+    parser.add_argument('--use-database', action='store_true', help='Use database mode for file sync')
     
     args = parser.parse_args()
     
     # Create manager based on mode
-    if args.mode == 'local':
-        manager = create_local_uploader(args.bucket)
+    if args.mode == 'database' or args.use_database:
+        # Database mode - sync files from database
+        config = S3Config(
+            bucket_name=args.bucket,
+            upload_mode=UploadMode.LOCAL_THEN_UPLOAD,  # Not used for database sync
+            organize_by_person=True,
+            update_csv=False  # Database mode doesn't update CSV
+        )
+        manager = UnifiedS3Manager(config)
+        
+        # Parse target rows if provided
+        target_rows = None
+        if args.rows:
+            target_rows = [int(row.strip()) for row in args.rows.split(',')]
+        
+        # Run database sync
+        results = manager.sync_database_files(target_rows=target_rows)
+        
+        # Save report
+        manager.save_report()
+        manager._print_summary()
     else:
-        manager = create_streaming_uploader(args.bucket)
-    
-    # Override config if needed
-    manager.config.csv_file = args.csv
-    manager.config.downloads_dir = args.downloads_dir
-    manager.config.update_csv = not args.no_csv_update
-    
-    # Run upload process
-    results = manager.run_upload_process()
+        # Traditional modes
+        if args.mode == 'local':
+            manager = create_local_uploader(args.bucket)
+        else:
+            manager = create_streaming_uploader(args.bucket)
+        
+        # Override config if needed
+        manager.config.csv_file = args.csv
+        manager.config.downloads_dir = args.downloads_dir
+        manager.config.update_csv = not args.no_csv_update
+        
+        # Run upload process
+        results = manager.run_upload_process()

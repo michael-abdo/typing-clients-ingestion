@@ -21,6 +21,8 @@ paths:
   text_extraction_output: "text_extraction_output.csv"
   sheet_cache: "sheet.html"
   simple_downloads_dir: "simple_downloads"
+  # DRY Phase 3 additions
+  downloads_dir: "downloads"  # Default download directory for unified downloader
 
 # Download Settings
 downloads:
@@ -31,6 +33,9 @@ downloads:
     subtitle_languages: "en.*"
     max_workers: 4
     rate_limit_per_second: 2.0
+    # DRY Phase 3 additions
+    quality: "128K"  # Default audio quality for audio downloads
+    format: "mp3"    # Default audio format for audio downloads
   drive:
     chunk_sizes:
       small: 1048576      # 1MB for files < 10MB
@@ -142,6 +147,68 @@ web_scraping:
     scroll_step: 300
     page_load_extra_wait: 3
 
+# Google Docs Configuration
+google_docs:
+  extraction:
+    # Extraction methods in priority order
+    methods:
+      - name: "http"
+        enabled: true
+        timeout: 30.0
+        retry_attempts: 2
+        priority: 1
+      - name: "selenium"
+        enabled: true
+        timeout: 60.0
+        retry_attempts: 1
+        priority: 2
+    
+    # HTTP export settings
+    http_export:
+      formats:
+        - format: "txt"
+          url_template: "https://docs.google.com/document/d/{doc_id}/export?format=txt"
+          mime_type: "text/plain"
+          priority: 1
+        - format: "html"
+          url_template: "https://docs.google.com/document/d/{doc_id}/export?format=html"
+          mime_type: "text/html"
+          priority: 2
+      
+      # Fallback public view URLs
+      public_view_urls:
+        - "https://docs.google.com/document/d/{doc_id}/pub"
+        - "https://docs.google.com/document/d/{doc_id}/preview"
+    
+    # Content processing rules
+    content_processing:
+      min_content_length: 50
+      max_content_length: 10485760  # 10MB
+      strip_google_metadata: true
+      normalize_whitespace: true
+      encoding: "utf-8"
+    
+    # Error handling
+    error_handling:
+      permission_denied_fallback: true
+      rate_limit_backoff: true
+      malformed_doc_skip: true
+      max_fallback_attempts: 1
+
+# Database Configuration (S3 UUID System)
+database:
+  host: "localhost"
+  port: 5432
+  name: "typing_clients_uuid"
+  user: "migration_user"
+  password: "simple123"
+  connection_pool:
+    min_connections: 1
+    max_connections: 10
+    timeout: 30
+  query_timeout: 30
+  fallback_to_csv: true  # Fallback to CSV if database unavailable
+  
 # Security
 security:
   ssl_verify: true
@@ -181,6 +248,9 @@ rate_limiting:
     google_docs:
       rate: 1.0  # 1 request per second
       burst: 3   # Allow burst of 3 requests
+    google_docs_http:
+      rate: 2.0  # 2 requests per second for HTTP export (faster than Selenium)
+      burst: 5   # Allow burst of 5 requests
     selenium:
       rate: 0.5  # 1 request every 2 seconds
       burst: 2   # Allow burst of 2 requests
@@ -215,3 +285,104 @@ cleanup:
     old_backups: true
     empty_dirs: true
     backup_retention_days: 30
+
+# Pipeline Configuration
+pipelines:
+  # Full ingestion pipeline - from Google Sheets to S3
+  full_ingestion:
+    description: "Complete ingestion pipeline from Google Sheets to S3"
+    stages:
+      - name: "extract_data"
+        description: "Extract data from Google Sheets and process documents"
+        enabled: true
+        command: ["python3", "simple_workflow.py"]
+        timeout: 600  # 10 minutes
+        success_markers:
+          - file_exists: "outputs/output.csv"
+        retry_on_failure: true
+        
+      - name: "download_content"
+        description: "Download YouTube and Drive content"
+        enabled: true
+        command: ["python3", "download_all_minimal.py", "--no-timeout"]
+        timeout: 1800  # 30 minutes
+        success_markers:
+          - directory_exists: "downloads"
+          - directory_not_empty: "downloads"
+        retry_on_failure: true
+        
+      - name: "upload_to_s3"
+        description: "Upload downloaded content to S3"
+        enabled: true
+        command: ["python3", "utils/s3_manager.py", "--mode", "streaming"]
+        timeout: 1200  # 20 minutes
+        success_markers:
+          - file_exists: "s3_upload_report.json"
+        retry_on_failure: true
+    
+    # Pipeline-level settings
+    settings:
+      resume_enabled: true
+      state_file_prefix: "pipeline_state"
+      cleanup_on_success: true
+      notification_on_failure: false
+      max_retries: 2
+      retry_delay: 60  # seconds
+  
+  # Example of a partial pipeline for testing
+  test_extraction:
+    description: "Test pipeline for document extraction only"
+    stages:
+      - name: "extract_data"
+        description: "Extract data from Google Sheets and process documents"
+        enabled: true
+        command: ["python3", "simple_workflow.py", "--test-mode"]
+        timeout: 300  # 5 minutes
+        success_markers:
+          - file_exists: "outputs/output.csv"
+    settings:
+      resume_enabled: false
+      cleanup_on_success: false
+  
+  # Test pipeline for Sam Torode - skip extraction, focus on download/upload
+  test_sam_pipeline:
+    description: "Test pipeline for Sam Torode's data - download and S3 upload only"
+    stages:
+      - name: "download_content"
+        description: "Download YouTube and Drive content"
+        enabled: true
+        command: ["python3", "download_all_minimal.py", "--no-timeout", "--rows", "502"]
+        timeout: 600  # 10 minutes for specific row
+        success_markers:
+          - directory_exists: "downloads/502_Sam_Torode"
+          - directory_not_empty: "downloads/502_Sam_Torode"
+        retry_on_failure: true
+        
+      - name: "upload_to_s3"
+        description: "Upload downloaded content to S3"
+        enabled: true
+        command: ["python3", "utils/s3_manager.py", "--mode", "streaming", "--downloads-dir", "downloads/502_Sam_Torode"]
+        timeout: 300  # 5 minutes
+        success_markers:
+          - file_exists: "s3_upload_report.json"
+        retry_on_failure: true
+    settings:
+      resume_enabled: true
+      cleanup_on_success: false
+      notification_on_failure: false
+  
+  # Quick test - just upload Sam's existing downloads to S3
+  test_sam_s3_upload:
+    description: "Test S3 upload with Sam Torode's existing downloads"
+    stages:
+      - name: "upload_to_s3"
+        description: "Upload Sam's downloaded content to S3"
+        enabled: true
+        command: ["python3", "utils/s3_manager.py", "--mode", "streaming"]
+        timeout: 300  # 5 minutes
+        success_markers:
+          - file_exists: "s3_upload_report.json"
+        retry_on_failure: true
+    settings:
+      resume_enabled: false
+      cleanup_on_success: false

@@ -66,16 +66,32 @@ class RetryStrategy(Enum):
 @dataclass
 class DownloadConfig:
     """Configuration for download operations"""
-    output_dir: str = "downloads"
-    timeout: int = 120
+    output_dir: str = None  # Will be set from config
+    timeout: int = None  # Will be set from config
     retry_strategy: RetryStrategy = RetryStrategy.BASIC_RETRY
     youtube_strategy: DownloadStrategy = DownloadStrategy.AUDIO_ONLY
-    youtube_quality: str = "128K"
-    youtube_format: str = "mp3"
+    youtube_quality: str = None  # Will be set from config
+    youtube_format: str = None  # Will be set from config
     create_metadata: bool = True
     show_progress: bool = True
-    max_retries: int = 3
-    retry_delay: int = 2
+    max_retries: int = None  # Will be set from config
+    retry_delay: int = None  # Will be set from config
+    
+    def __post_init__(self):
+        """Initialize default values from config"""
+        config = get_config()
+        if self.output_dir is None:
+            self.output_dir = config.get('paths.downloads_dir', 'downloads')
+        if self.timeout is None:
+            self.timeout = config.get('timeouts.video_download', 120)
+        if self.youtube_quality is None:
+            self.youtube_quality = config.get('downloads.youtube.quality', '128K')
+        if self.youtube_format is None:
+            self.youtube_format = config.get('downloads.youtube.format', 'mp3')
+        if self.max_retries is None:
+            self.max_retries = config.get('retry.max_attempts', 3)
+        if self.retry_delay is None:
+            self.retry_delay = config.get('retry.base_delay', 2)
 
 
 @dataclass
@@ -467,10 +483,119 @@ class UnifiedDownloader:
         links = str(row.get(column, '')).split('|') if pd.notna(row.get(column)) else []
         return [l.strip() for l in links if l and l != 'nan' and l.strip()]
     
-    def process_csv(self, csv_file: str = "outputs/output.csv", 
+    def process_people_from_database(self, db_manager, target_rows: Optional[List[int]] = None,
+                                   max_rows: Optional[int] = None) -> Dict:
+        """Process people directly from database"""
+        self.logger.info("🚀 Starting Unified Download Process (DATABASE MODE)")
+        self.logger.info(f"📁 Output Directory: {self.output_dir}")
+        self.logger.info(f"🎯 Strategy: {self.config.youtube_strategy.value}")
+        self.logger.info(f"🔄 Retry: {self.config.retry_strategy.value}")
+        self.logger.info("=" * 70)
+        
+        all_results = []
+        
+        if target_rows:
+            # Process specific rows
+            self.logger.info(f"🎯 Processing {len(target_rows)} targeted people")
+            for row_id in target_rows:
+                person = db_manager.get_person_by_row_id(row_id)
+                if person:
+                    # Get files for this person to extract links
+                    files = db_manager.get_person_files(row_id)
+                    
+                    # Convert to pandas Series for compatibility
+                    row_data = pd.Series({
+                        'row_id': person['row_id'],
+                        'name': person['name'],
+                        'email': person.get('email', ''),
+                        'type': person.get('type', ''),
+                        'link': '',  # Link extraction from files needed
+                        'youtube_playlist': '',  # Need to extract from files
+                        'google_drive': ''  # Need to extract from files
+                    })
+                    
+                    # Extract links from file metadata
+                    youtube_links = []
+                    drive_links = []
+                    for file in files:
+                        if file.get('metadata'):
+                            source_url = file['metadata'].get('source_url', '')
+                            if 'youtube' in source_url or 'youtu.be' in source_url:
+                                youtube_links.append(source_url)
+                            elif 'drive.google' in source_url or 'docs.google' in source_url:
+                                drive_links.append(source_url)
+                    
+                    row_data['youtube_playlist'] = '|'.join(youtube_links)
+                    row_data['google_drive'] = '|'.join(drive_links)
+                    
+                    result = self.process_person(row_data, download_files=False)
+                    all_results.append(result)
+                    self.stats.downloads.append(result)
+                else:
+                    self.logger.warning(f"Person with row_id {row_id} not found in database")
+        else:
+            # Process all people
+            people_df = db_manager.get_all_people()
+            self.stats.total_people = len(people_df)
+            
+            if max_rows:
+                people_df = people_df.head(max_rows)
+                self.logger.info(f"🎯 Processing first {max_rows} people")
+            
+            for idx, person in people_df.iterrows():
+                # Get files for this person
+                files = db_manager.get_person_files(int(person['row_id']))
+                
+                # Convert to pandas Series for compatibility
+                row_data = pd.Series({
+                    'row_id': person['row_id'],
+                    'name': person['name'],
+                    'email': person.get('email', ''),
+                    'type': person.get('type', ''),
+                    'link': '',
+                    'youtube_playlist': '',
+                    'google_drive': ''
+                })
+                
+                # Extract links from file metadata
+                youtube_links = []
+                drive_links = []
+                for file in files:
+                    if file.get('metadata'):
+                        source_url = file['metadata'].get('source_url', '')
+                        if 'youtube' in source_url or 'youtu.be' in source_url:
+                            youtube_links.append(source_url)
+                        elif 'drive.google' in source_url or 'docs.google' in source_url:
+                            drive_links.append(source_url)
+                
+                row_data['youtube_playlist'] = '|'.join(youtube_links)
+                row_data['google_drive'] = '|'.join(drive_links)
+                
+                result = self.process_person(row_data, download_files=False)
+                all_results.append(result)
+                self.stats.downloads.append(result)
+        
+        # Complete stats
+        self.stats.completed_at = datetime.now().isoformat()
+        
+        # Save report
+        self._save_report()
+        
+        # Print summary
+        self._print_summary()
+        
+        return {
+            "stats": self.stats,
+            "results": all_results
+        }
+    
+    def process_csv(self, csv_file: str = None, 
                    target_rows: Optional[List[int]] = None,
                    download_files: bool = False) -> Dict:
         """Process all people from CSV file"""
+        if csv_file is None:
+            csv_file = get_config().get('paths.output_csv', 'outputs/output.csv')
+            
         self.logger.info("🚀 Starting Unified Download Process")
         self.logger.info(f"📁 Output Directory: {self.output_dir}")
         self.logger.info(f"🎯 Strategy: {self.config.youtube_strategy.value}")
@@ -565,26 +690,21 @@ class UnifiedDownloader:
             self.logger.info(f"\n🎯 Success Rate: {success_rate:.1f}%")
 
 
-def create_audio_downloader(output_dir: str = "downloads") -> UnifiedDownloader:
+def create_audio_downloader(output_dir: str = None) -> UnifiedDownloader:
     """Create downloader configured for audio-only downloads"""
     config = DownloadConfig(
         output_dir=output_dir,
         youtube_strategy=DownloadStrategy.AUDIO_ONLY,
-        youtube_format="mp3",
-        youtube_quality="128K",
-        timeout=60,
         retry_strategy=RetryStrategy.BASIC_RETRY
     )
     return UnifiedDownloader(config)
 
 
-def create_robust_downloader(output_dir: str = "downloads") -> UnifiedDownloader:
+def create_robust_downloader(output_dir: str = None) -> UnifiedDownloader:
     """Create downloader configured for robust downloads with multiple strategies"""
     config = DownloadConfig(
         output_dir=output_dir,
         youtube_strategy=DownloadStrategy.AUDIO_ONLY,
-        youtube_format="mp3",
-        youtube_quality="128K",
         timeout=0,  # No timeout
         retry_strategy=RetryStrategy.MULTIPLE_STRATEGIES,
         max_retries=5
@@ -592,14 +712,11 @@ def create_robust_downloader(output_dir: str = "downloads") -> UnifiedDownloader
     return UnifiedDownloader(config)
 
 
-def create_targeted_downloader(output_dir: str = "downloads") -> UnifiedDownloader:
+def create_targeted_downloader(output_dir: str = None) -> UnifiedDownloader:
     """Create downloader configured for targeted downloads"""
     config = DownloadConfig(
         output_dir=output_dir,
         youtube_strategy=DownloadStrategy.AUDIO_ONLY,
-        youtube_format="mp3",
-        youtube_quality="128K",
-        timeout=120,
         retry_strategy=RetryStrategy.BASIC_RETRY,
         show_progress=True
     )
@@ -610,8 +727,8 @@ if __name__ == "__main__":
     import argparse
     
     parser = argparse.ArgumentParser(description='Unified Download Manager')
-    parser.add_argument('--csv', default='outputs/output.csv', help='CSV file to process')
-    parser.add_argument('--output-dir', default='downloads', help='Output directory')
+    parser.add_argument('--csv', default=None, help='CSV file to process (default from config)')
+    parser.add_argument('--output-dir', default=None, help='Output directory (default from config)')
     parser.add_argument('--strategy', choices=['audio', 'robust', 'targeted'], 
                        default='audio', help='Download strategy')
     parser.add_argument('--target-rows', nargs='+', type=int, help='Specific row IDs to process')

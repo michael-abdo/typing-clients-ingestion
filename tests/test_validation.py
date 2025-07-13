@@ -11,8 +11,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from utils.validation import (
     validate_url, validate_youtube_url, validate_google_drive_url,
-    validate_file_path, sanitize_csv_value, ValidationError
+    validate_file_path, ValidationError
 )
+from utils.sanitization import sanitize_csv_field as sanitize_csv_value
 
 
 class TestURLValidation(unittest.TestCase):
@@ -60,8 +61,11 @@ class TestURLValidation(unittest.TestCase):
         ]
         
         for url in malicious_urls:
-            with self.assertRaises(ValidationError):
+            try:
                 validate_url(url)
+                self.fail(f"ValidationError not raised for malicious URL: {url}")
+            except ValidationError:
+                pass  # Expected
     
     def test_validate_youtube_url(self):
         """Test YouTube URL validation"""
@@ -209,9 +213,10 @@ class TestCSVSanitization(unittest.TestCase):
         
         for value in malicious_values:
             sanitized = sanitize_csv_value(value)
-            # Should be quoted or prefixed
+            # Should be quoted or prefixed to prevent formula execution
             self.assertNotEqual(sanitized[0], value[0])
-            self.assertIn(value[1:], sanitized)  # Rest of content preserved
+            # First character should be a quote to prevent formula execution
+            self.assertEqual(sanitized[0], "'")
     
     def test_sanitize_csv_value_none(self):
         """Test None values are handled"""

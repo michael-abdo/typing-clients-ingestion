@@ -1,244 +1,152 @@
 #!/usr/bin/env python3
 """
 Download all links from the most recent 30 people with better error handling
+Enhanced with options for no-timeout mode and missing-people-only mode
+
+CONSOLIDATED: Now uses UnifiedDownloader (DRY Refactoring Phase 2.5)
 """
 
 import os
 import sys
-import pandas as pd
-import subprocess
-import re
-from pathlib import Path
 import json
+import argparse
+from pathlib import Path
 from datetime import datetime
-import signal
 
-class TimeoutError(Exception):
-    pass
+# Add utils to path
+sys.path.append(str(Path(__file__).parent))
 
-def timeout_handler(signum, frame):
-    raise TimeoutError("Download timed out")
+# Import consolidated downloader and database manager
+try:
+    from utils.downloader import UnifiedDownloader, DownloadConfig, DownloadStrategy, RetryStrategy
+    from utils.database_manager import get_database_manager
+except ImportError as e:
+    print(f"Error: Could not import required modules: {e}")
+    sys.exit(1)
 
-class MinimalDownloader:
-    def __init__(self, output_dir="downloads"):
-        self.output_dir = Path(output_dir)
-        self.output_dir.mkdir(exist_ok=True)
-        self.report = {
-            "started_at": datetime.now().isoformat(),
-            "stats": {
-                "total_people": 0,
-                "people_with_links": 0,
-                "youtube_success": 0,
-                "youtube_failed": 0,
-                "drive_saved": 0,
-                "drive_attempted": 0
-            },
-            "downloads": []
-        }
+
+def main():
+    """Main function with argument parsing"""
+    parser = argparse.ArgumentParser(description="Download all links with configurable options")
+    parser.add_argument("--no-timeout", action="store_true", 
+                       help="Disable download timeouts (downloads may take longer)")
+    parser.add_argument("--missing-only", action="store_true",
+                       help="Process only missing people (rows 472-486)")
+    parser.add_argument("--max-rows", type=int, default=None,
+                       help="Maximum number of rows to process")
+    parser.add_argument("--csv", default=None,
+                       help="CSV file path (default: from config)")
+    parser.add_argument("--output-dir", default=None,
+                       help="Output directory (default: from config)")
+    parser.add_argument("--use-database", action="store_true",
+                       help="Use database instead of CSV file")
+    parser.add_argument("--rows", type=str, default=None,
+                       help="Specific row IDs to process (comma-separated)")
     
-    def sanitize_filename(self, name):
-        """Create safe filename"""
-        safe = re.sub(r'[^\w\s-]', '', name)
-        safe = re.sub(r'[-\s]+', '_', safe)
-        return safe.strip('_')
+    args = parser.parse_args()
     
-    def download_youtube(self, url, person_name, row_id):
-        """Download YouTube content (audio only to save space)"""
-        person_dir = self.output_dir / f"{row_id}_{self.sanitize_filename(person_name)}"
-        person_dir.mkdir(exist_ok=True)
+    # Missing people row IDs (for missing-only mode)
+    missing_rows = [486, 485, 484, 483, 482, 481, 480, 477, 476, 474, 473, 472]
+    
+    # Configure UnifiedDownloader based on command-line arguments
+    config = DownloadConfig(
+        output_dir=args.output_dir,
+        timeout=None if args.no_timeout else 120,
+        retry_strategy=RetryStrategy.NO_TIMEOUT if args.no_timeout else RetryStrategy.BASIC_RETRY,
+        youtube_strategy=DownloadStrategy.AUDIO_ONLY,
+        youtube_format="mp3",
+        youtube_quality="128K",
+        show_progress=True,
+        create_metadata=True
+    )
+    
+    # Initialize unified downloader
+    downloader = UnifiedDownloader(config)
+    
+    # Display mode information
+    mode_desc = "NO TIMEOUT MODE" if args.no_timeout else "MISSING PEOPLE ONLY" if args.missing_only else "STANDARD MODE"
+    print(f"DOWNLOADING CONTENT - {mode_desc} (CONSOLIDATED)")
+    print("=" * 70)
+    print("NOTE: YouTube videos will be downloaded as audio (MP3)")
+    print("      Drive links will have their info saved (auth required for download)")
+    if args.no_timeout:
+        print("      NO TIMEOUT: Downloads may take longer but won't be interrupted")
+    if args.missing_only:
+        print("      MISSING ONLY: Processing only rows 472-486")
+    print("=" * 70)
+    
+    # Determine target rows
+    target_rows = None
+    if args.rows:
+        # Parse comma-separated row IDs
+        target_rows = [int(row.strip()) for row in args.rows.split(',')]
+    elif args.missing_only:
+        target_rows = missing_rows
+    
+    # Process data based on source
+    if args.use_database:
+        print("Using DATABASE as data source")
+        print("=" * 70)
         
-        # Determine if video or playlist
-        is_playlist = 'playlist' in url
+        # Get database manager
+        db = get_database_manager()
         
-        if is_playlist:
-            # Just save playlist info
-            playlist_id = re.search(r'list=([a-zA-Z0-9_-]+)', url)
-            if playlist_id:
-                info_file = person_dir / f"playlist_{playlist_id.group(1)}_info.json"
-                with open(info_file, 'w') as f:
-                    json.dump({
-                        "type": "youtube_playlist",
-                        "url": url,
-                        "playlist_id": playlist_id.group(1),
-                        "person": person_name,
-                        "row_id": row_id,
-                        "saved_at": datetime.now().isoformat()
-                    }, f, indent=2)
-                
-                self.report["downloads"].append({
-                    "person": person_name,
-                    "row_id": row_id,
-                    "type": "youtube_playlist",
-                    "url": url,
-                    "status": "info_saved",
-                    "file": str(info_file)
-                })
-                self.report["stats"]["youtube_success"] += 1
-                return True, "Playlist info saved"
+        # Test database connection
+        if not db.test_connection():
+            print("ERROR: Database connection failed. Falling back to CSV mode.")
+            args.use_database = False
         else:
-            # Download video (audio only)
-            video_id = re.search(r'v=([a-zA-Z0-9_-]{11})', url)
-            if not video_id:
-                return False, "Invalid video URL"
-            
-            output_file = person_dir / f"youtube_{video_id.group(1)}.%(ext)s"
-            
-            cmd = [
-                "yt-dlp",
-                "-f", "bestaudio[ext=m4a]/bestaudio",
-                "-o", str(output_file),
-                "--extract-audio",
-                "--audio-format", "mp3",
-                "--audio-quality", "128K",
-                "--no-playlist",
-                "--quiet",
-                "--no-warnings",
-                url
-            ]
-            
-            try:
-                # Set timeout of 60 seconds
-                result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
-                
-                if result.returncode == 0:
-                    # Find the downloaded file
-                    downloaded = list(person_dir.glob(f"youtube_{video_id.group(1)}.*"))
-                    if downloaded:
-                        self.report["downloads"].append({
-                            "person": person_name,
-                            "row_id": row_id,
-                            "type": "youtube_video",
-                            "url": url,
-                            "status": "downloaded",
-                            "file": str(downloaded[0]),
-                            "size_kb": downloaded[0].stat().st_size / 1024
-                        })
-                        self.report["stats"]["youtube_success"] += 1
-                        return True, f"Downloaded {downloaded[0].name}"
-                    else:
-                        self.report["stats"]["youtube_failed"] += 1
-                        return False, "Download completed but file not found"
-                else:
-                    self.report["stats"]["youtube_failed"] += 1
-                    error = result.stderr or result.stdout or "Unknown error"
-                    return False, error[:100]
-                    
-            except subprocess.TimeoutExpired:
-                self.report["stats"]["youtube_failed"] += 1
-                return False, "Download timed out (60s)"
-            except Exception as e:
-                self.report["stats"]["youtube_failed"] += 1
-                return False, str(e)
-    
-    def save_drive_info(self, url, person_name, row_id):
-        """Save Drive link info (most require auth to download)"""
-        person_dir = self.output_dir / f"{row_id}_{self.sanitize_filename(person_name)}"
-        person_dir.mkdir(exist_ok=True)
-        
-        # Determine if file or folder
-        is_folder = '/folders/' in url
-        
-        if is_folder:
-            folder_id = re.search(r'folders/([a-zA-Z0-9_-]+)', url)
-            if folder_id:
-                info_file = person_dir / f"drive_folder_{folder_id.group(1)}_info.json"
-        else:
-            file_id = re.search(r'file/d/([a-zA-Z0-9_-]+)', url)
-            if file_id:
-                info_file = person_dir / f"drive_file_{file_id.group(1)}_info.json"
+            # Get people data from database
+            if target_rows:
+                # Process specific rows
+                results = downloader.process_people_from_database(db, target_rows=target_rows)
             else:
-                return False, "Invalid Drive URL"
-        
-        # Save info
-        with open(info_file, 'w') as f:
-            json.dump({
-                "type": "drive_folder" if is_folder else "drive_file",
-                "url": url,
-                "id": folder_id.group(1) if is_folder else file_id.group(1),
-                "person": person_name,
-                "row_id": row_id,
-                "saved_at": datetime.now().isoformat(),
-                "note": "Google Drive content typically requires authentication to download"
-            }, f, indent=2)
-        
-        self.report["downloads"].append({
-            "person": person_name,
-            "row_id": row_id,
-            "type": "drive_folder" if is_folder else "drive_file",
-            "url": url,
-            "status": "info_saved",
-            "file": str(info_file)
-        })
-        self.report["stats"]["drive_saved"] += 1
-        
-        return True, f"Drive info saved"
+                # Process all people
+                results = downloader.process_people_from_database(db, max_rows=args.max_rows)
     
-    def process_all(self, csv_file="outputs/output.csv"):
-        """Process all people and their links"""
-        print("DOWNLOADING CONTENT FROM MOST RECENT 30 PEOPLE")
-        print("=" * 70)
-        print("NOTE: YouTube videos will be downloaded as audio (MP3)")
-        print("      Drive links will have their info saved (auth required for download)")
-        print("=" * 70)
-        
-        # Read CSV
-        df = pd.read_csv(csv_file)
-        self.report["stats"]["total_people"] = len(df)
-        
-        # Process each person
-        for idx, row in df.iterrows():
-            # Get links
-            youtube_links = str(row.get('youtube_playlist', '')).split('|') if pd.notna(row.get('youtube_playlist')) else []
-            youtube_links = [l.strip() for l in youtube_links if l and l != 'nan' and l.strip()]
-            
-            drive_links = str(row.get('google_drive', '')).split('|') if pd.notna(row.get('google_drive')) else []
-            drive_links = [l.strip() for l in drive_links if l and l != 'nan' and l.strip()]
-            
-            if youtube_links or drive_links:
-                self.report["stats"]["people_with_links"] += 1
-                
-                print(f"\n{'='*70}")
-                print(f"Row {row['row_id']}: {row['name']}")
-                print(f"Links: {len(youtube_links)} YouTube, {len(drive_links)} Drive")
-                
-                # Process YouTube
-                for link in youtube_links:
-                    print(f"\n  📥 YouTube: {link[:60]}...")
-                    success, message = self.download_youtube(link, row['name'], row['row_id'])
-                    if success:
-                        print(f"     ✅ {message}")
-                    else:
-                        print(f"     ❌ {message}")
-                
-                # Process Drive
-                for link in drive_links:
-                    print(f"\n  📁 Drive: {link[:60]}...")
-                    success, message = self.save_drive_info(link, row['name'], row['row_id'])
-                    if success:
-                        print(f"     ✅ {message}")
-                    else:
-                        print(f"     ❌ {message}")
-        
-        # Save report
-        self.report["completed_at"] = datetime.now().isoformat()
-        report_file = self.output_dir / "download_report.json"
-        with open(report_file, 'w') as f:
-            json.dump(self.report, f, indent=2)
-        
-        # Print summary
-        print(f"\n{'='*70}")
-        print("DOWNLOAD SUMMARY")
-        print(f"{'='*70}")
-        print(f"Total people: {self.report['stats']['total_people']}")
-        print(f"People with links: {self.report['stats']['people_with_links']}")
-        print(f"\nYouTube:")
-        print(f"  ✅ Downloaded: {self.report['stats']['youtube_success']}")
-        print(f"  ❌ Failed: {self.report['stats']['youtube_failed']}")
-        print(f"\nGoogle Drive:")
-        print(f"  📁 Info saved: {self.report['stats']['drive_saved']}")
-        print(f"\n📊 Full report: {report_file}")
-        print(f"📁 Downloads directory: {self.output_dir}")
+    if not args.use_database:
+        # Process CSV using UnifiedDownloader
+        results = downloader.process_csv(
+            csv_file=args.csv,
+            target_rows=target_rows,
+            download_files=False  # Only save Drive info, don't download files
+        )
+    
+    # Generate legacy-compatible report
+    output_dir = args.output_dir or downloader.output_dir
+    report_file = Path(output_dir) / "download_report.json"
+    with open(report_file, 'w') as f:
+        json.dump({
+            "started_at": downloader.stats.started_at,
+            "completed_at": downloader.stats.completed_at,
+            "mode": mode_desc.lower().replace(" ", "_"),
+            "stats": {
+                "total_people": downloader.stats.total_people,
+                "people_with_links": downloader.stats.people_processed,
+                "youtube_success": downloader.stats.youtube_success,
+                "youtube_failed": downloader.stats.youtube_failed,
+                "drive_saved": downloader.stats.drive_success,
+                "drive_attempted": downloader.stats.drive_success + downloader.stats.drive_failed
+            },
+            "downloads": downloader.stats.downloads,
+            "errors": downloader.stats.errors
+        }, f, indent=2)
+    
+    # Print summary
+    print(f"\n{'='*70}")
+    print("DOWNLOAD SUMMARY")
+    print(f"{'='*70}")
+    print(f"Total people: {downloader.stats.total_people}")
+    print(f"People with links: {downloader.stats.people_processed}")
+    print(f"\nYouTube:")
+    print(f"  ✅ Downloaded: {downloader.stats.youtube_success}")
+    print(f"  ❌ Failed: {downloader.stats.youtube_failed}")
+    print(f"\nGoogle Drive:")
+    print(f"  📁 Info saved: {downloader.stats.drive_success}")
+    print(f"\n📊 Full report: {report_file}")
+    print(f"📁 Downloads directory: {downloader.output_dir}")
+    print(f"\n🎯 CONSOLIDATED: Using UnifiedDownloader (DRY refactoring complete)")
+
 
 if __name__ == "__main__":
-    downloader = MinimalDownloader()
-    downloader.process_all()
+    main()
