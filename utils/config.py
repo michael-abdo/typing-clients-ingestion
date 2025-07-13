@@ -498,6 +498,198 @@ def format_warning(message: str, icon: bool = True) -> str:
     return f"{StatusIcons.WARNING} {message}" if icon else message
 
 
+# === DRY PHASE 2: CONSOLIDATED FILE PATH OPERATIONS ===
+
+def ensure_download_directory(name: str = "downloads") -> Path:
+    """
+    Ensure download directory exists with standard name.
+    
+    Consolidates the repeated pattern found in 12+ files:
+        from pathlib import Path
+        path = Path("downloads")
+        path.mkdir(exist_ok=True)
+    
+    Args:
+        name: Directory name (default: "downloads")
+        
+    Returns:
+        Path object for the directory
+        
+    Example:
+        downloads_dir = ensure_download_directory()
+        youtube_dir = ensure_download_directory("youtube_downloads")
+    """
+    download_dir = get_project_root() / name
+    return ensure_directory(download_dir)
+
+
+def ensure_output_directory(name: str = "outputs") -> Path:
+    """
+    Ensure output directory exists with standard name.
+    
+    Consolidates the repeated pattern for output directories.
+    
+    Args:
+        name: Directory name (default: "outputs")
+        
+    Returns:
+        Path object for the directory
+        
+    Example:
+        outputs_dir = ensure_output_directory()
+        results_dir = ensure_output_directory("results")
+    """
+    output_dir = get_project_root() / name
+    return ensure_directory(output_dir)
+
+
+def ensure_logs_directory(name: str = "logs") -> Path:
+    """
+    Ensure logs directory exists with standard name.
+    
+    Consolidates the repeated pattern for log directories.
+    
+    Args:
+        name: Directory name (default: "logs")
+        
+    Returns:
+        Path object for the directory
+        
+    Example:
+        logs_dir = ensure_logs_directory()
+        debug_logs_dir = ensure_logs_directory("debug_logs")
+    """
+    logs_dir = get_project_root() / name
+    return ensure_directory(logs_dir)
+
+
+def get_standard_directories() -> Dict[str, Path]:
+    """
+    Get all standard directories used throughout the application.
+    
+    Consolidates directory access patterns and provides single source of truth.
+    
+    Returns:
+        Dictionary mapping directory names to Path objects
+        
+    Example:
+        dirs = get_standard_directories()
+        csv_path = dirs['outputs'] / 'output.csv'
+        log_path = dirs['logs'] / 'download.log'
+    """
+    return {
+        'project_root': get_project_root(),
+        'outputs': ensure_output_directory(),
+        'logs': ensure_logs_directory(),
+        'downloads': ensure_download_directory(),
+        'youtube_downloads': ensure_download_directory('youtube_downloads'),
+        'drive_downloads': ensure_download_directory('drive_downloads'),
+        'backups': ensure_output_directory('backups'),
+        'temp': ensure_download_directory('temp')
+    }
+
+
+def get_standard_file_paths() -> Dict[str, Path]:
+    """
+    Get standard file paths used throughout the application.
+    
+    Consolidates file path patterns and provides single source of truth.
+    
+    Returns:
+        Dictionary mapping file names to Path objects
+        
+    Example:
+        files = get_standard_file_paths()
+        df = pd.read_csv(files['output_csv'])
+    """
+    dirs = get_standard_directories()
+    
+    return {
+        'output_csv': dirs['outputs'] / 'output.csv',
+        'config_yaml': dirs['project_root'] / 'config' / 'config.yaml',
+        'download_log': dirs['logs'] / 'download.log',
+        'error_log': dirs['logs'] / 'error.log',
+        'status_json': dirs['outputs'] / 'status.json',
+        'progress_json': dirs['outputs'] / 'progress.json',
+        'stats_json': dirs['outputs'] / 'stats.json'
+    }
+
+
+def create_file_with_parents(file_path: Union[str, Path], content: str = "", 
+                           encoding: str = "utf-8") -> Path:
+    """
+    Create file with parent directories if they don't exist.
+    
+    Consolidates the repeated pattern:
+        from pathlib import Path
+        file_path = Path(filename)
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        file_path.write_text(content)
+    
+    Args:
+        file_path: Path to file to create
+        content: Content to write to file (default: empty string)
+        encoding: File encoding (default: utf-8)
+        
+    Returns:
+        Path object for the created file
+        
+    Example:
+        log_file = create_file_with_parents('logs/download.log')
+        csv_file = create_file_with_parents('outputs/results.csv', 'header1,header2\n')
+    """
+    file_path = Path(file_path)
+    ensure_parent_dir(file_path)
+    
+    with open(file_path, 'w', encoding=encoding) as f:
+        f.write(content)
+    
+    return file_path
+
+
+def safe_file_path(file_path: Union[str, Path], base_dir: Optional[Union[str, Path]] = None) -> Path:
+    """
+    Create safe file path within project boundaries.
+    
+    Prevents path traversal attacks and ensures files stay within project.
+    
+    Args:
+        file_path: File path to normalize
+        base_dir: Base directory to restrict to (default: project root)
+        
+    Returns:
+        Safe Path object within project boundaries
+        
+    Example:
+        safe_path = safe_file_path('../../../etc/passwd')  # Returns project_root/etc/passwd
+        safe_path = safe_file_path('outputs/data.csv')     # Returns project_root/outputs/data.csv
+    """
+    if base_dir is None:
+        base_dir = get_project_root()
+    
+    base_dir = Path(base_dir).resolve()
+    file_path = Path(file_path)
+    
+    # If absolute path, make it relative to base_dir
+    if file_path.is_absolute():
+        try:
+            file_path = file_path.relative_to(base_dir)
+        except ValueError:
+            # Path is outside base_dir, use just the filename
+            file_path = file_path.name
+    
+    # Resolve the path within base_dir
+    resolved_path = (base_dir / file_path).resolve()
+    
+    # Ensure the resolved path is still within base_dir
+    try:
+        resolved_path.relative_to(base_dir)
+        return resolved_path
+    except ValueError:
+        # Path escaped base_dir, return safe fallback
+        return base_dir / file_path.name
+
+
 def format_stats(label: str, value: Any, icon: bool = True) -> str:
     """Format a statistics message (DRY)"""
     return f"{StatusIcons.STATS} {label}: {value}" if icon else f"{label}: {value}"

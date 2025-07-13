@@ -192,15 +192,15 @@ class UnifiedS3Manager:
             
             self.logger.info(f"  📥 Streaming YouTube to S3: {s3_key}")
             
-            # Start yt-dlp process
-            cmd = ["yt-dlp", "-f", "bestaudio", "-o", pipe_path, url]
+            # Start yt-dlp process - use best video format for mp4
+            cmd = ["yt-dlp", "-f", "best[ext=mp4]/best", "-o", pipe_path, url]
             process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             
             # Upload from pipe to S3
             start_time = datetime.now()
             
             with open(pipe_path, 'rb') as pipe_file:
-                extra_args = {'ContentType': 'video/webm'}
+                extra_args = {'ContentType': 'video/mp4'}
                 if self.config.add_metadata:
                     extra_args['Metadata'] = {
                         'uploaded_at': start_time.isoformat(),

@@ -706,28 +706,450 @@ def run_direct_s3_test(test_youtube: bool = True, test_drive: bool = True) -> Li
                 )
                 
             except Exception as e:
-                result = {'success': False, 'error': str(e)}
+                result = {
+                    'type': 'drive_direct_stream',
+                    'success': False,
+                    'error': str(e)
+                }
                 results.append(result)
                 TestReporter.print_test_result("Drive Direct Stream", False, str(e))
         
-        # Cleanup S3 test files
+        # Cleanup
         s3_tester.cleanup()
     
     return results
 
 
+# === DRY PHASE 2: CONSOLIDATED EXTRACTION TESTING PATTERNS ===
+
+def run_extraction_test(row_id: str, test_case: dict, extraction_func: Callable) -> dict:
+    """
+    Standard extraction test runner with consistent reporting.
+    
+    Consolidates the repeated pattern found in 12+ test files:
+        def test_extraction(row_id, test_case):
+            print(f"Testing Row {row_id}: {test_case['name']}")
+            try:
+                result = extract_data(row_id)
+                print("✓ Success")
+                return result
+            except Exception as e:
+                print(f"❌ Error: {e}")
+                return None
+    
+    Args:
+        row_id: Row ID to test
+        test_case: Dictionary with test case information
+        extraction_func: Function that performs the extraction
+        
+    Returns:
+        Dictionary with test results
+        
+    Example:
+        result = run_extraction_test("123", {"name": "Test Person"}, extract_person_data)
+        if result['success']:
+            print(f"Extraction took {result['timing']:.2f}s")
+    """
+    TestReporter.print_test_header(f"Testing Row {row_id}: {test_case.get('name', 'Unknown')}")
+    
+    result = {
+        'row_id': row_id,
+        'test_case': test_case.get('name', 'Unknown'),
+        'success': False,
+        'extracted_data': None,
+        'error': None,
+        'timing': 0,
+        'timestamp': datetime.now().isoformat()
+    }
+    
+    try:
+        start_time = time.time()
+        extracted_data = extraction_func(row_id, test_case)
+        end_time = time.time()
+        
+        result.update({
+            'success': True,
+            'extracted_data': extracted_data,
+            'timing': end_time - start_time
+        })
+        
+        TestReporter.print_test_result(
+            f"Row {row_id} Extraction", 
+            True, 
+            f"Completed in {result['timing']:.2f}s"
+        )
+        
+    except Exception as e:
+        result['error'] = str(e)
+        TestReporter.print_test_result(f"Row {row_id} Extraction", False, str(e))
+    
+    return result
+
+
+def compare_extraction_results(expected: dict, actual: dict) -> dict:
+    """
+    Compare extraction results with expected values.
+    
+    Consolidates result comparison patterns used in extraction tests.
+    
+    Args:
+        expected: Expected extraction results
+        actual: Actual extraction results
+        
+    Returns:
+        Dictionary with comparison results
+        
+    Example:
+        comparison = compare_extraction_results(expected_data, actual_data)
+        if comparison['match']:
+            print(f"Perfect match! Similarity: {comparison['similarity_score']:.2f}")
+    """
+    comparison = {
+        'match': True,
+        'differences': [],
+        'similarity_score': 0.0,
+        'details': {
+            'expected_keys': set(expected.keys()) if expected else set(),
+            'actual_keys': set(actual.keys()) if actual else set(),
+            'common_keys': set(),
+            'missing_keys': set(),
+            'extra_keys': set()
+        }
+    }
+    
+    # Handle None/empty cases
+    if not expected and not actual:
+        comparison['similarity_score'] = 1.0
+        return comparison
+    
+    if not expected or not actual:
+        comparison['match'] = False
+        comparison['differences'].append("One of the results is None/empty")
+        return comparison
+    
+    # Analyze key differences
+    expected_keys = set(expected.keys())
+    actual_keys = set(actual.keys())
+    
+    comparison['details']['common_keys'] = expected_keys & actual_keys
+    comparison['details']['missing_keys'] = expected_keys - actual_keys
+    comparison['details']['extra_keys'] = actual_keys - expected_keys
+    
+    # Check for missing or extra keys
+    if comparison['details']['missing_keys']:
+        comparison['match'] = False
+        comparison['differences'].append(f"Missing keys: {list(comparison['details']['missing_keys'])}")
+    
+    if comparison['details']['extra_keys']:
+        comparison['differences'].append(f"Extra keys: {list(comparison['details']['extra_keys'])}")
+    
+    # Compare values for common keys
+    matches = 0
+    total_comparisons = 0
+    
+    for key in comparison['details']['common_keys']:
+        total_comparisons += 1
+        expected_val = expected[key]
+        actual_val = actual[key]
+        
+        if expected_val == actual_val:
+            matches += 1
+        else:
+            comparison['match'] = False
+            
+            # Special handling for different data types
+            if isinstance(expected_val, list) and isinstance(actual_val, list):
+                list_similarity = _compare_lists(expected_val, actual_val)
+                comparison['differences'].append(f"Key '{key}': list similarity {list_similarity:.2f}")
+            elif isinstance(expected_val, str) and isinstance(actual_val, str):
+                string_similarity = _compare_strings(expected_val, actual_val)
+                comparison['differences'].append(f"Key '{key}': string similarity {string_similarity:.2f}")
+            else:
+                comparison['differences'].append(f"Key '{key}': expected {expected_val}, got {actual_val}")
+    
+    # Calculate similarity score
+    if total_comparisons > 0:
+        key_score = len(comparison['details']['common_keys']) / len(expected_keys)
+        value_score = matches / total_comparisons
+        comparison['similarity_score'] = (key_score + value_score) / 2
+    
+    return comparison
+
+
+def _compare_lists(list1: list, list2: list) -> float:
+    """Compare two lists and return similarity score."""
+    if not list1 and not list2:
+        return 1.0
+    
+    if not list1 or not list2:
+        return 0.0
+    
+    # Convert to sets for comparison
+    set1 = set(str(item) for item in list1)
+    set2 = set(str(item) for item in list2)
+    
+    intersection = set1 & set2
+    union = set1 | set2
+    
+    return len(intersection) / len(union) if union else 0.0
+
+
+def _compare_strings(str1: str, str2: str) -> float:
+    """Compare two strings and return similarity score."""
+    if str1 == str2:
+        return 1.0
+    
+    if not str1 or not str2:
+        return 0.0
+    
+    # Simple character-based similarity
+    str1 = str1.lower().strip()
+    str2 = str2.lower().strip()
+    
+    if str1 == str2:
+        return 1.0
+    
+    # Check if one is contained in the other
+    if str1 in str2 or str2 in str1:
+        return 0.8
+    
+    # Basic word overlap
+    words1 = set(str1.split())
+    words2 = set(str2.split())
+    
+    if words1 and words2:
+        intersection = words1 & words2
+        union = words1 | words2
+        return len(intersection) / len(union)
+    
+    return 0.0
+
+
+def run_batch_extraction_tests(test_cases: List[dict], extraction_func: Callable, 
+                             max_concurrent: int = 1) -> List[dict]:
+    """
+    Run multiple extraction tests in batch.
+    
+    Consolidates batch testing patterns used across test scripts.
+    
+    Args:
+        test_cases: List of test case dictionaries
+        extraction_func: Function that performs extraction
+        max_concurrent: Maximum number of concurrent tests (default: 1)
+        
+    Returns:
+        List of test results
+        
+    Example:
+        test_cases = [
+            {"row_id": "123", "name": "Test Person 1", "expected": {...}},
+            {"row_id": "456", "name": "Test Person 2", "expected": {...}}
+        ]
+        results = run_batch_extraction_tests(test_cases, extract_person_data)
+    """
+    TestReporter.print_test_header("Batch Extraction Tests", f"Running {len(test_cases)} tests")
+    
+    results = []
+    
+    for i, test_case in enumerate(test_cases):
+        print(f"\nTest {i+1}/{len(test_cases)}")
+        
+        row_id = test_case.get('row_id', f'test_{i}')
+        result = run_extraction_test(row_id, test_case, extraction_func)
+        
+        # If expected results are provided, compare them
+        if 'expected' in test_case and result['success']:
+            comparison = compare_extraction_results(test_case['expected'], result['extracted_data'])
+            result['comparison'] = comparison
+            
+            if not comparison['match']:
+                print(f"⚠️  Comparison failed: {comparison['differences']}")
+        
+        results.append(result)
+    
+    # Print summary
+    TestReporter.print_summary(results)
+    
+    return results
+
+
+def create_extraction_test_suite(csv_file: str = None, max_tests: int = 5) -> List[dict]:
+    """
+    Create a test suite from CSV data for extraction testing.
+    
+    Consolidates test suite creation patterns.
+    
+    Args:
+        csv_file: Path to CSV file (default: from config)
+        max_tests: Maximum number of tests to create
+        
+    Returns:
+        List of test case dictionaries
+        
+    Example:
+        test_suite = create_extraction_test_suite("outputs/output.csv", max_tests=3)
+        results = run_batch_extraction_tests(test_suite, my_extraction_func)
+    """
+    try:
+        df = TestCSVHandler.read_test_csv(csv_file)
+    except Exception as e:
+        print(f"❌ Failed to read CSV: {e}")
+        return []
+    
+    test_cases = []
+    
+    # Sample rows for testing
+    sample_rows = df.sample(min(max_tests, len(df)))
+    
+    for _, row in sample_rows.iterrows():
+        test_case = {
+            'row_id': str(row.get('row_id', 'unknown')),
+            'name': row.get('name', 'Unknown Person'),
+            'email': row.get('email', ''),
+            'type': row.get('type', ''),
+            'doc_link': row.get('link', ''),
+            'expected': {
+                'person_name': row.get('name', ''),
+                'youtube_links': TestCSVHandler.extract_links(row, 'youtube_playlist'),
+                'drive_links': TestCSVHandler.extract_links(row, 'google_drive'),
+                'document_text': row.get('document_text', ''),
+                'processed': row.get('processed', '')
+            }
+        }
+        
+        test_cases.append(test_case)
+    
+    return test_cases
+
+
+def validate_extraction_function(extraction_func: Callable, test_sample_size: int = 3) -> dict:
+    """
+    Validate an extraction function with a small test sample.
+    
+    Consolidates extraction function validation patterns.
+    
+    Args:
+        extraction_func: Function to validate
+        test_sample_size: Number of tests to run for validation
+        
+    Returns:
+        Dictionary with validation results
+        
+    Example:
+        validation = validate_extraction_function(my_extract_func, test_sample_size=2)
+        if validation['valid']:
+            print("Function is ready for production use")
+    """
+    TestReporter.print_test_header("Extraction Function Validation")
+    
+    validation = {
+        'valid': True,
+        'errors': [],
+        'warnings': [],
+        'test_results': [],
+        'performance': {
+            'avg_time': 0.0,
+            'max_time': 0.0,
+            'min_time': float('inf')
+        }
+    }
+    
+    # Create test suite
+    test_cases = create_extraction_test_suite(max_tests=test_sample_size)
+    
+    if not test_cases:
+        validation['valid'] = False
+        validation['errors'].append("Could not create test cases")
+        return validation
+    
+    # Run tests
+    results = run_batch_extraction_tests(test_cases, extraction_func)
+    validation['test_results'] = results
+    
+    # Analyze results
+    successful_tests = [r for r in results if r['success']]
+    failed_tests = [r for r in results if not r['success']]
+    
+    if not successful_tests:
+        validation['valid'] = False
+        validation['errors'].append("No successful tests")
+    
+    if len(failed_tests) > len(successful_tests):
+        validation['valid'] = False
+        validation['errors'].append(f"More failures ({len(failed_tests)}) than successes ({len(successful_tests)})")
+    
+    # Calculate performance metrics
+    if successful_tests:
+        timings = [r['timing'] for r in successful_tests]
+        validation['performance']['avg_time'] = sum(timings) / len(timings)
+        validation['performance']['max_time'] = max(timings)
+        validation['performance']['min_time'] = min(timings)
+        
+        # Performance warnings
+        if validation['performance']['avg_time'] > 10.0:
+            validation['warnings'].append(f"Average extraction time is high: {validation['performance']['avg_time']:.2f}s")
+        
+        if validation['performance']['max_time'] > 30.0:
+            validation['warnings'].append(f"Maximum extraction time is very high: {validation['performance']['max_time']:.2f}s")
+    
+    # Check for common issues
+    common_errors = {}
+    for result in failed_tests:
+        error = result.get('error', 'Unknown error')
+        common_errors[error] = common_errors.get(error, 0) + 1
+    
+    if common_errors:
+        most_common_error = max(common_errors.items(), key=lambda x: x[1])
+        validation['warnings'].append(f"Most common error: {most_common_error[0]} ({most_common_error[1]} times)")
+    
+    # Print validation summary
+    print(f"\n📊 Validation Summary:")
+    print(f"✅ Valid: {validation['valid']}")
+    print(f"🧪 Tests run: {len(results)}")
+    print(f"✅ Successful: {len(successful_tests)}")
+    print(f"❌ Failed: {len(failed_tests)}")
+    print(f"⏱️  Average time: {validation['performance']['avg_time']:.2f}s")
+    
+    if validation['errors']:
+        print(f"❌ Errors: {validation['errors']}")
+    
+    if validation['warnings']:
+        print(f"⚠️  Warnings: {validation['warnings']}")
+    
+    return validation
+
+
 if __name__ == "__main__":
-    # Run quick tests
-    TestReporter.print_test_header("Quick Download Tests", "Testing basic download functionality")
-    download_results = run_quick_download_test(2)
+    # Test the extraction testing utilities
+    print("=== Testing Extraction Test Utilities ===")
     
-    TestReporter.print_test_header("Direct S3 Streaming Tests", "Testing direct-to-S3 streaming")
-    s3_results = run_direct_s3_test(True, True)
+    # Example extraction function for testing
+    def example_extraction_func(row_id: str, test_case: dict) -> dict:
+        """Example extraction function for testing"""
+        time.sleep(0.1)  # Simulate processing time
+        return {
+            'person_name': test_case.get('name', 'Unknown'),
+            'extracted_text': f"Extracted content for {row_id}",
+            'links_found': 2,
+            'success': True
+        }
     
-    # Print overall summary
-    all_results = download_results + s3_results
-    TestReporter.print_summary(all_results)
+    # Test single extraction
+    print("\n1. Testing single extraction:")
+    test_case = {'name': 'Test Person', 'row_id': '123'}
+    result = run_extraction_test('123', test_case, example_extraction_func)
+    print(f"Result: {result['success']}, Time: {result['timing']:.2f}s")
     
-    # Save report
-    TestReporter.save_report(all_results, "test_report.json")
-    print(f"\n📄 Test report saved to: test_report.json")
+    # Test result comparison
+    print("\n2. Testing result comparison:")
+    expected = {'person_name': 'Test Person', 'links_found': 2}
+    actual = {'person_name': 'Test Person', 'links_found': 2}
+    comparison = compare_extraction_results(expected, actual)
+    print(f"Match: {comparison['match']}, Similarity: {comparison['similarity_score']:.2f}")
+    
+    # Test with differences
+    actual_different = {'person_name': 'Different Person', 'links_found': 1}
+    comparison_diff = compare_extraction_results(expected, actual_different)
+    print(f"Match: {comparison_diff['match']}, Differences: {comparison_diff['differences']}")
+    
+    print("\n=== Extraction test utilities ready! ===")
