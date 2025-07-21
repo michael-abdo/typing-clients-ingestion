@@ -12,6 +12,9 @@ import json
 import shutil
 import tempfile
 import gzip
+import glob
+import re
+import warnings
 from pathlib import Path
 from typing import List, Optional, Dict, Any, Callable
 from datetime import datetime
@@ -19,23 +22,37 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 
 try:
-    from file_lock import file_lock
-    from sanitization import sanitize_error_message, sanitize_csv_field
-    from config import get_config
-    from row_context import RowContext, DownloadResult
-    from error_handling import validate_csv_integrity
-    from error_decorators import handle_file_operations, handle_validation_errors
-    from error_messages import csv_error, file_error, validation_error
-    from logging_config import get_logger
+    from .file_lock import file_lock
+    from .sanitization import sanitize_error_message, sanitize_csv_field
+    from .config import get_config
+    from .row_context import RowContext, DownloadResult
+    # Consolidated error handling imports
+    from .error_handling import (
+        handle_file_operations, 
+        handle_validation_errors,
+        csv_error, 
+        file_error, 
+        validation_error
+    )
+    from .logging_config import get_logger
+    # Import CSV S3 versioning
+    from .csv_s3_versioning import get_csv_versioning
 except ImportError:
     from .file_lock import file_lock
     from .sanitization import sanitize_error_message, sanitize_csv_field
     from .config import get_config
     from .row_context import RowContext, DownloadResult
-    from .error_handling import validate_csv_integrity
-    from .error_decorators import handle_file_operations, handle_validation_errors
-    from .error_messages import csv_error, file_error, validation_error
+    # Consolidated error handling imports
+    from .error_handling import (
+        handle_file_operations,
+        handle_validation_errors,
+        csv_error,
+        file_error,
+        validation_error
+    )
     from .logging_config import get_logger
+    # Import CSV S3 versioning
+    from .csv_s3_versioning import get_csv_versioning
 
 # Setup module logger
 logger = get_logger(__name__)
@@ -177,6 +194,25 @@ class CSVManager:
                     df.to_csv(self.csv_path, index=False, encoding=self.encoding)
             else:
                 df.to_csv(self.csv_path, index=False, encoding=self.encoding)
+            
+            # Upload CSV version to S3 automatically
+            try:
+                # Check if S3 storage is enabled
+                if config.get('downloads.storage_mode', 'local') == 's3':
+                    versioning = get_csv_versioning()
+                    metadata = {
+                        'operation': operation_name,
+                        'row_count': str(len(df)),
+                        'column_count': str(len(df.columns))
+                    }
+                    upload_result = versioning.upload_csv_version(str(self.csv_path), metadata)
+                    if upload_result['success']:
+                        logger.info(f"CSV version uploaded to S3: {upload_result['versioned_name']}")
+                    else:
+                        logger.warning(f"Failed to upload CSV version to S3: {upload_result.get('error')}")
+            except Exception as s3_error:
+                # Don't fail the operation if S3 upload fails
+                logger.warning(f"CSV S3 versioning error (non-fatal): {str(s3_error)}")
             
             # Clear cache
             self._df_cache = None
@@ -657,6 +693,192 @@ def streaming_csv_update(filename, process_func, chunk_size=1000, fieldnames=Non
     yield rows_processed
 
 
+# === DRY PHASE 2: CONSOLIDATED CSV PATTERNS ===
+
+@staticmethod
+def load_output_csv(csv_path: str = 'outputs/output.csv') -> pd.DataFrame:
+    """
+    Standard way to load the main output CSV with consistent error handling.
+    
+    Consolidates the repeated pattern found in 15+ files:
+        import pandas as pd
+        df = pd.read_csv('outputs/output.csv')
+    
+    Args:
+        csv_path: Path to CSV file (default: outputs/output.csv)
+        
+    Returns:
+        DataFrame with loaded CSV data
+        
+    Raises:
+        FileNotFoundError: If CSV file doesn't exist
+        ValueError: If CSV file is empty or malformed
+    """
+    try:
+        if not os.path.exists(csv_path):
+            raise FileNotFoundError(f"Output CSV not found: {csv_path}")
+        
+        df = pd.read_csv(csv_path)
+        
+        if df.empty:
+            raise ValueError(f"CSV file is empty: {csv_path}")
+        
+        logger.info(f"Loaded {len(df)} rows from {csv_path}")
+        return df
+        
+    except pd.errors.EmptyDataError:
+        raise ValueError(f"CSV file is empty or malformed: {csv_path}")
+    except pd.errors.ParserError as e:
+        raise ValueError(f"CSV parsing error in {csv_path}: {e}")
+    except Exception as e:
+        raise ValueError(f"Error loading CSV {csv_path}: {e}")
+
+
+@staticmethod
+def extract_links_from_row(row: pd.Series, column: str) -> List[str]:
+    """
+    Extract and clean links from CSV row - eliminates 3-line pattern.
+    
+    Consolidates the repeated pattern found in 15+ files:
+        youtube_links = str(row.get('youtube_playlist', '')).split('|')
+        youtube_links = [l.strip() for l in youtube_links if l and l != 'nan']
+    
+    Args:
+        row: Pandas Series (CSV row)
+        column: Column name to extract links from
+        
+    Returns:
+        List of cleaned links
+        
+    Example:
+        youtube_links = CSVManager.extract_links_from_row(row, 'youtube_playlist')
+        drive_links = CSVManager.extract_links_from_row(row, 'google_drive')
+    """
+    if pd.isna(row.get(column)):
+        return []
+    
+    # Get column value and split by pipe delimiter
+    links = str(row.get(column, '')).split('|')
+    
+    # Clean and filter links
+    cleaned_links = []
+    for link in links:
+        link = link.strip()
+        # Filter out empty, 'nan', and 'None' values
+        if link and link not in ['nan', 'None', '']:
+            cleaned_links.append(link)
+    
+    return cleaned_links
+
+
+@staticmethod
+def extract_all_links_from_row(row: pd.Series) -> Dict[str, List[str]]:
+    """
+    Extract all types of links from a CSV row.
+    
+    Args:
+        row: Pandas Series (CSV row)
+        
+    Returns:
+        Dictionary with link types as keys and lists of links as values
+        
+    Example:
+        links = CSVManager.extract_all_links_from_row(row)
+        youtube_links = links['youtube']
+        drive_links = links['drive']
+    """
+    return {
+        'youtube': CSVManager.extract_links_from_row(row, 'youtube_playlist'),
+        'drive': CSVManager.extract_links_from_row(row, 'google_drive'),
+        's3_youtube': CSVManager.extract_links_from_row(row, 's3_youtube_urls'),
+        's3_drive': CSVManager.extract_links_from_row(row, 's3_drive_urls'),
+        's3_all': CSVManager.extract_links_from_row(row, 's3_all_files')
+    }
+
+
+def get_standard_csv_path() -> str:
+    """Get the standard output CSV path from configuration."""
+    try:
+        from config import get_default_csv_file
+        return get_default_csv_file()
+    except ImportError:
+        return 'outputs/output.csv'
+
+
+# === CONVENIENCE FUNCTIONS FOR COMMON PATTERNS ===
+
+def load_and_filter_csv(csv_path: str = None, 
+                       has_youtube: bool = False,
+                       has_drive: bool = False,
+                       row_ids: Optional[List[int]] = None) -> pd.DataFrame:
+    """
+    Load CSV and filter for common patterns.
+    
+    Args:
+        csv_path: CSV file path (default: from config)
+        has_youtube: Filter to rows with YouTube links
+        has_drive: Filter to rows with Drive links  
+        row_ids: Filter to specific row IDs
+        
+    Returns:
+        Filtered DataFrame
+    """
+    if csv_path is None:
+        csv_path = get_standard_csv_path()
+    
+    df = CSVManager.load_output_csv(csv_path)
+    
+    # Apply filters
+    if row_ids is not None:
+        df = df[df['row_id'].isin(row_ids)]
+    
+    if has_youtube:
+        df = df[df.apply(lambda row: len(CSVManager.extract_links_from_row(row, 'youtube_playlist')) > 0, axis=1)]
+    
+    if has_drive:
+        df = df[df.apply(lambda row: len(CSVManager.extract_links_from_row(row, 'google_drive')) > 0, axis=1)]
+    
+    return df
+
+
+def count_links_by_type(csv_path: str = None) -> Dict[str, int]:
+    """
+    Count total links by type across entire CSV.
+    
+    Args:
+        csv_path: CSV file path (default: from config)
+        
+    Returns:
+        Dictionary with link counts by type
+    """
+    if csv_path is None:
+        csv_path = get_standard_csv_path()
+    
+    df = CSVManager.load_output_csv(csv_path)
+    
+    counts = {
+        'youtube': 0,
+        'drive': 0,
+        'total_people': len(df),
+        'people_with_youtube': 0,
+        'people_with_drive': 0
+    }
+    
+    for _, row in df.iterrows():
+        youtube_links = CSVManager.extract_links_from_row(row, 'youtube_playlist')
+        drive_links = CSVManager.extract_links_from_row(row, 'google_drive')
+        
+        counts['youtube'] += len(youtube_links)
+        counts['drive'] += len(drive_links)
+        
+        if youtube_links:
+            counts['people_with_youtube'] += 1
+        if drive_links:
+            counts['people_with_drive'] += 1
+    
+    return counts
+
+
 if __name__ == "__main__":
     # Example usage and testing
     print("=== CSV Manager Test ===")
@@ -672,3 +894,31 @@ if __name__ == "__main__":
     # Test status summary
     summary = manager.get_download_status_summary()
     print(f"📊 Status summary: {summary}")
+    
+    # Test new DRY Phase 2 functions
+    print("\n=== Testing DRY Phase 2 Functions ===")
+    
+    try:
+        # Test load_output_csv
+        df = CSVManager.load_output_csv('outputs/output.csv')
+        print(f"✅ Loaded {len(df)} rows from output CSV")
+        
+        # Test extract_links_from_row with first row
+        if not df.empty:
+            first_row = df.iloc[0]
+            youtube_links = CSVManager.extract_links_from_row(first_row, 'youtube_playlist')
+            drive_links = CSVManager.extract_links_from_row(first_row, 'google_drive')
+            print(f"✅ Extracted {len(youtube_links)} YouTube and {len(drive_links)} Drive links from first row")
+            
+            # Test extract_all_links_from_row
+            all_links = CSVManager.extract_all_links_from_row(first_row)
+            print(f"✅ Extracted all links: {sum(len(links) for links in all_links.values())} total")
+        
+        # Test count_links_by_type
+        link_counts = count_links_by_type()
+        print(f"✅ Link counts: {link_counts}")
+        
+    except Exception as e:
+        print(f"⚠️ Could not test with actual CSV (expected in test environment): {e}")
+    
+    print("📋 CSV Manager ready with DRY consolidation!")
