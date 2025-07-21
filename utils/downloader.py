@@ -69,7 +69,7 @@ class DownloadConfig:
     output_dir: str = None  # Will be set from config
     timeout: int = None  # Will be set from config
     retry_strategy: RetryStrategy = RetryStrategy.BASIC_RETRY
-    youtube_strategy: DownloadStrategy = DownloadStrategy.AUDIO_ONLY
+    youtube_strategy: DownloadStrategy = DownloadStrategy.VIDEO_BEST
     youtube_quality: str = None  # Will be set from config
     youtube_format: str = None  # Will be set from config
     create_metadata: bool = True
@@ -87,7 +87,7 @@ class DownloadConfig:
         if self.youtube_quality is None:
             self.youtube_quality = config.get('downloads.youtube.quality', '128K')
         if self.youtube_format is None:
-            self.youtube_format = config.get('downloads.youtube.format', 'mp3')
+            self.youtube_format = config.get('downloads.youtube.default_format', 'mp4')
         if self.max_retries is None:
             self.max_retries = config.get('retry.max_attempts', 3)
         if self.retry_delay is None:
@@ -342,6 +342,10 @@ class UnifiedDownloader:
         with open(info_file, 'w') as f:
             json.dump(metadata, f, indent=2)
         
+        # For files, attempt actual download
+        if file_type == "file":
+            return self.download_drive_file_actual(url, person_name, row_id)
+        
         self.stats.drive_success += 1
         return True, f"Drive {file_type} info saved"
     
@@ -355,24 +359,28 @@ class UnifiedDownloader:
             return False, "Invalid Drive URL"
         
         file_id = file_id_match.group(1)
-        output_file = person_dir / f"drive_file_{file_id}"
         
-        # Skip if already exists
-        if output_file.exists():
-            self.stats.skipped += 1
-            return True, f"Already exists: {output_file.name}"
-        
-        cmd = [
-            "gdown",
-            f"https://drive.google.com/uc?id={file_id}",
-            "-O", str(output_file),
-            "--fuzzy"
-        ]
+        # Check if any file with this ID already exists
+        existing_files = list(person_dir.glob(f"*{file_id}*"))
+        if existing_files:
+            actual_files = [f for f in existing_files if not f.name.endswith(('.json', '_info.json', '_metadata.json'))]
+            if actual_files:
+                self.stats.skipped += 1
+                return True, f"Already exists: {actual_files[0].name}"
         
         try:
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=self.config.timeout)
+            import gdown
             
-            if result.returncode == 0 and output_file.exists():
+            self.logger.info(f"      📥 Downloading Drive file {file_id}...")
+            
+            # Use gdown library directly
+            gdown_url = f"https://drive.google.com/uc?id={file_id}"
+            
+            # Download to person directory (gdown will determine filename)
+            output = gdown.download(gdown_url, output=str(person_dir) + '/', quiet=False, fuzzy=True)
+            
+            if output and Path(output).exists():
+                output_file = Path(output)
                 size_mb = output_file.stat().st_size / (1024*1024)
                 self.stats.drive_success += 1
                 
@@ -380,17 +388,21 @@ class UnifiedDownloader:
                 if self.config.create_metadata:
                     self._save_drive_metadata(file_id, url, person_name, row_id, output_file)
                 
-                return True, f"Downloaded ({size_mb:.1f} MB)"
+                self.logger.info(f"      ✅ Downloaded: {output_file.name} ({size_mb:.1f} MB)")
+                return True, f"Downloaded: {output_file.name} ({size_mb:.1f} MB)"
             else:
                 self.stats.drive_failed += 1
-                return False, "Download failed"
+                return False, "Download failed - file may be private or deleted"
                 
-        except subprocess.TimeoutExpired:
-            self.stats.drive_failed += 1
-            return False, "Download timed out"
         except Exception as e:
             self.stats.drive_failed += 1
-            return False, str(e)
+            error_msg = str(e)
+            if "Access denied" in error_msg or "403" in error_msg:
+                return False, "Access denied - file requires authentication"
+            elif "404" in error_msg:
+                return False, "File not found or deleted"
+            else:
+                return False, f"Download error: {error_msg}"
     
     def _save_drive_metadata(self, file_id: str, url: str, person_name: str, row_id: int, output_file: Path):
         """Save Drive download metadata"""
@@ -694,7 +706,7 @@ def create_audio_downloader(output_dir: str = None) -> UnifiedDownloader:
     """Create downloader configured for audio-only downloads"""
     config = DownloadConfig(
         output_dir=output_dir,
-        youtube_strategy=DownloadStrategy.AUDIO_ONLY,
+        youtube_strategy=DownloadStrategy.VIDEO_BEST,
         retry_strategy=RetryStrategy.BASIC_RETRY
     )
     return UnifiedDownloader(config)
@@ -704,7 +716,7 @@ def create_robust_downloader(output_dir: str = None) -> UnifiedDownloader:
     """Create downloader configured for robust downloads with multiple strategies"""
     config = DownloadConfig(
         output_dir=output_dir,
-        youtube_strategy=DownloadStrategy.AUDIO_ONLY,
+        youtube_strategy=DownloadStrategy.VIDEO_BEST,
         timeout=0,  # No timeout
         retry_strategy=RetryStrategy.MULTIPLE_STRATEGIES,
         max_retries=5
@@ -716,7 +728,7 @@ def create_targeted_downloader(output_dir: str = None) -> UnifiedDownloader:
     """Create downloader configured for targeted downloads"""
     config = DownloadConfig(
         output_dir=output_dir,
-        youtube_strategy=DownloadStrategy.AUDIO_ONLY,
+        youtube_strategy=DownloadStrategy.VIDEO_BEST,
         retry_strategy=RetryStrategy.BASIC_RETRY,
         show_progress=True
     )

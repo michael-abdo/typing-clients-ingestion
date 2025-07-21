@@ -540,16 +540,17 @@ def download_drive_file(file_id, output_filename=None, logger=None):
             return output_path
         
         # Save file
-        total_size = int(response.headers.get('content-length', 0))
-        
-        if total_size == 0:
-            logger.warning("Could not determine file size")
-        else:
-            logger.info(f"File size: {total_size / Constants.BYTES_PER_MB:.2f} MB")
-        
-        # Download to a temporary file first
-        temp_path = f"{output_path}.tmp"
-        
+        try:
+            total_size = int(response.headers.get('content-length', 0))
+            
+            if total_size == 0:
+                logger.warning("Could not determine file size")
+            else:
+                logger.info(f"File size: {total_size / Constants.BYTES_PER_MB:.2f} MB")
+            
+            # Download to a temporary file first
+            temp_path = f"{output_path}.tmp"
+            
             # Use centralized download function (DRY consolidation)
             success = download_file_with_progress(response, temp_path, total_size, logger)
             if not success:

@@ -26,6 +26,13 @@ paths:
 
 # Download Settings
 downloads:
+  # Storage mode: "local" (default) or "s3" (direct to S3)
+  storage_mode: "s3"  # Changed from "local" to "s3" as default
+  # S3 settings for direct uploads
+  s3:
+    default_bucket: "typing-clients-uuid-system"
+    streaming_enabled: true
+    skip_local_storage: true
   youtube:
     default_resolution: "720"
     default_format: "mp4"
@@ -328,6 +335,55 @@ pipelines:
       notification_on_failure: false
       max_retries: 2
       retry_delay: 60  # seconds
+  
+  # Direct S3 pipeline - downloads directly to S3 without local storage
+  s3_direct_ingestion:
+    description: "Direct S3 ingestion pipeline - no local storage"
+    stages:
+      - name: "extract_and_upload"
+        description: "Extract data and stream directly to S3"
+        enabled: true
+        command: ["python3", "simple_workflow_s3.py", "--mode", "full", "--download"]
+        timeout: 1800  # 30 minutes
+        success_markers:
+          - file_exists: "outputs/output.csv"
+          - file_exists: "s3_direct_upload_report.json"
+        retry_on_failure: true
+    
+    settings:
+      resume_enabled: true
+      state_file_prefix: "s3_pipeline_state"
+      cleanup_on_success: false
+      notification_on_failure: false
+      max_retries: 2
+      retry_delay: 60
+  
+  # Enhanced pipeline - auto-detects storage mode from config
+  enhanced_ingestion:
+    description: "Enhanced pipeline with auto storage mode detection"
+    stages:
+      - name: "extract_data"
+        description: "Extract data from Google Sheets"
+        enabled: true
+        command: ["python3", "simple_workflow.py"]
+        timeout: 600
+        success_markers:
+          - file_exists: "outputs/output.csv"
+        retry_on_failure: true
+        
+      - name: "download_content"
+        description: "Download content (auto-detects storage mode)"
+        enabled: true
+        command: ["python3", "download_all_enhanced.py", "--storage", "auto"]
+        timeout: 1800
+        success_markers:
+          - file_exists: "s3_direct_upload_report.json"  # If S3 mode
+        retry_on_failure: true
+    
+    settings:
+      resume_enabled: true
+      state_file_prefix: "enhanced_pipeline_state"
+      cleanup_on_success: true
   
   # Example of a partial pipeline for testing
   test_extraction:
