@@ -254,10 +254,69 @@ class UnifiedS3Manager:
             self.logger.info(f"  📁 Streaming Drive to S3: {s3_key}")
             
             start_time = datetime.now()
-            response = requests.get(download_url, stream=True)
+            session = requests.Session()
+            
+            # First request to get cookies and check for virus scan warning
+            response = session.get(download_url, stream=True)
             response.raise_for_status()
             
-            # Use BytesIO for streaming
+            # Check if we got a virus scan warning page
+            content_type = response.headers.get('Content-Type', '')
+            if 'text/html' in content_type:
+                # Read the first chunk to check for virus scan warning
+                first_chunk = next(response.iter_content(chunk_size=8192), b'')
+                response_text = first_chunk.decode('utf-8', errors='ignore')
+                
+                if 'virus scan warning' in response_text.lower():
+                    self.logger.info("Large file detected with virus scan warning, bypassing confirmation...")
+                    
+                    # Read the rest of the response to get the full HTML
+                    for chunk in response.iter_content(chunk_size=8192):
+                        if chunk:
+                            response_text += chunk.decode('utf-8', errors='ignore')
+                    
+                    # Parse the confirmation parameters
+                    confirm_match = re.search(r'name="confirm" value="([^"]*)"', response_text)
+                    uuid_match = re.search(r'name="uuid" value="([^"]*)"', response_text)
+                    
+                    if confirm_match:
+                        confirm_code = confirm_match.group(1)
+                        
+                        # Build the proper download URL with all parameters
+                        download_params = {
+                            'id': drive_id,
+                            'export': 'download',
+                            'confirm': confirm_code
+                        }
+                        
+                        if uuid_match:
+                            download_params['uuid'] = uuid_match.group(1)
+                        
+                        # Use drive.usercontent.google.com for direct downloads
+                        direct_download_url = "https://drive.usercontent.google.com/download"
+                        
+                        # Make the download request with all parameters
+                        response = session.get(direct_download_url, params=download_params, stream=True)
+                        response.raise_for_status()
+                    else:
+                        return UploadResult(
+                            success=False,
+                            s3_key=s3_key,
+                            error="Could not parse virus scan confirmation code"
+                        )
+                else:
+                    # Not a virus scan warning, but still HTML - might be an error page
+                    return UploadResult(
+                        success=False,
+                        s3_key=s3_key,
+                        error="Received HTML response instead of file content"
+                    )
+            else:
+                # Reset stream position if we didn't consume the response
+                response = session.get(download_url, stream=True)
+                response.raise_for_status()
+            
+            # Stream the file content to BytesIO
             file_obj = BytesIO()
             file_size = 0
             
@@ -265,15 +324,28 @@ class UnifiedS3Manager:
                 if chunk:
                     file_obj.write(chunk)
                     file_size += len(chunk)
+                    
+                    # Log progress for large files
+                    if file_size > 0 and file_size % (100 * 1024 * 1024) == 0:  # Every 100MB
+                        self.logger.info(f"    Progress: {file_size / (1024 * 1024):.1f} MB downloaded...")
             
             file_obj.seek(0)
             
-            extra_args = {'ContentType': 'application/octet-stream'}
+            # Determine content type from response headers
+            response_content_type = response.headers.get('Content-Type', 'application/octet-stream')
+            if response_content_type == 'application/octet-stream':
+                # Try to guess from s3_key extension
+                content_type = self.get_content_type(s3_key)
+            else:
+                content_type = response_content_type
+            
+            extra_args = {'ContentType': content_type}
             if self.config.add_metadata:
                 extra_args['Metadata'] = {
                     'uploaded_at': start_time.isoformat(),
                     'source': 'typing-clients-ingestion-drive-stream',
-                    'drive_id': drive_id
+                    'drive_id': drive_id,
+                    'original_size': str(file_size)
                 }
             
             self.s3_client.upload_fileobj(
@@ -285,6 +357,8 @@ class UnifiedS3Manager:
             
             upload_time = (datetime.now() - start_time).total_seconds()
             s3_url = f"https://{self.config.bucket_name}.s3.amazonaws.com/{s3_key}"
+            
+            self.logger.info(f"    ✅ Successfully uploaded {file_size / (1024 * 1024):.1f} MB to S3")
             
             return UploadResult(
                 success=True,
