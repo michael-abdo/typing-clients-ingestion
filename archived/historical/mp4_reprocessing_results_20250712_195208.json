@@ -1,0 +1,385 @@
+{
+  "progress": {
+    "started_at": "2025-07-12T19:52:08.889001",
+    "total_clients": 7,
+    "total_videos": 23,
+    "completed_clients": 4,
+    "completed_videos": 20,
+    "failed_videos": 0,
+    "errors": [],
+    "successes": [
+      {
+        "client_id": "487_Olivia_Tomlinson",
+        "video_id": "0131Nbfjw4Q",
+        "s3_url": "https://typing-clients-storage-2025.s3.amazonaws.com/487/Olivia_Tomlinson/youtube_0131Nbfjw4Q.mp4"
+      },
+      {
+        "client_id": "487_Olivia_Tomlinson",
+        "video_id": "2iwahDWerSQ",
+        "s3_url": "https://typing-clients-storage-2025.s3.amazonaws.com/487/Olivia_Tomlinson/youtube_2iwahDWerSQ.mp4"
+      },
+      {
+        "client_id": "487_Olivia_Tomlinson",
+        "video_id": "3cU7q7wB9Hk",
+        "s3_url": "https://typing-clients-storage-2025.s3.amazonaws.com/487/Olivia_Tomlinson/youtube_3cU7q7wB9Hk.mp4"
+      },
+      {
+        "client_id": "487_Olivia_Tomlinson",
+        "video_id": "8zo0I4-F3Bs",
+        "s3_url": "https://typing-clients-storage-2025.s3.amazonaws.com/487/Olivia_Tomlinson/youtube_8zo0I4-F3Bs.mp4"
+      },
+      {
+        "client_id": "487_Olivia_Tomlinson",
+        "video_id": "Dmmff9nv1b4",
+        "s3_url": "https://typing-clients-storage-2025.s3.amazonaws.com/487/Olivia_Tomlinson/youtube_Dmmff9nv1b4.mp4"
+      },
+      {
+        "client_id": "487_Olivia_Tomlinson",
+        "video_id": "NwS2ncgtkoc",
+        "s3_url": "https://typing-clients-storage-2025.s3.amazonaws.com/487/Olivia_Tomlinson/youtube_NwS2ncgtkoc.mp4"
+      },
+      {
+        "client_id": "487_Olivia_Tomlinson",
+        "video_id": "fjGmoUEOTP8",
+        "s3_url": "https://typing-clients-storage-2025.s3.amazonaws.com/487/Olivia_Tomlinson/youtube_fjGmoUEOTP8.mp4"
+      },
+      {
+        "client_id": "502_Sam_Torode",
+        "video_id": "7cufMri1c5o",
+        "s3_url": "https://typing-clients-storage-2025.s3.amazonaws.com/502/Sam_Torode/youtube_7cufMri1c5o.mp4"
+      },
+      {
+        "client_id": "502_Sam_Torode",
+        "video_id": "M36f9CGC0QY",
+        "s3_url": "https://typing-clients-storage-2025.s3.amazonaws.com/502/Sam_Torode/youtube_M36f9CGC0QY.mp4"
+      },
+      {
+        "client_id": "502_Sam_Torode",
+        "video_id": "cfZmeDJ7Rls",
+        "s3_url": "https://typing-clients-storage-2025.s3.amazonaws.com/502/Sam_Torode/youtube_cfZmeDJ7Rls.mp4"
+      },
+      {
+        "client_id": "502_Sam_Torode",
+        "video_id": "jgmL98lDNDU",
+        "s3_url": "https://typing-clients-storage-2025.s3.amazonaws.com/502/Sam_Torode/youtube_jgmL98lDNDU.mp4"
+      },
+      {
+        "client_id": "502_Sam_Torode",
+        "video_id": "q2QMw4nGV0A",
+        "s3_url": "https://typing-clients-storage-2025.s3.amazonaws.com/502/Sam_Torode/youtube_q2QMw4nGV0A.mp4"
+      },
+      {
+        "client_id": "502_Sam_Torode",
+        "video_id": "sV5oH7itRyo",
+        "s3_url": "https://typing-clients-storage-2025.s3.amazonaws.com/502/Sam_Torode/youtube_sV5oH7itRyo.mp4"
+      },
+      {
+        "client_id": "494_John_Williams",
+        "video_id": "BtSNvQ9Rc90",
+        "s3_url": "https://typing-clients-storage-2025.s3.amazonaws.com/494/John_Williams/youtube_BtSNvQ9Rc90.mp4"
+      },
+      {
+        "client_id": "494_John_Williams",
+        "video_id": "K6kBTbbjH4c",
+        "s3_url": "https://typing-clients-storage-2025.s3.amazonaws.com/494/John_Williams/youtube_K6kBTbbjH4c.mp4"
+      },
+      {
+        "client_id": "494_John_Williams",
+        "video_id": "ZBuff3DGbUM",
+        "s3_url": "https://typing-clients-storage-2025.s3.amazonaws.com/494/John_Williams/youtube_ZBuff3DGbUM.mp4"
+      },
+      {
+        "client_id": "494_John_Williams",
+        "video_id": "vHD2wDyvWLw",
+        "s3_url": "https://typing-clients-storage-2025.s3.amazonaws.com/494/John_Williams/youtube_vHD2wDyvWLw.mp4"
+      },
+      {
+        "client_id": "493_Maddie_Boyle",
+        "video_id": "4HfkyhvaaWc",
+        "s3_url": "https://typing-clients-storage-2025.s3.amazonaws.com/493/Maddie_Boyle/youtube_4HfkyhvaaWc.mp4"
+      },
+      {
+        "client_id": "493_Maddie_Boyle",
+        "video_id": "YmFip4BZGE0",
+        "s3_url": "https://typing-clients-storage-2025.s3.amazonaws.com/493/Maddie_Boyle/youtube_YmFip4BZGE0.mp4"
+      },
+      {
+        "client_id": "493_Maddie_Boyle",
+        "video_id": "amupMWpSA5I",
+        "s3_url": "https://typing-clients-storage-2025.s3.amazonaws.com/493/Maddie_Boyle/youtube_amupMWpSA5I.mp4"
+      }
+    ],
+    "current_client": "493_Maddie_Boyle"
+  },
+  "results": [
+    {
+      "client_id": "487_Olivia_Tomlinson",
+      "folder_name": "487/Olivia_Tomlinson",
+      "reprocess_type": "full",
+      "total_videos": 7,
+      "successful_videos": 7,
+      "failed_videos": 0,
+      "video_results": [
+        {
+          "video_id": "0131Nbfjw4Q",
+          "youtube_url": "https://www.youtube.com/watch?v=0131Nbfjw4Q",
+          "s3_key": "487/Olivia_Tomlinson/youtube_0131Nbfjw4Q.mp4",
+          "success": true,
+          "error": null,
+          "s3_url": "https://typing-clients-storage-2025.s3.amazonaws.com/487/Olivia_Tomlinson/youtube_0131Nbfjw4Q.mp4",
+          "upload_time": 64.85,
+          "file_size": 163806185,
+          "file_size_mb": 156.22
+        },
+        {
+          "video_id": "2iwahDWerSQ",
+          "youtube_url": "https://www.youtube.com/watch?v=2iwahDWerSQ",
+          "s3_key": "487/Olivia_Tomlinson/youtube_2iwahDWerSQ.mp4",
+          "success": true,
+          "error": null,
+          "s3_url": "https://typing-clients-storage-2025.s3.amazonaws.com/487/Olivia_Tomlinson/youtube_2iwahDWerSQ.mp4",
+          "upload_time": 8.9,
+          "file_size": 14121508,
+          "file_size_mb": 13.47
+        },
+        {
+          "video_id": "3cU7q7wB9Hk",
+          "youtube_url": "https://www.youtube.com/watch?v=3cU7q7wB9Hk",
+          "s3_key": "487/Olivia_Tomlinson/youtube_3cU7q7wB9Hk.mp4",
+          "success": true,
+          "error": null,
+          "s3_url": "https://typing-clients-storage-2025.s3.amazonaws.com/487/Olivia_Tomlinson/youtube_3cU7q7wB9Hk.mp4",
+          "upload_time": 13.18,
+          "file_size": 55842350,
+          "file_size_mb": 53.26
+        },
+        {
+          "video_id": "8zo0I4-F3Bs",
+          "youtube_url": "https://www.youtube.com/watch?v=8zo0I4-F3Bs",
+          "s3_key": "487/Olivia_Tomlinson/youtube_8zo0I4-F3Bs.mp4",
+          "success": true,
+          "error": null,
+          "s3_url": "https://typing-clients-storage-2025.s3.amazonaws.com/487/Olivia_Tomlinson/youtube_8zo0I4-F3Bs.mp4",
+          "upload_time": 19.41,
+          "file_size": 123676311,
+          "file_size_mb": 117.95
+        },
+        {
+          "video_id": "Dmmff9nv1b4",
+          "youtube_url": "https://www.youtube.com/watch?v=Dmmff9nv1b4",
+          "s3_key": "487/Olivia_Tomlinson/youtube_Dmmff9nv1b4.mp4",
+          "success": true,
+          "error": null,
+          "s3_url": "https://typing-clients-storage-2025.s3.amazonaws.com/487/Olivia_Tomlinson/youtube_Dmmff9nv1b4.mp4",
+          "upload_time": 20.4,
+          "file_size": 126227776,
+          "file_size_mb": 120.38
+        },
+        {
+          "video_id": "NwS2ncgtkoc",
+          "youtube_url": "https://www.youtube.com/watch?v=NwS2ncgtkoc",
+          "s3_key": "487/Olivia_Tomlinson/youtube_NwS2ncgtkoc.mp4",
+          "success": true,
+          "error": null,
+          "s3_url": "https://typing-clients-storage-2025.s3.amazonaws.com/487/Olivia_Tomlinson/youtube_NwS2ncgtkoc.mp4",
+          "upload_time": 13.87,
+          "file_size": 60933749,
+          "file_size_mb": 58.11
+        },
+        {
+          "video_id": "fjGmoUEOTP8",
+          "youtube_url": "https://www.youtube.com/watch?v=fjGmoUEOTP8",
+          "s3_key": "487/Olivia_Tomlinson/youtube_fjGmoUEOTP8.mp4",
+          "success": true,
+          "error": null,
+          "s3_url": "https://typing-clients-storage-2025.s3.amazonaws.com/487/Olivia_Tomlinson/youtube_fjGmoUEOTP8.mp4",
+          "upload_time": 12.82,
+          "file_size": 68507756,
+          "file_size_mb": 65.33
+        }
+      ],
+      "started_at": "2025-07-12T19:52:08.889086",
+      "completed_at": "2025-07-12T19:54:49.651718"
+    },
+    {
+      "client_id": "502_Sam_Torode",
+      "folder_name": "502/Sam_Torode",
+      "reprocess_type": "full",
+      "total_videos": 6,
+      "successful_videos": 6,
+      "failed_videos": 0,
+      "video_results": [
+        {
+          "video_id": "7cufMri1c5o",
+          "youtube_url": "https://www.youtube.com/watch?v=7cufMri1c5o",
+          "s3_key": "502/Sam_Torode/youtube_7cufMri1c5o.mp4",
+          "success": true,
+          "error": null,
+          "s3_url": "https://typing-clients-storage-2025.s3.amazonaws.com/502/Sam_Torode/youtube_7cufMri1c5o.mp4",
+          "upload_time": 12.92,
+          "file_size": 142250042,
+          "file_size_mb": 135.66
+        },
+        {
+          "video_id": "M36f9CGC0QY",
+          "youtube_url": "https://www.youtube.com/watch?v=M36f9CGC0QY",
+          "s3_key": "502/Sam_Torode/youtube_M36f9CGC0QY.mp4",
+          "success": true,
+          "error": null,
+          "s3_url": "https://typing-clients-storage-2025.s3.amazonaws.com/502/Sam_Torode/youtube_M36f9CGC0QY.mp4",
+          "upload_time": 6.88,
+          "file_size": 7589382,
+          "file_size_mb": 7.24
+        },
+        {
+          "video_id": "cfZmeDJ7Rls",
+          "youtube_url": "https://www.youtube.com/watch?v=cfZmeDJ7Rls",
+          "s3_key": "502/Sam_Torode/youtube_cfZmeDJ7Rls.mp4",
+          "success": true,
+          "error": null,
+          "s3_url": "https://typing-clients-storage-2025.s3.amazonaws.com/502/Sam_Torode/youtube_cfZmeDJ7Rls.mp4",
+          "upload_time": 13.83,
+          "file_size": 34784560,
+          "file_size_mb": 33.17
+        },
+        {
+          "video_id": "jgmL98lDNDU",
+          "youtube_url": "https://www.youtube.com/watch?v=jgmL98lDNDU",
+          "s3_key": "502/Sam_Torode/youtube_jgmL98lDNDU.mp4",
+          "success": true,
+          "error": null,
+          "s3_url": "https://typing-clients-storage-2025.s3.amazonaws.com/502/Sam_Torode/youtube_jgmL98lDNDU.mp4",
+          "upload_time": 16.69,
+          "file_size": 50272296,
+          "file_size_mb": 47.94
+        },
+        {
+          "video_id": "q2QMw4nGV0A",
+          "youtube_url": "https://www.youtube.com/watch?v=q2QMw4nGV0A",
+          "s3_key": "502/Sam_Torode/youtube_q2QMw4nGV0A.mp4",
+          "success": true,
+          "error": null,
+          "s3_url": "https://typing-clients-storage-2025.s3.amazonaws.com/502/Sam_Torode/youtube_q2QMw4nGV0A.mp4",
+          "upload_time": 25.7,
+          "file_size": 181706263,
+          "file_size_mb": 173.29
+        },
+        {
+          "video_id": "sV5oH7itRyo",
+          "youtube_url": "https://www.youtube.com/watch?v=sV5oH7itRyo",
+          "s3_key": "502/Sam_Torode/youtube_sV5oH7itRyo.mp4",
+          "success": true,
+          "error": null,
+          "s3_url": "https://typing-clients-storage-2025.s3.amazonaws.com/502/Sam_Torode/youtube_sV5oH7itRyo.mp4",
+          "upload_time": 16.89,
+          "file_size": 131703643,
+          "file_size_mb": 125.6
+        }
+      ],
+      "started_at": "2025-07-12T19:54:49.652671",
+      "completed_at": "2025-07-12T19:56:28.859688"
+    },
+    {
+      "client_id": "494_John_Williams",
+      "folder_name": "494/John_Williams",
+      "reprocess_type": "full",
+      "total_videos": 4,
+      "successful_videos": 4,
+      "failed_videos": 0,
+      "video_results": [
+        {
+          "video_id": "BtSNvQ9Rc90",
+          "youtube_url": "https://www.youtube.com/watch?v=BtSNvQ9Rc90",
+          "s3_key": "494/John_Williams/youtube_BtSNvQ9Rc90.mp4",
+          "success": true,
+          "error": null,
+          "s3_url": "https://typing-clients-storage-2025.s3.amazonaws.com/494/John_Williams/youtube_BtSNvQ9Rc90.mp4",
+          "upload_time": 7.79,
+          "file_size": 21202031,
+          "file_size_mb": 20.22
+        },
+        {
+          "video_id": "K6kBTbbjH4c",
+          "youtube_url": "https://www.youtube.com/watch?v=K6kBTbbjH4c",
+          "s3_key": "494/John_Williams/youtube_K6kBTbbjH4c.mp4",
+          "success": true,
+          "error": null,
+          "s3_url": "https://typing-clients-storage-2025.s3.amazonaws.com/494/John_Williams/youtube_K6kBTbbjH4c.mp4",
+          "upload_time": 16.36,
+          "file_size": 52785246,
+          "file_size_mb": 50.34
+        },
+        {
+          "video_id": "ZBuff3DGbUM",
+          "youtube_url": "https://www.youtube.com/watch?v=ZBuff3DGbUM",
+          "s3_key": "494/John_Williams/youtube_ZBuff3DGbUM.mp4",
+          "success": true,
+          "error": null,
+          "s3_url": "https://typing-clients-storage-2025.s3.amazonaws.com/494/John_Williams/youtube_ZBuff3DGbUM.mp4",
+          "upload_time": 7.54,
+          "file_size": 10435758,
+          "file_size_mb": 9.95
+        },
+        {
+          "video_id": "vHD2wDyvWLw",
+          "youtube_url": "https://www.youtube.com/watch?v=vHD2wDyvWLw",
+          "s3_key": "494/John_Williams/youtube_vHD2wDyvWLw.mp4",
+          "success": true,
+          "error": null,
+          "s3_url": "https://typing-clients-storage-2025.s3.amazonaws.com/494/John_Williams/youtube_vHD2wDyvWLw.mp4",
+          "upload_time": 9.72,
+          "file_size": 25367070,
+          "file_size_mb": 24.19
+        }
+      ],
+      "started_at": "2025-07-12T19:56:28.861121",
+      "completed_at": "2025-07-12T19:57:14.462659"
+    },
+    {
+      "client_id": "493_Maddie_Boyle",
+      "folder_name": "493/Maddie_Boyle",
+      "reprocess_type": "full",
+      "total_videos": 3,
+      "successful_videos": 3,
+      "failed_videos": 0,
+      "video_results": [
+        {
+          "video_id": "4HfkyhvaaWc",
+          "youtube_url": "https://www.youtube.com/watch?v=4HfkyhvaaWc",
+          "s3_key": "493/Maddie_Boyle/youtube_4HfkyhvaaWc.mp4",
+          "success": true,
+          "error": null,
+          "s3_url": "https://typing-clients-storage-2025.s3.amazonaws.com/493/Maddie_Boyle/youtube_4HfkyhvaaWc.mp4",
+          "upload_time": 29.36,
+          "file_size": 296244262,
+          "file_size_mb": 282.52
+        },
+        {
+          "video_id": "YmFip4BZGE0",
+          "youtube_url": "https://www.youtube.com/watch?v=YmFip4BZGE0",
+          "s3_key": "493/Maddie_Boyle/youtube_YmFip4BZGE0.mp4",
+          "success": true,
+          "error": null,
+          "s3_url": "https://typing-clients-storage-2025.s3.amazonaws.com/493/Maddie_Boyle/youtube_YmFip4BZGE0.mp4",
+          "upload_time": 7.65,
+          "file_size": 3538459,
+          "file_size_mb": 3.37
+        },
+        {
+          "video_id": "amupMWpSA5I",
+          "youtube_url": "https://www.youtube.com/watch?v=amupMWpSA5I",
+          "s3_key": "493/Maddie_Boyle/youtube_amupMWpSA5I.mp4",
+          "success": true,
+          "error": null,
+          "s3_url": "https://typing-clients-storage-2025.s3.amazonaws.com/493/Maddie_Boyle/youtube_amupMWpSA5I.mp4",
+          "upload_time": 13.47,
+          "file_size": 47185210,
+          "file_size_mb": 45.0
+        }
+      ],
+      "started_at": "2025-07-12T19:57:14.464342",
+      "completed_at": "2025-07-12T19:58:08.093675"
+    }
+  ],
+  "updated_at": "2025-07-12T19:58:08.093739"
+}

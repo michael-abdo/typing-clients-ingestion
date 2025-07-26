@@ -1,0 +1,3 @@
+[2025-07-26T02:15:26.052669] INFO: Recovery session started | Data: {"session_id": "2939515a", "timestamp": "2025-07-26T02:15:26.052417"}
+[2025-07-26T02:15:26.052879] INFO: Completed phase: drive_ids | Data: {"mappings_added": 0}
+[2025-07-26T02:15:26.053417] INFO: Session data saved | Data: {"file": "recovery_session_2939515a_20250726_021526/session_data.json", "total_mappings": 0, "total_errors": 0}

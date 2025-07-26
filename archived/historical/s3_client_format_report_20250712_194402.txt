@@ -1,0 +1,70 @@
+S3 CLIENT FORMAT ANALYSIS REPORT
+============================================================
+Generated: 2025-07-12 19:44:02
+Bucket: typing-clients-storage-2025
+
+📊 EXECUTIVE SUMMARY
+------------------------------
+Total Clients: 22
+Total YouTube Videos: 51
+
+Format Distribution:
+  🔴 MP3-Only Clients: 7 (32 videos)
+  🟢 MP4-Only Clients: 0 (9 videos)
+  🟡 Mixed Format Clients: 5
+  ⚪ No YouTube Clients: 10
+
+🚨 CLIENTS REQUIRING MP4 REPROCESSING (MP3-ONLY)
+--------------------------------------------------
+• 487/Olivia_Tomlinson: 7 MP3 videos
+    - youtube_0131Nbfjw4Q.mp3 (55.94 MB)
+    - youtube_2iwahDWerSQ.mp3 (4.64 MB)
+    - youtube_3cU7q7wB9Hk.mp3 (19.05 MB)
+    - youtube_8zo0I4-F3Bs.mp3 (33.16 MB)
+    - youtube_Dmmff9nv1b4.mp3 (20.69 MB)
+    - youtube_NwS2ncgtkoc.mp3 (12.01 MB)
+    - youtube_fjGmoUEOTP8.mp3 (41.39 MB)
+• 502/Sam_Torode: 6 MP3 videos
+    - youtube_7cufMri1c5o.mp3 (51.05 MB)
+    - youtube_M36f9CGC0QY.mp3 (2.21 MB)
+    - youtube_cfZmeDJ7Rls.mp3 (10.0 MB)
+    - youtube_jgmL98lDNDU.mp3 (33.86 MB)
+    - youtube_q2QMw4nGV0A.mp3 (71.82 MB)
+    - youtube_sV5oH7itRyo.mp3 (55.73 MB)
+• 494/John_Williams: 4 MP3 videos
+    - youtube_BtSNvQ9Rc90.mp3 (9.19 MB)
+    - youtube_K6kBTbbjH4c.mp3 (47.38 MB)
+    - youtube_ZBuff3DGbUM.mp3 (23.03 MB)
+    - youtube_vHD2wDyvWLw.mp3 (9.25 MB)
+• 493/Maddie_Boyle: 3 MP3 videos
+    - youtube_4HfkyhvaaWc.mp3 (107.74 MB)
+    - youtube_YmFip4BZGE0.mp3 (1.38 MB)
+    - youtube_amupMWpSA5I.mp3 (38.88 MB)
+• 482/Brandon_Donahue: 1 MP3 videos
+    - youtube_x2jejX4YbrA.mp3 (6.0 MB)
+• 485/Brandon_Donahue: 1 MP3 videos
+    - youtube_x2jejX4YbrA.mp3 (20.73 MB)
+• 488/Jeremy_May: 1 MP3 videos
+    - youtube_d6IR17a0M2o.mp3 (90.28 MB)
+
+⚠️  CLIENTS WITH MIXED FORMATS (PARTIAL REPROCESSING)
+-------------------------------------------------------
+• 472/Kaioxys_DarkMacro: 4 MP3, 3 MP4
+    MP3 files needing reprocessing:
+      - youtube_69XL3TrD6mE.mp3
+      - youtube_J1G3gYd9mDs.mp3
+      - youtube_JkpmSamm45Q.mp3
+      - youtube_MOfmDdHpT-E.mp3
+• 473/Nathalie_Bauer: 1 MP3, 1 MP4
+    MP3 files needing reprocessing:
+      - youtube_eK68til-RMo.mp3
+• 480/Austyn_Brown: 1 MP3, 2 MP4
+    MP3 files needing reprocessing:
+      - youtube_hIn9CG5np68.mp3
+• 481/Joseph_Cotroneo: 2 MP3, 2 MP4
+    MP3 files needing reprocessing:
+      - youtube_Gytg7F2qgSY.mp3
+      - youtube_QxVX2_B3nHs.mp3
+• 498/Carlos_Arthur: 1 MP3, 1 MP4
+    MP3 files needing reprocessing:
+      - youtube_UD2X2hJTq4Y.mp3

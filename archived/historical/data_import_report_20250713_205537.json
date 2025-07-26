@@ -1,0 +1,78 @@
+{
+  "import_metadata": {
+    "timestamp": "2025-07-13T20:55:37.089851",
+    "csv_file": "outputs/output.csv",
+    "total_people_in_csv": 497,
+    "imported_people": 496,
+    "total_files_migrated": 98,
+    "imported_files": 98
+  },
+  "validation_results": {
+    "person_count": 496,
+    "file_count": 98,
+    "orphaned_files": 0,
+    "missing_files": 0,
+    "file_type_breakdown": {
+      "audio": {
+        "count": 43,
+        "total_size": 1766551929.0
+      },
+      "video": {
+        "count": 30,
+        "total_size": 2812666550.0
+      },
+      "metadata": {
+        "count": 17,
+        "total_size": 5257.0
+      },
+      "binary": {
+        "count": 5,
+        "total_size": 4506573263.0
+      },
+      "other": {
+        "count": 3,
+        "total_size": 1068664106.0
+      }
+    },
+    "size_statistics": {
+      "total_files": 98,
+      "total_size": 10154461105.0,
+      "avg_size": 103616950.05102041,
+      "min_size": 249,
+      "max_size": 1304466344
+    },
+    "validation_errors": [
+      {
+        "type": "people_without_files",
+        "count": 474,
+        "details": [
+          {
+            "row_id": 175,
+            "name": "Michael Smeenk"
+          },
+          {
+            "row_id": 52,
+            "name": "Amy York"
+          },
+          {
+            "row_id": 192,
+            "name": "Bryce Pandolfo"
+          },
+          {
+            "row_id": 255,
+            "name": "Tyler Wassmer"
+          },
+          {
+            "row_id": 209,
+            "name": "Jordan Tan"
+          }
+        ]
+      }
+    ]
+  },
+  "summary": {
+    "people_import_success_rate": 99.79879275653923,
+    "files_import_success_rate": 100.0,
+    "data_integrity_status": "WARNINGS"
+  }
+}

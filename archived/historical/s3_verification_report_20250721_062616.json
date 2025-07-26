@@ -1,0 +1,610 @@
+{
+  "timestamp": "2025-07-21T06:26:16.143569",
+  "buckets_checked": [
+    "typing-clients-uuid-system",
+    "typing-clients-storage-2025",
+    "xenodex-client-output-new"
+  ],
+  "clients_checked": [
+    "502",
+    "503",
+    "504",
+    "505",
+    "506"
+  ],
+  "summary": {
+    "total_files_matched": 0,
+    "total_size_mismatches": 0,
+    "total_missing_in_s3": 22,
+    "total_missing_locally": 1,
+    "all_clients_verified": false,
+    "safe_to_delete_local": false
+  },
+  "s3_inventory": {
+    "502": [
+      {
+        "key": "502_Sam_Torode/test_youtube_M36f9CGC0QY.mp4",
+        "size": 7589382,
+        "last_modified": "2025-07-12T19:30:14+00:00",
+        "etag": "1773910588cac0d0fd5bee1a495d70a3",
+        "bucket": "typing-clients-storage-2025"
+      }
+    ]
+  },
+  "local_inventory": {
+    "502": [
+      {
+        "path": "502_Sam_Torode/youtube_7cufMri1c5o.mp4",
+        "full_path": "/home/Mike/projects/xenodex/typing-clients-ingestion-minimal/downloads/502_Sam_Torode/youtube_7cufMri1c5o.mp4",
+        "size": 142250042,
+        "name": "youtube_7cufMri1c5o.mp4",
+        "is_metadata": false
+      },
+      {
+        "path": "502_Sam_Torode/youtube_cfZmeDJ7Rls_metadata.json",
+        "full_path": "/home/Mike/projects/xenodex/typing-clients-ingestion-minimal/downloads/502_Sam_Torode/youtube_cfZmeDJ7Rls_metadata.json",
+        "size": 358,
+        "name": "youtube_cfZmeDJ7Rls_metadata.json",
+        "is_metadata": true
+      },
+      {
+        "path": "502_Sam_Torode/youtube_sV5oH7itRyo.mp4",
+        "full_path": "/home/Mike/projects/xenodex/typing-clients-ingestion-minimal/downloads/502_Sam_Torode/youtube_sV5oH7itRyo.mp4",
+        "size": 131703643,
+        "name": "youtube_sV5oH7itRyo.mp4",
+        "is_metadata": false
+      },
+      {
+        "path": "502_Sam_Torode/youtube_q2QMw4nGV0A.mp4",
+        "full_path": "/home/Mike/projects/xenodex/typing-clients-ingestion-minimal/downloads/502_Sam_Torode/youtube_q2QMw4nGV0A.mp4",
+        "size": 181706263,
+        "name": "youtube_q2QMw4nGV0A.mp4",
+        "is_metadata": false
+      },
+      {
+        "path": "502_Sam_Torode/youtube_7cufMri1c5o_metadata.json",
+        "full_path": "/home/Mike/projects/xenodex/typing-clients-ingestion-minimal/downloads/502_Sam_Torode/youtube_7cufMri1c5o_metadata.json",
+        "size": 361,
+        "name": "youtube_7cufMri1c5o_metadata.json",
+        "is_metadata": true
+      },
+      {
+        "path": "502_Sam_Torode/youtube_jgmL98lDNDU.mp4",
+        "full_path": "/home/Mike/projects/xenodex/typing-clients-ingestion-minimal/downloads/502_Sam_Torode/youtube_jgmL98lDNDU.mp4",
+        "size": 50272296,
+        "name": "youtube_jgmL98lDNDU.mp4",
+        "is_metadata": false
+      },
+      {
+        "path": "502_Sam_Torode/youtube_jgmL98lDNDU_metadata.json",
+        "full_path": "/home/Mike/projects/xenodex/typing-clients-ingestion-minimal/downloads/502_Sam_Torode/youtube_jgmL98lDNDU_metadata.json",
+        "size": 393,
+        "name": "youtube_jgmL98lDNDU_metadata.json",
+        "is_metadata": true
+      },
+      {
+        "path": "502_Sam_Torode/youtube_q2QMw4nGV0A_metadata.json",
+        "full_path": "/home/Mike/projects/xenodex/typing-clients-ingestion-minimal/downloads/502_Sam_Torode/youtube_q2QMw4nGV0A_metadata.json",
+        "size": 361,
+        "name": "youtube_q2QMw4nGV0A_metadata.json",
+        "is_metadata": true
+      },
+      {
+        "path": "502_Sam_Torode/youtube_M36f9CGC0QY_metadata.json",
+        "full_path": "/home/Mike/projects/xenodex/typing-clients-ingestion-minimal/downloads/502_Sam_Torode/youtube_M36f9CGC0QY_metadata.json",
+        "size": 385,
+        "name": "youtube_M36f9CGC0QY_metadata.json",
+        "is_metadata": true
+      },
+      {
+        "path": "502_Sam_Torode/youtube_sV5oH7itRyo_metadata.json",
+        "full_path": "/home/Mike/projects/xenodex/typing-clients-ingestion-minimal/downloads/502_Sam_Torode/youtube_sV5oH7itRyo_metadata.json",
+        "size": 354,
+        "name": "youtube_sV5oH7itRyo_metadata.json",
+        "is_metadata": true
+      },
+      {
+        "path": "502_Sam_Torode/youtube_cfZmeDJ7Rls.mp4",
+        "full_path": "/home/Mike/projects/xenodex/typing-clients-ingestion-minimal/downloads/502_Sam_Torode/youtube_cfZmeDJ7Rls.mp4",
+        "size": 34784560,
+        "name": "youtube_cfZmeDJ7Rls.mp4",
+        "is_metadata": false
+      },
+      {
+        "path": "502_Sam_Torode/youtube_M36f9CGC0QY.mp4",
+        "full_path": "/home/Mike/projects/xenodex/typing-clients-ingestion-minimal/downloads/502_Sam_Torode/youtube_M36f9CGC0QY.mp4",
+        "size": 7589382,
+        "name": "youtube_M36f9CGC0QY.mp4",
+        "is_metadata": false
+      }
+    ],
+    "503": [
+      {
+        "path": "503_Augusto_Evangelista/youtube_H-yfWylQeKM.mp4",
+        "full_path": "/home/Mike/projects/xenodex/typing-clients-ingestion-minimal/downloads/503_Augusto_Evangelista/youtube_H-yfWylQeKM.mp4",
+        "size": 126794645,
+        "name": "youtube_H-yfWylQeKM.mp4",
+        "is_metadata": false
+      },
+      {
+        "path": "503_Augusto_Evangelista/youtube_PGprS6kWY88_metadata.json",
+        "full_path": "/home/Mike/projects/xenodex/typing-clients-ingestion-minimal/downloads/503_Augusto_Evangelista/youtube_PGprS6kWY88_metadata.json",
+        "size": 367,
+        "name": "youtube_PGprS6kWY88_metadata.json",
+        "is_metadata": true
+      },
+      {
+        "path": "503_Augusto_Evangelista/youtube_l7djwhCyJMI_metadata.json",
+        "full_path": "/home/Mike/projects/xenodex/typing-clients-ingestion-minimal/downloads/503_Augusto_Evangelista/youtube_l7djwhCyJMI_metadata.json",
+        "size": 367,
+        "name": "youtube_l7djwhCyJMI_metadata.json",
+        "is_metadata": true
+      },
+      {
+        "path": "503_Augusto_Evangelista/youtube_jthAa5FEqZg.mp4",
+        "full_path": "/home/Mike/projects/xenodex/typing-clients-ingestion-minimal/downloads/503_Augusto_Evangelista/youtube_jthAa5FEqZg.mp4",
+        "size": 39681976,
+        "name": "youtube_jthAa5FEqZg.mp4",
+        "is_metadata": false
+      },
+      {
+        "path": "503_Augusto_Evangelista/youtube_ZxIdoPEbHIA.mp4",
+        "full_path": "/home/Mike/projects/xenodex/typing-clients-ingestion-minimal/downloads/503_Augusto_Evangelista/youtube_ZxIdoPEbHIA.mp4",
+        "size": 80143519,
+        "name": "youtube_ZxIdoPEbHIA.mp4",
+        "is_metadata": false
+      },
+      {
+        "path": "503_Augusto_Evangelista/youtube_e_ypuna0tus_metadata.json",
+        "full_path": "/home/Mike/projects/xenodex/typing-clients-ingestion-minimal/downloads/503_Augusto_Evangelista/youtube_e_ypuna0tus_metadata.json",
+        "size": 368,
+        "name": "youtube_e_ypuna0tus_metadata.json",
+        "is_metadata": true
+      },
+      {
+        "path": "503_Augusto_Evangelista/youtube_MTDf5DeieeM.mp4",
+        "full_path": "/home/Mike/projects/xenodex/typing-clients-ingestion-minimal/downloads/503_Augusto_Evangelista/youtube_MTDf5DeieeM.mp4",
+        "size": 47037947,
+        "name": "youtube_MTDf5DeieeM.mp4",
+        "is_metadata": false
+      },
+      {
+        "path": "503_Augusto_Evangelista/youtube_jthAa5FEqZg_metadata.json",
+        "full_path": "/home/Mike/projects/xenodex/typing-clients-ingestion-minimal/downloads/503_Augusto_Evangelista/youtube_jthAa5FEqZg_metadata.json",
+        "size": 367,
+        "name": "youtube_jthAa5FEqZg_metadata.json",
+        "is_metadata": true
+      },
+      {
+        "path": "503_Augusto_Evangelista/youtube_Q9gPcEmbyMA_metadata.json",
+        "full_path": "/home/Mike/projects/xenodex/typing-clients-ingestion-minimal/downloads/503_Augusto_Evangelista/youtube_Q9gPcEmbyMA_metadata.json",
+        "size": 368,
+        "name": "youtube_Q9gPcEmbyMA_metadata.json",
+        "is_metadata": true
+      },
+      {
+        "path": "503_Augusto_Evangelista/youtube_H-yfWylQeKM.m4a",
+        "full_path": "/home/Mike/projects/xenodex/typing-clients-ingestion-minimal/downloads/503_Augusto_Evangelista/youtube_H-yfWylQeKM.m4a",
+        "size": 71399848,
+        "name": "youtube_H-yfWylQeKM.m4a",
+        "is_metadata": false
+      },
+      {
+        "path": "503_Augusto_Evangelista/youtube_e_ypuna0tus.m4a",
+        "full_path": "/home/Mike/projects/xenodex/typing-clients-ingestion-minimal/downloads/503_Augusto_Evangelista/youtube_e_ypuna0tus.m4a",
+        "size": 58197619,
+        "name": "youtube_e_ypuna0tus.m4a",
+        "is_metadata": false
+      },
+      {
+        "path": "503_Augusto_Evangelista/youtube_l7djwhCyJMI.mp4",
+        "full_path": "/home/Mike/projects/xenodex/typing-clients-ingestion-minimal/downloads/503_Augusto_Evangelista/youtube_l7djwhCyJMI.mp4",
+        "size": 75389947,
+        "name": "youtube_l7djwhCyJMI.mp4",
+        "is_metadata": false
+      },
+      {
+        "path": "503_Augusto_Evangelista/youtube_PGprS6kWY88.mp4",
+        "full_path": "/home/Mike/projects/xenodex/typing-clients-ingestion-minimal/downloads/503_Augusto_Evangelista/youtube_PGprS6kWY88.mp4",
+        "size": 93176634,
+        "name": "youtube_PGprS6kWY88.mp4",
+        "is_metadata": false
+      },
+      {
+        "path": "503_Augusto_Evangelista/youtube_Q9gPcEmbyMA.m4a",
+        "full_path": "/home/Mike/projects/xenodex/typing-clients-ingestion-minimal/downloads/503_Augusto_Evangelista/youtube_Q9gPcEmbyMA.m4a",
+        "size": 64890748,
+        "name": "youtube_Q9gPcEmbyMA.m4a",
+        "is_metadata": false
+      },
+      {
+        "path": "503_Augusto_Evangelista/youtube_2JC1aaqk2tU_metadata.json",
+        "full_path": "/home/Mike/projects/xenodex/typing-clients-ingestion-minimal/downloads/503_Augusto_Evangelista/youtube_2JC1aaqk2tU_metadata.json",
+        "size": 367,
+        "name": "youtube_2JC1aaqk2tU_metadata.json",
+        "is_metadata": true
+      },
+      {
+        "path": "503_Augusto_Evangelista/youtube_Q9gPcEmbyMA.mp4",
+        "full_path": "/home/Mike/projects/xenodex/typing-clients-ingestion-minimal/downloads/503_Augusto_Evangelista/youtube_Q9gPcEmbyMA.mp4",
+        "size": 177445968,
+        "name": "youtube_Q9gPcEmbyMA.mp4",
+        "is_metadata": false
+      },
+      {
+        "path": "503_Augusto_Evangelista/youtube_qIV2XD4v-ZM.mp4",
+        "full_path": "/home/Mike/projects/xenodex/typing-clients-ingestion-minimal/downloads/503_Augusto_Evangelista/youtube_qIV2XD4v-ZM.mp4",
+        "size": 63331247,
+        "name": "youtube_qIV2XD4v-ZM.mp4",
+        "is_metadata": false
+      },
+      {
+        "path": "503_Augusto_Evangelista/youtube_qIV2XD4v-ZM_metadata.json",
+        "full_path": "/home/Mike/projects/xenodex/typing-clients-ingestion-minimal/downloads/503_Augusto_Evangelista/youtube_qIV2XD4v-ZM_metadata.json",
+        "size": 367,
+        "name": "youtube_qIV2XD4v-ZM_metadata.json",
+        "is_metadata": true
+      },
+      {
+        "path": "503_Augusto_Evangelista/youtube_e_ypuna0tus.mp4",
+        "full_path": "/home/Mike/projects/xenodex/typing-clients-ingestion-minimal/downloads/503_Augusto_Evangelista/youtube_e_ypuna0tus.mp4",
+        "size": 143826134,
+        "name": "youtube_e_ypuna0tus.mp4",
+        "is_metadata": false
+      },
+      {
+        "path": "503_Augusto_Evangelista/youtube_2JC1aaqk2tU.mp4",
+        "full_path": "/home/Mike/projects/xenodex/typing-clients-ingestion-minimal/downloads/503_Augusto_Evangelista/youtube_2JC1aaqk2tU.mp4",
+        "size": 61060087,
+        "name": "youtube_2JC1aaqk2tU.mp4",
+        "is_metadata": false
+      },
+      {
+        "path": "503_Augusto_Evangelista/youtube_MTDf5DeieeM_metadata.json",
+        "full_path": "/home/Mike/projects/xenodex/typing-clients-ingestion-minimal/downloads/503_Augusto_Evangelista/youtube_MTDf5DeieeM_metadata.json",
+        "size": 367,
+        "name": "youtube_MTDf5DeieeM_metadata.json",
+        "is_metadata": true
+      },
+      {
+        "path": "503_Augusto_Evangelista/youtube_H-yfWylQeKM_metadata.json",
+        "full_path": "/home/Mike/projects/xenodex/typing-clients-ingestion-minimal/downloads/503_Augusto_Evangelista/youtube_H-yfWylQeKM_metadata.json",
+        "size": 368,
+        "name": "youtube_H-yfWylQeKM_metadata.json",
+        "is_metadata": true
+      },
+      {
+        "path": "503_Augusto_Evangelista/youtube_ZxIdoPEbHIA_metadata.json",
+        "full_path": "/home/Mike/projects/xenodex/typing-clients-ingestion-minimal/downloads/503_Augusto_Evangelista/youtube_ZxIdoPEbHIA_metadata.json",
+        "size": 367,
+        "name": "youtube_ZxIdoPEbHIA_metadata.json",
+        "is_metadata": true
+      }
+    ],
+    "504": [
+      {
+        "path": "504_Navid_Ghahremani/Video 1.mp4",
+        "full_path": "/home/Mike/projects/xenodex/typing-clients-ingestion-minimal/downloads/504_Navid_Ghahremani/Video 1.mp4",
+        "size": 3120905797,
+        "name": "Video 1.mp4",
+        "is_metadata": false
+      },
+      {
+        "path": "504_Navid_Ghahremani/drive_file_1yS_bwMMHn_TgnM2ehfrBSUE2592kiNvD_info.json",
+        "full_path": "/home/Mike/projects/xenodex/typing-clients-ingestion-minimal/downloads/504_Navid_Ghahremani/drive_file_1yS_bwMMHn_TgnM2ehfrBSUE2592kiNvD_info.json",
+        "size": 686,
+        "name": "drive_file_1yS_bwMMHn_TgnM2ehfrBSUE2592kiNvD_info.json",
+        "is_metadata": true
+      },
+      {
+        "path": "504_Navid_Ghahremani/Video 2.mp4",
+        "full_path": "/home/Mike/projects/xenodex/typing-clients-ingestion-minimal/downloads/504_Navid_Ghahremani/Video 2.mp4",
+        "size": 3133808495,
+        "name": "Video 2.mp4",
+        "is_metadata": false
+      },
+      {
+        "path": "504_Navid_Ghahremani/drive_file_1ycaTalHZEKYFMZnwQptBNEqKagOhyI5p_metadata.json",
+        "full_path": "/home/Mike/projects/xenodex/typing-clients-ingestion-minimal/downloads/504_Navid_Ghahremani/drive_file_1ycaTalHZEKYFMZnwQptBNEqKagOhyI5p_metadata.json",
+        "size": 368,
+        "name": "drive_file_1ycaTalHZEKYFMZnwQptBNEqKagOhyI5p_metadata.json",
+        "is_metadata": true
+      },
+      {
+        "path": "504_Navid_Ghahremani/drive_file_1yS_bwMMHn_TgnM2ehfrBSUE2592kiNvD_metadata.json",
+        "full_path": "/home/Mike/projects/xenodex/typing-clients-ingestion-minimal/downloads/504_Navid_Ghahremani/drive_file_1yS_bwMMHn_TgnM2ehfrBSUE2592kiNvD_metadata.json",
+        "size": 368,
+        "name": "drive_file_1yS_bwMMHn_TgnM2ehfrBSUE2592kiNvD_metadata.json",
+        "is_metadata": true
+      },
+      {
+        "path": "504_Navid_Ghahremani/drive_file_1ycaTalHZEKYFMZnwQptBNEqKagOhyI5p_info.json",
+        "full_path": "/home/Mike/projects/xenodex/typing-clients-ingestion-minimal/downloads/504_Navid_Ghahremani/drive_file_1ycaTalHZEKYFMZnwQptBNEqKagOhyI5p_info.json",
+        "size": 686,
+        "name": "drive_file_1ycaTalHZEKYFMZnwQptBNEqKagOhyI5p_info.json",
+        "is_metadata": true
+      }
+    ],
+    "506": [
+      {
+        "path": "506_Ryan_Madera/VIDEO TYPING - Ryan Madera.mkv",
+        "full_path": "/home/Mike/projects/xenodex/typing-clients-ingestion-minimal/downloads/506_Ryan_Madera/VIDEO TYPING - Ryan Madera.mkv",
+        "size": 829095471,
+        "name": "VIDEO TYPING - Ryan Madera.mkv",
+        "is_metadata": false
+      },
+      {
+        "path": "506_Ryan_Madera/drive_file_1-gkqpxm2b0KwSc9FwfHIRz030X09GXDq_info.json",
+        "full_path": "/home/Mike/projects/xenodex/typing-clients-ingestion-minimal/downloads/506_Ryan_Madera/drive_file_1-gkqpxm2b0KwSc9FwfHIRz030X09GXDq_info.json",
+        "size": 681,
+        "name": "drive_file_1-gkqpxm2b0KwSc9FwfHIRz030X09GXDq_info.json",
+        "is_metadata": true
+      },
+      {
+        "path": "506_Ryan_Madera/drive_file_1-gkqpxm2b0KwSc9FwfHIRz030X09GXDq_metadata.json",
+        "full_path": "/home/Mike/projects/xenodex/typing-clients-ingestion-minimal/downloads/506_Ryan_Madera/drive_file_1-gkqpxm2b0KwSc9FwfHIRz030X09GXDq_metadata.json",
+        "size": 381,
+        "name": "drive_file_1-gkqpxm2b0KwSc9FwfHIRz030X09GXDq_metadata.json",
+        "is_metadata": true
+      }
+    ]
+  },
+  "comparison_results": {
+    "502": {
+      "matched_files": [],
+      "size_mismatches": [],
+      "missing_in_s3": [
+        {
+          "path": "502_Sam_Torode/youtube_7cufMri1c5o.mp4",
+          "full_path": "/home/Mike/projects/xenodex/typing-clients-ingestion-minimal/downloads/502_Sam_Torode/youtube_7cufMri1c5o.mp4",
+          "size": 142250042,
+          "name": "youtube_7cufMri1c5o.mp4",
+          "is_metadata": false
+        },
+        {
+          "path": "502_Sam_Torode/youtube_sV5oH7itRyo.mp4",
+          "full_path": "/home/Mike/projects/xenodex/typing-clients-ingestion-minimal/downloads/502_Sam_Torode/youtube_sV5oH7itRyo.mp4",
+          "size": 131703643,
+          "name": "youtube_sV5oH7itRyo.mp4",
+          "is_metadata": false
+        },
+        {
+          "path": "502_Sam_Torode/youtube_q2QMw4nGV0A.mp4",
+          "full_path": "/home/Mike/projects/xenodex/typing-clients-ingestion-minimal/downloads/502_Sam_Torode/youtube_q2QMw4nGV0A.mp4",
+          "size": 181706263,
+          "name": "youtube_q2QMw4nGV0A.mp4",
+          "is_metadata": false
+        },
+        {
+          "path": "502_Sam_Torode/youtube_jgmL98lDNDU.mp4",
+          "full_path": "/home/Mike/projects/xenodex/typing-clients-ingestion-minimal/downloads/502_Sam_Torode/youtube_jgmL98lDNDU.mp4",
+          "size": 50272296,
+          "name": "youtube_jgmL98lDNDU.mp4",
+          "is_metadata": false
+        },
+        {
+          "path": "502_Sam_Torode/youtube_cfZmeDJ7Rls.mp4",
+          "full_path": "/home/Mike/projects/xenodex/typing-clients-ingestion-minimal/downloads/502_Sam_Torode/youtube_cfZmeDJ7Rls.mp4",
+          "size": 34784560,
+          "name": "youtube_cfZmeDJ7Rls.mp4",
+          "is_metadata": false
+        },
+        {
+          "path": "502_Sam_Torode/youtube_M36f9CGC0QY.mp4",
+          "full_path": "/home/Mike/projects/xenodex/typing-clients-ingestion-minimal/downloads/502_Sam_Torode/youtube_M36f9CGC0QY.mp4",
+          "size": 7589382,
+          "name": "youtube_M36f9CGC0QY.mp4",
+          "is_metadata": false
+        }
+      ],
+      "missing_locally": [
+        {
+          "key": "502_Sam_Torode/test_youtube_M36f9CGC0QY.mp4",
+          "size": 7589382,
+          "last_modified": "2025-07-12T19:30:14+00:00",
+          "etag": "1773910588cac0d0fd5bee1a495d70a3",
+          "bucket": "typing-clients-storage-2025"
+        }
+      ],
+      "total_local_files": 12,
+      "total_s3_files": 1,
+      "matched_count": 0,
+      "mismatch_count": 0,
+      "missing_in_s3_count": 6,
+      "missing_locally_count": 1
+    },
+    "503": {
+      "matched_files": [],
+      "size_mismatches": [],
+      "missing_in_s3": [
+        {
+          "path": "503_Augusto_Evangelista/youtube_H-yfWylQeKM.mp4",
+          "full_path": "/home/Mike/projects/xenodex/typing-clients-ingestion-minimal/downloads/503_Augusto_Evangelista/youtube_H-yfWylQeKM.mp4",
+          "size": 126794645,
+          "name": "youtube_H-yfWylQeKM.mp4",
+          "is_metadata": false
+        },
+        {
+          "path": "503_Augusto_Evangelista/youtube_jthAa5FEqZg.mp4",
+          "full_path": "/home/Mike/projects/xenodex/typing-clients-ingestion-minimal/downloads/503_Augusto_Evangelista/youtube_jthAa5FEqZg.mp4",
+          "size": 39681976,
+          "name": "youtube_jthAa5FEqZg.mp4",
+          "is_metadata": false
+        },
+        {
+          "path": "503_Augusto_Evangelista/youtube_ZxIdoPEbHIA.mp4",
+          "full_path": "/home/Mike/projects/xenodex/typing-clients-ingestion-minimal/downloads/503_Augusto_Evangelista/youtube_ZxIdoPEbHIA.mp4",
+          "size": 80143519,
+          "name": "youtube_ZxIdoPEbHIA.mp4",
+          "is_metadata": false
+        },
+        {
+          "path": "503_Augusto_Evangelista/youtube_MTDf5DeieeM.mp4",
+          "full_path": "/home/Mike/projects/xenodex/typing-clients-ingestion-minimal/downloads/503_Augusto_Evangelista/youtube_MTDf5DeieeM.mp4",
+          "size": 47037947,
+          "name": "youtube_MTDf5DeieeM.mp4",
+          "is_metadata": false
+        },
+        {
+          "path": "503_Augusto_Evangelista/youtube_H-yfWylQeKM.m4a",
+          "full_path": "/home/Mike/projects/xenodex/typing-clients-ingestion-minimal/downloads/503_Augusto_Evangelista/youtube_H-yfWylQeKM.m4a",
+          "size": 71399848,
+          "name": "youtube_H-yfWylQeKM.m4a",
+          "is_metadata": false
+        },
+        {
+          "path": "503_Augusto_Evangelista/youtube_e_ypuna0tus.m4a",
+          "full_path": "/home/Mike/projects/xenodex/typing-clients-ingestion-minimal/downloads/503_Augusto_Evangelista/youtube_e_ypuna0tus.m4a",
+          "size": 58197619,
+          "name": "youtube_e_ypuna0tus.m4a",
+          "is_metadata": false
+        },
+        {
+          "path": "503_Augusto_Evangelista/youtube_l7djwhCyJMI.mp4",
+          "full_path": "/home/Mike/projects/xenodex/typing-clients-ingestion-minimal/downloads/503_Augusto_Evangelista/youtube_l7djwhCyJMI.mp4",
+          "size": 75389947,
+          "name": "youtube_l7djwhCyJMI.mp4",
+          "is_metadata": false
+        },
+        {
+          "path": "503_Augusto_Evangelista/youtube_PGprS6kWY88.mp4",
+          "full_path": "/home/Mike/projects/xenodex/typing-clients-ingestion-minimal/downloads/503_Augusto_Evangelista/youtube_PGprS6kWY88.mp4",
+          "size": 93176634,
+          "name": "youtube_PGprS6kWY88.mp4",
+          "is_metadata": false
+        },
+        {
+          "path": "503_Augusto_Evangelista/youtube_Q9gPcEmbyMA.m4a",
+          "full_path": "/home/Mike/projects/xenodex/typing-clients-ingestion-minimal/downloads/503_Augusto_Evangelista/youtube_Q9gPcEmbyMA.m4a",
+          "size": 64890748,
+          "name": "youtube_Q9gPcEmbyMA.m4a",
+          "is_metadata": false
+        },
+        {
+          "path": "503_Augusto_Evangelista/youtube_Q9gPcEmbyMA.mp4",
+          "full_path": "/home/Mike/projects/xenodex/typing-clients-ingestion-minimal/downloads/503_Augusto_Evangelista/youtube_Q9gPcEmbyMA.mp4",
+          "size": 177445968,
+          "name": "youtube_Q9gPcEmbyMA.mp4",
+          "is_metadata": false
+        },
+        {
+          "path": "503_Augusto_Evangelista/youtube_qIV2XD4v-ZM.mp4",
+          "full_path": "/home/Mike/projects/xenodex/typing-clients-ingestion-minimal/downloads/503_Augusto_Evangelista/youtube_qIV2XD4v-ZM.mp4",
+          "size": 63331247,
+          "name": "youtube_qIV2XD4v-ZM.mp4",
+          "is_metadata": false
+        },
+        {
+          "path": "503_Augusto_Evangelista/youtube_e_ypuna0tus.mp4",
+          "full_path": "/home/Mike/projects/xenodex/typing-clients-ingestion-minimal/downloads/503_Augusto_Evangelista/youtube_e_ypuna0tus.mp4",
+          "size": 143826134,
+          "name": "youtube_e_ypuna0tus.mp4",
+          "is_metadata": false
+        },
+        {
+          "path": "503_Augusto_Evangelista/youtube_2JC1aaqk2tU.mp4",
+          "full_path": "/home/Mike/projects/xenodex/typing-clients-ingestion-minimal/downloads/503_Augusto_Evangelista/youtube_2JC1aaqk2tU.mp4",
+          "size": 61060087,
+          "name": "youtube_2JC1aaqk2tU.mp4",
+          "is_metadata": false
+        }
+      ],
+      "missing_locally": [],
+      "total_local_files": 23,
+      "total_s3_files": 0,
+      "matched_count": 0,
+      "mismatch_count": 0,
+      "missing_in_s3_count": 13,
+      "missing_locally_count": 0
+    },
+    "504": {
+      "matched_files": [],
+      "size_mismatches": [],
+      "missing_in_s3": [
+        {
+          "path": "504_Navid_Ghahremani/Video 1.mp4",
+          "full_path": "/home/Mike/projects/xenodex/typing-clients-ingestion-minimal/downloads/504_Navid_Ghahremani/Video 1.mp4",
+          "size": 3120905797,
+          "name": "Video 1.mp4",
+          "is_metadata": false
+        },
+        {
+          "path": "504_Navid_Ghahremani/Video 2.mp4",
+          "full_path": "/home/Mike/projects/xenodex/typing-clients-ingestion-minimal/downloads/504_Navid_Ghahremani/Video 2.mp4",
+          "size": 3133808495,
+          "name": "Video 2.mp4",
+          "is_metadata": false
+        }
+      ],
+      "missing_locally": [],
+      "total_local_files": 6,
+      "total_s3_files": 0,
+      "matched_count": 0,
+      "mismatch_count": 0,
+      "missing_in_s3_count": 2,
+      "missing_locally_count": 0
+    },
+    "505": {
+      "matched_files": [],
+      "size_mismatches": [],
+      "missing_in_s3": [],
+      "missing_locally": [],
+      "total_local_files": 0,
+      "total_s3_files": 0,
+      "matched_count": 0,
+      "mismatch_count": 0,
+      "missing_in_s3_count": 0,
+      "missing_locally_count": 0
+    },
+    "506": {
+      "matched_files": [],
+      "size_mismatches": [],
+      "missing_in_s3": [
+        {
+          "path": "506_Ryan_Madera/VIDEO TYPING - Ryan Madera.mkv",
+          "full_path": "/home/Mike/projects/xenodex/typing-clients-ingestion-minimal/downloads/506_Ryan_Madera/VIDEO TYPING - Ryan Madera.mkv",
+          "size": 829095471,
+          "name": "VIDEO TYPING - Ryan Madera.mkv",
+          "is_metadata": false
+        }
+      ],
+      "missing_locally": [],
+      "total_local_files": 3,
+      "total_s3_files": 0,
+      "matched_count": 0,
+      "mismatch_count": 0,
+      "missing_in_s3_count": 1,
+      "missing_locally_count": 0
+    }
+  },
+  "verification_status": {
+    "502": {
+      "verified": false,
+      "issues": [
+        "6 files missing in S3"
+      ]
+    },
+    "503": {
+      "verified": false,
+      "issues": [
+        "13 files missing in S3"
+      ]
+    },
+    "504": {
+      "verified": false,
+      "issues": [
+        "2 files missing in S3"
+      ]
+    },
+    "505": {
+      "verified": true,
+      "issues": []
+    },
+    "506": {
+      "verified": false,
+      "issues": [
+        "1 files missing in S3"
+      ]
+    }
+  }
+}
