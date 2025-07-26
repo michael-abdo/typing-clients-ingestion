@@ -14,15 +14,28 @@ try:
     from config import get_config
     from logging_config import get_logger
     from rate_limiter import rate_limit, wait_for_rate_limit
-    from patterns import clean_url, get_selenium_driver, cleanup_selenium_driver
+    from patterns import clean_url, get_selenium_driver, cleanup_selenium_driver, is_google_doc_url
     from error_handling import with_standard_error_handling
+    from google_docs_http import extract_google_doc_with_http_fallback
+    HAS_HTTP_EXTRACTION = True
 except ImportError:
-    from .http_pool import get as http_get
-    from .config import get_config
-    from .logging_config import get_logger
-    from .rate_limiter import rate_limit, wait_for_rate_limit
-    from .patterns import clean_url, get_selenium_driver, cleanup_selenium_driver
-    from .error_handling import with_standard_error_handling
+    try:
+        from .http_pool import get as http_get
+        from .config import get_config
+        from .logging_config import get_logger
+        from .rate_limiter import rate_limit, wait_for_rate_limit
+        from .patterns import clean_url, get_selenium_driver, cleanup_selenium_driver, is_google_doc_url
+        from .error_handling import with_standard_error_handling
+        from .google_docs_http import extract_google_doc_with_http_fallback
+        HAS_HTTP_EXTRACTION = True
+    except ImportError:
+        from .http_pool import get as http_get
+        from .config import get_config
+        from .logging_config import get_logger
+        from .rate_limiter import rate_limit, wait_for_rate_limit
+        from .patterns import clean_url, get_selenium_driver, cleanup_selenium_driver
+        from .error_handling import with_standard_error_handling
+        HAS_HTTP_EXTRACTION = False
 
 # Setup module logger
 logger = get_logger(__name__)
@@ -72,9 +85,9 @@ def get_html_with_selenium(url, debug=False):
         
         # For debugging, save the HTML content
         if debug:
-            # Create debug directory if it doesn't exist
-            if not os.path.exists(CACHE_DIR):
-                os.makedirs(CACHE_DIR)
+            # DRY CONSOLIDATION: Use path_utils for directory creation
+            from .path_utils import ensure_directory
+            ensure_directory(CACHE_DIR)
                 
             debug_file = os.path.join(CACHE_DIR, f"selenium_debug_{url.replace('://', '_').replace('/', '_').replace('?', '_').replace('=', '_')}.html")
             with open(debug_file, 'w', encoding='utf-8') as f:
@@ -87,19 +100,35 @@ def get_html_with_selenium(url, debug=False):
         return ""
 
 @with_standard_error_handling("Google Doc text extraction", "")
-def extract_google_doc_text(url, driver=None):
-    """Enhanced Google Doc text extraction with JavaScript and dynamic waiting
+def extract_google_doc_text(url, driver=None, prefer_http=True):
+    """Enhanced Google Doc text extraction with HTTP-first approach and Selenium fallback
     
-    Consolidates extraction logic from multiple duplicate implementations.
-    Uses advanced techniques for modern Google Docs content extraction.
+    Consolidates extraction logic with new HTTP export method for better performance.
+    Tries HTTP export first (fast), falls back to Selenium (robust) if needed.
     
     Args:
         url (str): Google Doc URL to extract text from
         driver: Optional existing Selenium driver instance
+        prefer_http (bool): Whether to try HTTP extraction first (default: True)
         
     Returns:
         str: Extracted text content from the document
     """
+    
+    # Try HTTP extraction first if enabled and preferred for Google Docs
+    if prefer_http and HAS_HTTP_EXTRACTION and is_google_doc_url(url):
+        try:
+            logger.info(f"Attempting HTTP-first extraction for Google Doc: {url}")
+            content, error = extract_google_doc_with_http_fallback(url)
+            if not error and content and len(content.strip()) > 0:
+                logger.info(f"HTTP extraction successful: {len(content)} characters")
+                return content
+            else:
+                logger.warning(f"HTTP extraction failed: {error}, falling back to Selenium")
+        except Exception as e:
+            logger.warning(f"HTTP extraction error: {str(e)}, falling back to Selenium")
+    
+    # Existing Selenium implementation continues here...
     # Use provided driver or get the shared one
     if driver is None:
         driver = get_selenium_driver()
@@ -307,9 +336,9 @@ def get_html(url, debug=False):
         
         # For debugging, save the HTML content
         if debug:
-            # Create debug directory if it doesn't exist
-            if not os.path.exists(CACHE_DIR):
-                os.makedirs(CACHE_DIR)
+            # DRY CONSOLIDATION: Use path_utils for directory creation
+            from .path_utils import ensure_directory
+            ensure_directory(CACHE_DIR)
                 
             debug_file = os.path.join(CACHE_DIR, f"debug_{url.replace('://', '_').replace('/', '_').replace('?', '_').replace('=', '_')}.html")
             with open(debug_file, 'w', encoding='utf-8') as f:
@@ -740,25 +769,314 @@ def process_url(url, limit=1, debug=False):
     # Return None for empty values
     return [], None, None
     
+# ============================================================================
+# EXTRACTION STRATEGY CONSOLIDATION (DRY Refactoring Phase 1.4)
+# ============================================================================
+
+# Consolidates functionality from:
+# - extract_single_doc.py (Selenium-based)
+# - extract_doc_simple.py (HTTP requests-based)  
+# - extract_chromium.py (Chromium subprocess-based)
+
+import subprocess
+import tempfile
+import requests
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.by import By
+
+class ExtractionStrategy:
+    """Base class for document extraction strategies"""
+    
+    def extract_content(self, url: str) -> str:
+        """Extract text content from URL. Subclasses must implement this."""
+        raise NotImplementedError("Subclasses must implement extract_content")
+    
+    def is_suitable_for(self, url: str) -> bool:
+        """Check if this strategy is suitable for the given URL"""
+        return True  # Default: suitable for all URLs
+
+class SeleniumExtractionStrategy(ExtractionStrategy):
+    """Selenium-based extraction strategy (consolidates extract_single_doc.py)"""
+    
+    def extract_content(self, url: str) -> str:
+        """Extract content using Selenium WebDriver"""
+        logger.info(f"Using Selenium strategy for: {url}")
+        
+        # Enhanced Chrome options for root user (from extract_single_doc.py)
+        chrome_options = Options()
+        chrome_options.add_argument("--headless=new")
+        chrome_options.add_argument("--no-sandbox")
+        chrome_options.add_argument("--disable-dev-shm-usage")
+        chrome_options.add_argument("--disable-gpu")
+        chrome_options.add_argument("--disable-extensions")
+        chrome_options.add_argument("--disable-plugins")
+        chrome_options.add_argument("--disable-images")
+        chrome_options.add_argument("--disable-setuid-sandbox")
+        chrome_options.add_argument("--user-data-dir=/tmp/chrome-user-data")
+        chrome_options.add_argument("--data-path=/tmp/chrome-data")
+        chrome_options.add_argument("--disk-cache-dir=/tmp/chrome-cache")
+        chrome_options.add_argument("--homedir=/tmp")
+        chrome_options.add_argument("--window-size=1920,1080")
+        
+        try:
+            driver = webdriver.Chrome(options=chrome_options)
+            logger.info("Loading document...")
+            driver.get(url)
+            
+            # Wait for document to load
+            wait = WebDriverWait(driver, 30)
+            wait.until(EC.presence_of_element_located((By.TAG_NAME, "body")))
+            
+            # Try multiple selectors for Google Docs content
+            selectors = [
+                '[role="document"]',
+                '[contenteditable="true"]',
+                '.kix-page',
+                '.doc-content',
+                'body'
+            ]
+            
+            content = ""
+            for selector in selectors:
+                try:
+                    elements = driver.find_elements(By.CSS_SELECTOR, selector)
+                    if elements:
+                        for element in elements:
+                            text = element.text.strip()
+                            if len(text) > len(content):
+                                content = text
+                        if content:
+                            break
+                except Exception:
+                    continue
+            
+            driver.quit()
+            return content
+            
+        except Exception as e:
+            logger.error(f"Selenium extraction failed: {str(e)}")
+            return ""
+
+class HttpExtractionStrategy(ExtractionStrategy):
+    """HTTP requests-based extraction strategy (consolidates extract_doc_simple.py)"""
+    
+    def extract_content(self, url: str) -> str:
+        """Extract content using HTTP requests"""
+        logger.info(f"Using HTTP strategy for: {url}")
+        
+        # Extract document ID (from extract_doc_simple.py)
+        doc_id_match = re.search(r'/document/d/([a-zA-Z0-9-_]+)', url)
+        if not doc_id_match:
+            logger.warning("Could not extract document ID for HTTP strategy")
+            return ""
+        
+        doc_id = doc_id_match.group(1)
+        
+        # Try different URL formats (from extract_doc_simple.py)
+        urls_to_try = [
+            f"https://docs.google.com/document/d/{doc_id}/pub",
+            f"https://docs.google.com/document/d/{doc_id}/preview", 
+            f"https://docs.google.com/document/d/{doc_id}/edit",
+            url
+        ]
+        
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+        }
+        
+        for test_url in urls_to_try:
+            try:
+                logger.debug(f"Trying URL: {test_url}")
+                response = requests.get(test_url, headers=headers, timeout=30)
+                
+                if response.status_code == 200:
+                    # Extract text content
+                    soup = BeautifulSoup(response.text, 'html.parser')
+                    
+                    # Remove script and style elements
+                    for script in soup(["script", "style"]):
+                        script.decompose()
+                    
+                    # Get text and clean up
+                    text = soup.get_text()
+                    lines = (line.strip() for line in text.splitlines())
+                    chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
+                    text = ' '.join(chunk for chunk in chunks if chunk)
+                    
+                    if len(text.strip()) > 100:  # Only return if we got substantial content
+                        logger.info(f"HTTP extraction successful: {len(text)} characters")
+                        return text
+                        
+            except Exception as e:
+                logger.debug(f"HTTP attempt failed for {test_url}: {str(e)}")
+                continue
+        
+        logger.warning("All HTTP extraction attempts failed")
+        return ""
+
+class ChromiumExtractionStrategy(ExtractionStrategy):
+    """Chromium subprocess-based extraction strategy (consolidates extract_chromium.py)"""
+    
+    def is_suitable_for(self, url: str) -> bool:
+        """Check if Chromium is available on the system"""
+        try:
+            subprocess.run(['/usr/bin/chromium-browser', '--version'], 
+                         capture_output=True, timeout=5)
+            return True
+        except Exception:
+            return False
+    
+    def extract_content(self, url: str) -> str:
+        """Extract content using Chromium subprocess"""
+        logger.info(f"Using Chromium strategy for: {url}")
+        
+        try:
+            # Run chromium in headless mode (from extract_chromium.py)
+            cmd = [
+                '/usr/bin/chromium-browser',
+                '--headless',
+                '--no-sandbox', 
+                '--disable-gpu',
+                '--disable-dev-shm-usage',
+                '--disable-extensions',
+                '--virtual-time-budget=10000',
+                '--dump-dom',
+                '--user-data-dir=/tmp/chromium-data',
+                url
+            ]
+            
+            logger.debug("Running Chromium...")
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
+            
+            if result.returncode == 0:
+                # Extract text from HTML
+                html_content = result.stdout
+                soup = BeautifulSoup(html_content, 'html.parser')
+                
+                # Remove script and style elements
+                for script in soup(["script", "style"]):
+                    script.decompose()
+                
+                text = soup.get_text()
+                lines = (line.strip() for line in text.splitlines())
+                chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
+                text = ' '.join(chunk for chunk in chunks if chunk)
+                
+                logger.info(f"Chromium extraction successful: {len(text)} characters")
+                return text
+            else:
+                logger.warning(f"Chromium process failed: {result.stderr}")
+                return ""
+                
+        except Exception as e:
+            logger.error(f"Chromium extraction failed: {str(e)}")
+            return ""
+
+class ExtractionContext:
+    """Context class that manages extraction strategies"""
+    
+    def __init__(self):
+        self.strategies = [
+            SeleniumExtractionStrategy(),
+            HttpExtractionStrategy(),
+            ChromiumExtractionStrategy()
+        ]
+    
+    def extract_with_strategy(self, url: str, strategy_name: str = None) -> str:
+        """Extract content using a specific strategy or auto-select best one"""
+        
+        if strategy_name:
+            # Use specified strategy
+            strategy_map = {
+                'selenium': SeleniumExtractionStrategy(),
+                'http': HttpExtractionStrategy(), 
+                'chromium': ChromiumExtractionStrategy()
+            }
+            
+            if strategy_name in strategy_map:
+                strategy = strategy_map[strategy_name]
+                if strategy.is_suitable_for(url):
+                    return strategy.extract_content(url)
+                else:
+                    logger.warning(f"Strategy '{strategy_name}' not suitable for URL")
+                    return ""
+            else:
+                logger.error(f"Unknown strategy: {strategy_name}")
+                return ""
+        
+        # Auto-select best strategy
+        for strategy in self.strategies:
+            if strategy.is_suitable_for(url):
+                try:
+                    content = strategy.extract_content(url)
+                    if content.strip():  # If we got content, return it
+                        return content
+                except Exception as e:
+                    logger.warning(f"Strategy {strategy.__class__.__name__} failed: {str(e)}")
+                    continue
+        
+        logger.error("All extraction strategies failed")
+        return ""
+
+# Global extraction context instance
+extraction_context = ExtractionContext()
+
+def extract_content_with_strategy(url: str, strategy: str = None) -> str:
+    """
+    Extract content from URL using specified strategy or auto-selection.
+    
+    Consolidates functionality from multiple extraction scripts into a unified interface.
+    
+    Args:
+        url: URL to extract content from
+        strategy: Strategy to use ('selenium', 'http', 'chromium') or None for auto-select
+        
+    Returns:
+        Extracted text content
+    """
+    return extraction_context.extract_with_strategy(url, strategy)
+
 # If the script is run directly, test with a sample URL
 if __name__ == "__main__":
-    # Process the specified Google Doc
-    import sys
-    if len(sys.argv) > 1:
-        test_url = sys.argv[1]
+    import argparse
+    
+    parser = argparse.ArgumentParser(description='Extract content from URLs using various strategies')
+    parser.add_argument('url', help='URL to extract content from')
+    parser.add_argument('--strategy', choices=['selenium', 'http', 'chromium'], 
+                       help='Extraction strategy to use (default: auto-select)')
+    parser.add_argument('--links', action='store_true', 
+                       help='Extract links instead of content')
+    parser.add_argument('--limit', type=int, default=10,
+                       help='Limit number of links to extract')
+    parser.add_argument('--debug', action='store_true',
+                       help='Enable debug output')
+    
+    args = parser.parse_args()
+    
+    if args.links:
+        # Original link extraction functionality
+        links, playlist, drive_links = process_url(args.url, limit=args.limit, debug=args.debug)
+        print(f"Extracted links from {args.url}:")
+        for link in links:
+            print(f"  - {link}")
+        
+        print(f"\nYouTube playlist: {playlist if playlist else 'None'}")
+        
+        if drive_links:
+            print(f"\nGoogle Drive links ({len(drive_links)}):")
+            for drive_link in drive_links:
+                print(f"  - {drive_link}")
     else:
-        test_url = "https://docs.google.com/document/d/1kMxRcQEdKLI89GV5E7Fr0N4h607vB7k4S1CU4s3Lihw/edit?tab=t.0"
-    
-    links, playlist, drive_links = process_url(test_url, limit=10, debug=True)
-    print(f"Extracted links from {test_url}:")
-    for link in links:
-        print(f"  - {link}")
-    
-    print(f"\nYouTube playlist: {playlist if playlist else 'None'}")
-    
-    print(f"\nGoogle Drive links ({len(drive_links)}):")
-    for drive_link in drive_links:
-        print(f"  - {drive_link}")
+        # New content extraction functionality
+        content = extract_content_with_strategy(args.url, args.strategy)
+        print(f"Extracted content from {args.url}:")
+        print("=" * 50)
+        print(content[:1000] + ("..." if len(content) > 1000 else ""))
+        print("=" * 50)
+        print(f"Total length: {len(content)} characters")
     
     # Clean up the driver
     cleanup_selenium_driver()

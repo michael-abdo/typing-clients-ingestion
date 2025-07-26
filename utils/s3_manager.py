@@ -25,14 +25,13 @@ from dataclasses import dataclass
 from enum import Enum
 import mimetypes
 
-# Import existing utilities
+# DRY CONSOLIDATION: Simplified import pattern
 try:
     from .config import get_config
     from .logging_config import get_logger
     from .sanitization import sanitize_error_message
     from .database_manager import get_database_manager
 except ImportError:
-    # Fallback for direct execution
     from config import get_config
     from logging_config import get_logger
     from sanitization import sanitize_error_message
@@ -449,7 +448,10 @@ class UnifiedS3Manager:
         
         self.logger.info("🚀 Starting Direct Streaming Upload")
         
-        df = pd.read_csv(csv_file)
+        # DRY CONSOLIDATION: Use existing CSVManager instead of direct pandas
+        from .csv_manager import CSVManager
+        csv_mgr = CSVManager(csv_file)
+        df = csv_mgr.read_csv_safe()
         person_s3_data = {}
         
         for _, row in df.iterrows():
@@ -596,21 +598,15 @@ class UnifiedS3Manager:
     
     def _extract_links(self, row: pd.Series, column: str) -> List[str]:
         """Extract links from CSV row"""
-        links = str(row.get(column, '')).split('|') if pd.notna(row.get(column)) else []
-        return [l.strip() for l in links if l and l != 'nan' and l.strip()]
+        # DRY CONSOLIDATION: Use url_utils for link parsing
+        from .url_utils import parse_url_links
+        return parse_url_links(str(row.get(column, '')))
     
     def _extract_drive_id(self, url: str) -> Optional[str]:
         """Extract Drive ID from URL"""
-        patterns = [
-            r'/d/([a-zA-Z0-9_-]+)',
-            r'id=([a-zA-Z0-9_-]+)'
-        ]
-        
-        for pattern in patterns:
-            match = re.search(pattern, url)
-            if match:
-                return match.group(1)
-        return None
+        # DRY CONSOLIDATION: Use url_utils for Drive ID extraction
+        from .url_utils import extract_drive_id
+        return extract_drive_id(url)
     
     def update_csv_with_s3_urls(self, person_s3_data: Dict, csv_file: Optional[str] = None):
         """Update CSV with S3 URLs"""
@@ -620,7 +616,10 @@ class UnifiedS3Manager:
         self.logger.info("\n📊 Updating CSV with S3 URLs...")
         
         # Read existing CSV
-        df = pd.read_csv(csv_file)
+        # DRY CONSOLIDATION: Use existing CSVManager instead of direct pandas
+        from .csv_manager import CSVManager
+        csv_mgr = CSVManager(csv_file)
+        df = csv_mgr.read_csv_safe()
         
         # Add new columns if they don't exist
         for col in ['s3_youtube_urls', 's3_drive_urls', 's3_all_files']:
@@ -641,7 +640,8 @@ class UnifiedS3Manager:
                     df.loc[mask, 's3_all_files'] = '|'.join(urls_data)
         
         # Save updated CSV
-        df.to_csv(csv_file, index=False)
+        # DRY CONSOLIDATION: Use CSVManager for consistent CSV writing
+        csv_mgr.write_csv(df)
         self.logger.info("✅ CSV updated with S3 URLs")
         
         return df
@@ -653,8 +653,9 @@ class UnifiedS3Manager:
         
         self.upload_report['completed_at'] = datetime.now().isoformat()
         
-        with open(report_file, 'w') as f:
-            json.dump(self.upload_report, f, indent=2)
+        # DRY CONSOLIDATION: Use json_utils for consistent JSON writing
+        from .json_utils import write_json_safe
+        write_json_safe(report_file, self.upload_report)
         
         self.logger.info(f"\n📄 Upload report saved to {report_file}")
     

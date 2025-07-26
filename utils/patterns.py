@@ -29,6 +29,14 @@ class PatternRegistry:
     DRIVE_OPEN_URL = re.compile(r'https://drive\.google\.com/open\?id=([a-zA-Z0-9_-]+)')
     DRIVE_FOLDER_URL = re.compile(r'https://drive\.google\.com/drive/folders/([a-zA-Z0-9_-]+)')
     
+    # Google Docs Patterns
+    GOOGLE_DOC_ID = re.compile(r'[a-zA-Z0-9_-]{25,}')
+    GOOGLE_DOC_URL = re.compile(r'https://docs\.google\.com/document/d/([a-zA-Z0-9_-]+)')
+    GOOGLE_DOC_EDIT_URL = re.compile(r'https://docs\.google\.com/document/d/([a-zA-Z0-9_-]+)/edit')
+    GOOGLE_DOC_VIEW_URL = re.compile(r'https://docs\.google\.com/document/d/([a-zA-Z0-9_-]+)/(?:view|preview)')
+    GOOGLE_DOC_PUB_URL = re.compile(r'https://docs\.google\.com/document/d/([a-zA-Z0-9_-]+)/pub')
+    GOOGLE_DOC_EXPORT_URL = re.compile(r'https://docs\.google\.com/document/d/([a-zA-Z0-9_-]+)/export\?format=(\w+)')
+    
     # Enhanced URL extraction patterns
     YOUTUBE_VIDEO_FULL = re.compile(r'https?://(?:www\.)?youtube\.com/watch\?v=([a-zA-Z0-9_-]{11})[^\s<>"]*')
     YOUTUBE_SHORT_FULL = re.compile(r'https?://youtu\.be/([a-zA-Z0-9_-]{11})[^\s<>"]*')
@@ -68,6 +76,14 @@ DRIVE_PATTERNS = {
     'folder_full': PatternRegistry.DRIVE_FOLDER_FULL,
 }
 
+GOOGLE_DOC_PATTERNS = {
+    'doc': PatternRegistry.GOOGLE_DOC_URL,
+    'edit': PatternRegistry.GOOGLE_DOC_EDIT_URL,
+    'view': PatternRegistry.GOOGLE_DOC_VIEW_URL,
+    'pub': PatternRegistry.GOOGLE_DOC_PUB_URL,
+    'export': PatternRegistry.GOOGLE_DOC_EXPORT_URL,
+}
+
 CLEANING_PATTERNS = {
     'whitespace': PatternRegistry.WHITESPACE_CLEANUP,
     'trailing_punctuation': PatternRegistry.URL_TRAILING_PUNCTUATION,
@@ -91,6 +107,25 @@ def extract_drive_id(url: str) -> str:
         if match:
             return match.group(1)
     return ""
+
+
+def extract_google_doc_id(url: str) -> str:
+    """Extract Google Doc ID from any URL format"""
+    for pattern in GOOGLE_DOC_PATTERNS.values():
+        match = pattern.search(url)
+        if match:
+            return match.group(1)
+    return ""
+
+
+def is_google_doc_url(url: str) -> bool:
+    """Check if URL is a Google Doc URL"""
+    return any(pattern.search(url) for pattern in GOOGLE_DOC_PATTERNS.values())
+
+
+def generate_doc_export_url(doc_id: str, format_type: str = "txt") -> str:
+    """Generate export URL for a Google Doc"""
+    return f"https://docs.google.com/document/d/{doc_id}/export?format={format_type}"
 
 
 def clean_url(url: str) -> str:
@@ -139,7 +174,15 @@ def get_chrome_options() -> Options:
     # Use temporary directory in /tmp for Chrome user data
     import tempfile
     import os
+    
+    # Handle running as root/sudo by setting HOME to /tmp
+    if os.geteuid() == 0:  # Running as root
+        os.environ['HOME'] = '/tmp'
+    
     temp_dir = tempfile.mkdtemp(prefix="chrome_temp_", dir="/tmp")
+    # Ensure directory has proper permissions
+    os.chmod(temp_dir, 0o755)
+    
     chrome_options.add_argument(f"--user-data-dir={temp_dir}")
     chrome_options.add_argument(f"--crash-dumps-dir={temp_dir}")
     
@@ -199,8 +242,14 @@ def wait_and_scroll_page(driver, wait_timeout: int = 30, scroll_delay: float = 0
 # Global selenium driver with enhanced management
 import atexit
 from selenium import webdriver
-from webdriver_manager.chrome import ChromeDriverManager
 from selenium.webdriver.chrome.service import Service
+
+# Try to import webdriver_manager, but make it optional
+try:
+    from webdriver_manager.chrome import ChromeDriverManager
+    HAS_WEBDRIVER_MANAGER = True
+except ImportError:
+    HAS_WEBDRIVER_MANAGER = False
 
 # Initialize logger and error handling
 try:
@@ -232,15 +281,20 @@ def get_selenium_driver():
         chrome_options = get_chrome_options()
         
         try:
-            _driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
-        except Exception as e:
-            logger.error(f"Error initializing Selenium driver: {str(e)}")
-            # Try fallback method - requires Chrome driver to be installed manually
-            try:
-                _driver = webdriver.Chrome(options=chrome_options)
-            except Exception as e:
-                logger.error(f"Could not initialize Selenium driver: {str(e)}")
-                return None
+            # Try direct Chrome driver first (requires chromedriver in PATH)
+            _driver = webdriver.Chrome(options=chrome_options)
+        except Exception as e1:
+            if HAS_WEBDRIVER_MANAGER:
+                # Try with webdriver_manager if available
+                try:
+                    _driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=chrome_options)
+                except Exception as e2:
+                    logger.error(f"Error with webdriver_manager: {str(e2)}")
+                    _driver = None
+            else:
+                logger.error(f"Error initializing Chrome driver: {str(e1)}")
+                logger.error("Install chromedriver and ensure it's in PATH, or install webdriver-manager")
+                _driver = None
     
     # Ensure driver is still alive
     try:
@@ -285,3 +339,386 @@ if __name__ == "__main__":
         print(f"  Is YouTube: {is_youtube_url(url)}")
         print(f"  Is Drive: {is_drive_url(url)}")
         print()
+
+
+# === DRY PHASE 2: CONSOLIDATED URL PROCESSING PATTERNS ===
+
+def normalize_url_for_comparison(url: str) -> str:
+    """
+    Normalize URLs for comparison purposes.
+    
+    Consolidates the repeated pattern found in 10+ files:
+        def normalize_url(url):
+            url = url.split('?')[0] if '?' in url else url
+            url = url.rstrip('/')
+            return url.strip()
+    
+    Args:
+        url: URL to normalize
+        
+    Returns:
+        Normalized URL string
+        
+    Example:
+        normalized = normalize_url_for_comparison('https://youtu.be/abc123?t=10')
+        # Returns: 'https://www.youtube.com/watch?v=abc123'
+    """
+    if not url or url in ['nan', 'None', '']:
+        return ''
+    
+    # Clean the URL first
+    url = clean_url(url)
+    
+    # Remove query parameters
+    url = url.split('?')[0] if '?' in url else url
+    
+    # Remove trailing slashes
+    url = url.rstrip('/')
+    
+    # Normalize common YouTube URL formats
+    if 'youtube.com' in url or 'youtu.be' in url:
+        # Extract video ID and normalize
+        video_id = extract_youtube_video_id(url)
+        if video_id:
+            return f"https://www.youtube.com/watch?v={video_id}"
+    
+    # Normalize Google Drive URLs
+    if 'drive.google.com' in url:
+        drive_id = extract_drive_id(url)
+        if drive_id:
+            if '/folders/' in url:
+                return f"https://drive.google.com/drive/folders/{drive_id}"
+            else:
+                return f"https://drive.google.com/file/d/{drive_id}"
+    
+    return url.strip()
+
+
+def normalize_url_for_truth_comparison(url: str) -> str:
+    """
+    Enhanced URL normalization for truth source comparison.
+    
+    Consolidates the specific pattern from test_all_30_rows.py and test_all_truth_source.py:
+        def normalize_url_for_comparison(url):
+            url = re.sub(r'[?&](si|usp|feature)=[^&\\s]*', '', url)
+            url = url.rstrip('?&')
+            
+            if 'youtu.be/' in url:
+                video_id = url.split('youtu.be/')[-1].split('?')[0]
+                return f"https://www.youtube.com/watch?v={video_id}"
+            
+            if 'drive.google.com/file/d/' in url and not url.endswith('/view'):
+                url = url.rstrip('/') + '/view'
+            
+            return url.rstrip('/')
+    
+    Args:
+        url: URL to normalize for truth source comparison
+        
+    Returns:
+        Normalized URL string suitable for truth source comparison
+        
+    Example:
+        normalized = normalize_url_for_truth_comparison('https://youtu.be/abc123?si=tracking')
+        # Returns: 'https://www.youtube.com/watch?v=abc123'
+    """
+    if not url or url in ['nan', 'None', '']:
+        return ''
+    
+    # Remove tracking parameters specific to truth source comparison
+    url = re.sub(r'[?&](si|usp|feature)=[^&\\s]*', '', url)
+    url = url.rstrip('?&')
+    
+    # Normalize YouTube short URLs to standard format
+    if 'youtu.be/' in url:
+        video_id = url.split('youtu.be/')[-1].split('?')[0]
+        return f"https://www.youtube.com/watch?v={video_id}"
+    
+    # Ensure Drive URLs end with /view for consistent comparison
+    if 'drive.google.com/file/d/' in url and not url.endswith('/view'):
+        url = url.rstrip('/') + '/view'
+    
+    return url.rstrip('/')
+
+
+def compare_urls_for_truth(url1: str, url2: str) -> bool:
+    """
+    Compare URLs using truth source normalization rules.
+    
+    Consolidates the compare_urls function from test files:
+        def compare_urls(found_url, expected_url):
+            return normalize_url_for_comparison(found_url) == normalize_url_for_comparison(expected_url)
+    
+    Args:
+        url1: First URL to compare
+        url2: Second URL to compare
+        
+    Returns:
+        True if URLs are equivalent after normalization
+        
+    Example:
+        match = compare_urls_for_truth('https://youtu.be/abc123', 'https://www.youtube.com/watch?v=abc123')
+        # Returns: True
+    """
+    return normalize_url_for_truth_comparison(url1) == normalize_url_for_truth_comparison(url2)
+
+
+def extract_youtube_video_id(url: str) -> str:
+    """
+    Extract YouTube video ID from various URL formats.
+    
+    Consolidates the repeated pattern found in 10+ files with different regex patterns.
+    
+    Args:
+        url: YouTube URL in any format
+        
+    Returns:
+        11-character YouTube video ID or empty string if not found
+        
+    Example:
+        video_id = extract_youtube_video_id('https://youtu.be/abc123?t=10')
+        # Returns: 'abc123'
+    """
+    if not url:
+        return ''
+    
+    # Use existing function for consistency
+    return extract_youtube_id(url)
+
+
+def extract_all_urls_from_text(text: str) -> Dict[str, list]:
+    """
+    Extract all URLs from text and categorize them.
+    
+    Consolidates URL extraction patterns used throughout the codebase.
+    
+    Args:
+        text: Text to extract URLs from
+        
+    Returns:
+        Dictionary with categorized URLs
+        
+    Example:
+        urls = extract_all_urls_from_text(document_text)
+        youtube_urls = urls['youtube']
+        drive_urls = urls['drive']
+        other_urls = urls['other']
+    """
+    result = {
+        'youtube': [],
+        'drive': [],
+        'other': [],
+        'all': []
+    }
+    
+    # Find all HTTP URLs
+    all_urls = PatternRegistry.HTTP_URL.findall(text)
+    
+    for url in all_urls:
+        url = clean_url(url)
+        if not url:
+            continue
+        
+        result['all'].append(url)
+        
+        if is_youtube_url(url):
+            result['youtube'].append(url)
+        elif is_drive_url(url):
+            result['drive'].append(url)
+        else:
+            result['other'].append(url)
+    
+    return result
+
+
+def filter_meaningful_urls(urls: list, exclude_patterns: list = None) -> list:
+    """
+    Filter URLs to remove noise and infrastructure links.
+    
+    Consolidates meaningful link filtering patterns used in link extraction.
+    
+    Args:
+        urls: List of URLs to filter
+        exclude_patterns: Additional patterns to exclude
+        
+    Returns:
+        List of filtered URLs
+        
+    Example:
+        meaningful_urls = filter_meaningful_urls(all_urls)
+        # Removes things like login pages, error pages, etc.
+    """
+    if exclude_patterns is None:
+        exclude_patterns = []
+    
+    # Common noise patterns to exclude
+    default_exclude_patterns = [
+        'accounts.google.com',
+        'login',
+        'signin',
+        'error',
+        '404',
+        'redirect',
+        'auth',
+        'oauth',
+        'support.google.com',
+        'policies.google.com',
+        'privacy',
+        'terms',
+        'help',
+        'about',
+        'contact',
+        'feedback',
+        'report',
+        'abuse',
+        'developers.google.com',
+        'cloud.google.com',
+        'workspace.google.com',
+        'gsuite.google.com',
+        'admin.google.com',
+        'myaccount.google.com',
+        'google.com/search',
+        'google.com/intl',
+        'google.com/policies',
+        'google.com/chrome',
+        'google.com/gmail',
+        'google.com/maps',
+        'google.com/news',
+        'google.com/shopping',
+        'google.com/images',
+        'google.com/translate',
+        'google.com/calendar',
+        'google.com/drive/help',
+        'google.com/drive/apps',
+        'docs.google.com/document/u/0',
+        'docs.google.com/spreadsheets/u/0',
+        'docs.google.com/presentation/u/0',
+        'docs.google.com/forms/u/0',
+        'drive.google.com/drive/u/0',
+        'drive.google.com/drive/my-drive',
+        'drive.google.com/drive/shared-with-me',
+        'drive.google.com/drive/recent',
+        'drive.google.com/drive/starred',
+        'drive.google.com/drive/trash',
+        'drive.google.com/drive/activity',
+        'drive.google.com/drive/settings',
+        'www.youtube.com/feed',
+        'www.youtube.com/channel',
+        'www.youtube.com/user',
+        'www.youtube.com/results',
+        'www.youtube.com/playlist',
+        'music.youtube.com',
+        'youtube.com/shorts',
+        'youtube.com/live',
+        'youtube.com/gaming',
+        'youtube.com/trending',
+        'youtube.com/subscriptions',
+        'youtube.com/history',
+        'youtube.com/library',
+        'youtube.com/account',
+        'youtube.com/upload',
+        'youtube.com/create',
+        'youtube.com/studio',
+        'youtube.com/analytics',
+        'youtube.com/ads',
+        'youtube.com/premium',
+        'youtube.com/music',
+        'youtube.com/tv',
+        'youtube.com/kids',
+        'youtube.com/howyoutubeworks',
+        'youtube.com/about',
+        'youtube.com/press',
+        'youtube.com/copyright',
+        'youtube.com/policies',
+        'youtube.com/safety',
+        'youtube.com/creators',
+        'youtube.com/advertise',
+        'youtube.com/developer',
+        'youtube.com/terms',
+        'youtube.com/privacy',
+        'youtube.com/community',
+        'youtube.com/intl'
+    ]
+    
+    all_exclude_patterns = default_exclude_patterns + exclude_patterns
+    
+    filtered_urls = []
+    for url in urls:
+        if not url or url in ['nan', 'None', '']:
+            continue
+        
+        # Check if URL contains any exclude pattern
+        url_lower = url.lower()
+        if any(pattern.lower() in url_lower for pattern in all_exclude_patterns):
+            continue
+        
+        # Additional checks for meaningful content
+        if is_youtube_url(url):
+            # Only keep video URLs, not channel/playlist/etc
+            if extract_youtube_video_id(url):
+                filtered_urls.append(url)
+        elif is_drive_url(url):
+            # Keep all drive URLs (files and folders)
+            filtered_urls.append(url)
+        else:
+            # Keep other URLs if they don't match exclude patterns
+            filtered_urls.append(url)
+    
+    return filtered_urls
+
+
+def validate_url_format(url: str, url_type: str = 'any') -> bool:
+    """
+    Validate URL format for specific types.
+    
+    Consolidates URL validation patterns used throughout the codebase.
+    
+    Args:
+        url: URL to validate
+        url_type: Type to validate ('youtube', 'drive', 'any')
+        
+    Returns:
+        True if URL is valid for the specified type
+        
+    Example:
+        is_valid = validate_url_format(url, 'youtube')
+        if is_valid:
+            process_youtube_url(url)
+    """
+    if not url or url in ['nan', 'None', '']:
+        return False
+    
+    if url_type == 'youtube':
+        return is_youtube_url(url) and bool(extract_youtube_video_id(url))
+    elif url_type == 'drive':
+        return is_drive_url(url) and bool(extract_drive_id(url))
+    elif url_type == 'any':
+        return bool(PatternRegistry.HTTP_URL.match(url))
+    else:
+        return False
+
+
+def standardize_url_format(url: str) -> str:
+    """
+    Standardize URL format for storage and comparison.
+    
+    Consolidates URL standardization patterns used in CSV and database storage.
+    
+    Args:
+        url: URL to standardize
+        
+    Returns:
+        Standardized URL string
+        
+    Example:
+        standard_url = standardize_url_format('HTTPS://YOUTU.BE/ABC123?T=10')
+        # Returns: 'https://www.youtube.com/watch?v=ABC123'
+    """
+    if not url or url in ['nan', 'None', '']:
+        return ''
+    
+    # Convert to lowercase and normalize
+    url = url.lower().strip()
+    
+    # Use normalize_url_for_comparison for consistency
+    return normalize_url_for_comparison(url)

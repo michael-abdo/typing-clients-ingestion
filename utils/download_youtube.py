@@ -14,8 +14,8 @@ try:
     from rate_limiter import rate_limit, wait_for_rate_limit
     from row_context import RowContext, DownloadResult
     from sanitization import sanitize_error_message, SafeDownloadError
-    from error_decorators import handle_download_operations, handle_validation_errors
-    from error_messages import download_error, validation_error
+    # Consolidated error handling imports
+    from error_handling import handle_download_operations, handle_validation_errors, download_error, validation_error
 except ImportError:
     from .logging_config import get_logger
     from .validation import validate_youtube_url, validate_file_path, ValidationError
@@ -25,8 +25,8 @@ except ImportError:
     from .rate_limiter import rate_limit, wait_for_rate_limit
     from .row_context import RowContext, DownloadResult
     from .sanitization import sanitize_error_message, SafeDownloadError
-    from .error_decorators import handle_download_operations, handle_validation_errors
-    from .error_messages import download_error, validation_error
+    # Consolidated error handling imports
+    from .error_handling import handle_download_operations, handle_validation_errors, download_error, validation_error
 
 # Setup module logger
 logger = get_logger(__name__)

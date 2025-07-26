@@ -81,8 +81,9 @@ class DownloadResult:
             
         metadata_path = os.path.join(downloads_dir, self.metadata_file)
         
-        # Ensure downloads directory exists
-        os.makedirs(downloads_dir, exist_ok=True)
+        # DRY CONSOLIDATION: Use path_utils for directory creation
+        from .path_utils import ensure_directory
+        ensure_directory(downloads_dir)
         
         metadata = {
             'download_result': {

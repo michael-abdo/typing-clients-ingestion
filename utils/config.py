@@ -212,6 +212,33 @@ def get_project_root() -> Path:
     return Path(__file__).parent.parent
 
 
+def setup_project_imports() -> None:
+    """
+    Set up project imports by adding necessary directories to sys.path.
+    This eliminates the need for sys.path manipulation in individual files.
+    
+    Usage:
+        from utils.config import setup_project_imports
+        setup_project_imports()
+        
+        # Now you can import project modules normally
+        from utils.logging_config import setup_logging
+        from utils.s3_manager import S3Manager
+    """
+    import sys
+    project_root = get_project_root()
+    
+    # Add project root to sys.path if not already there
+    project_root_str = str(project_root)
+    if project_root_str not in sys.path:
+        sys.path.insert(0, project_root_str)
+    
+    # Add utils directory to sys.path if not already there
+    utils_dir = str(project_root / 'utils')
+    if utils_dir not in sys.path:
+        sys.path.insert(0, utils_dir)
+
+
 def get_outputs_dir() -> Path:
     """
     Get outputs directory, creating if necessary (DRY path utility).
@@ -1281,4 +1308,82 @@ def save_default_config(config_path: Optional[str] = None) -> bool:
     except Exception as e:
         logging.error(f"Failed to save default configuration: {e}")
         return False
+
+
+
+
+# ============================================================================
+# DRY CONSOLIDATION: COMMON IMPORT PATTERNS
+# ============================================================================
+
+def setup_utils_imports(**import_map):
+    """
+    Consolidates repeated try/except ImportError patterns found across utils modules.
+    
+    Args:
+        **import_map: Dictionary mapping local names to module.function paths
+        
+    Returns:
+        Dictionary of imported functions/classes mapped to local names
+        
+    Example:
+        # Replace this repeated pattern:
+        try:
+            from logging_config import get_logger
+            from validation import validate_youtube_url
+        except ImportError:
+            from .logging_config import get_logger
+            from .validation import validate_youtube_url
+            
+        # With this:
+        imports = setup_utils_imports(
+            logger="logging_config.get_logger",
+            validate_url="validation.validate_youtube_url"
+        )
+        logger = imports["logger"](__name__)
+        validate_url = imports["validate_url"]
+    """
+    imports = {}
+    
+    for local_name, module_path in import_map.items():
+        if "." in module_path:
+            module_name, function_name = module_path.rsplit(".", 1)
+            try:
+                # Try absolute import first
+                module = importlib.import_module(module_name)
+                imports[local_name] = getattr(module, function_name)
+            except ImportError:
+                try:
+                    # Try relative import
+                    module = importlib.import_module(f".{module_name}", package="utils")
+                    imports[local_name] = getattr(module, function_name)
+                except ImportError as e:
+                    logging.warning(f"Failed to import {module_path}: {e}")
+                    imports[local_name] = None
+        else:
+            # Import entire module
+            try:
+                imports[local_name] = importlib.import_module(module_path)
+            except ImportError:
+                try:
+                    imports[local_name] = importlib.import_module(f".{module_path}", package="utils")
+                except ImportError as e:
+                    logging.warning(f"Failed to import {module_path}: {e}")
+                    imports[local_name] = None
+    
+    return imports
+
+
+def get_common_utils():
+    """Get commonly used utility functions across the codebase."""
+    return setup_utils_imports(
+        get_logger="logging_config.get_logger",
+        # get_config - use direct import to avoid circular reference 
+        handle_file_operations="error_handling.handle_file_operations",
+        handle_network_operations="error_handling.handle_network_operations",
+        sanitize_error_message="sanitization.sanitize_error_message",
+        clean_url="patterns.clean_url",
+        retry_with_backoff="retry_utils.retry_with_backoff",
+        validate_url="validation.validate_url"
+    )
 

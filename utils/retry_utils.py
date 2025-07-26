@@ -1,20 +1,218 @@
-"""Retry utilities with exponential backoff for network operations"""
+"""
+Centralized Retry Utilities (DRY Refactoring Phase 4.11)
+
+This module provides standardized retry decorators and utilities to replace
+custom retry logic scattered throughout the codebase. All retry patterns
+are centralized here for consistency and maintainability.
+
+Enhanced with comprehensive retry strategies, better config integration,
+and specialized decorators for different operation types.
+"""
 import time
 import random
 import functools
-from typing import Callable, Any, Optional, Tuple, Type
+from typing import Callable, Any, Optional, Tuple, Type, Union, Dict
+from dataclasses import dataclass
+from enum import Enum
 import subprocess
 import requests
 
 try:
-    from config import get_timeout
+    from config import get_timeout, get_config
+    from logging_config import get_logger
 except ImportError:
-    from .config import get_timeout
+    from .config import get_timeout, get_config
+    from .logging_config import get_logger
+
+# Module logger
+logger = get_logger(__name__)
+
+# Get configuration
+config = get_config()
 
 
 class RetryError(Exception):
     """Raised when all retry attempts are exhausted"""
     pass
+
+
+class RetryStrategy(Enum):
+    """Retry strategy types"""
+    EXPONENTIAL = "exponential"
+    LINEAR = "linear"
+    FIXED = "fixed"
+    FIBONACCI = "fibonacci"
+
+
+@dataclass
+class RetryConfig:
+    """Enhanced configuration for retry operations"""
+    max_attempts: int = None
+    base_delay: float = None
+    max_delay: float = None
+    strategy: RetryStrategy = RetryStrategy.EXPONENTIAL
+    jitter: bool = None
+    
+    def __post_init__(self):
+        """Initialize from config if values are None"""
+        if self.max_attempts is None:
+            self.max_attempts = config.get('retry.max_attempts', 3)
+        if self.base_delay is None:
+            self.base_delay = config.get('retry.base_delay', 1.0)
+        if self.max_delay is None:
+            self.max_delay = config.get('retry.max_delay', 60.0)
+        if self.jitter is None:
+            self.jitter = config.get('retry.jitter', True)
+
+
+# Specialized exception types for different retry scenarios
+class NetworkRetryableError(Exception):
+    """Network-related errors that should be retried"""
+    pass
+
+
+class FileRetryableError(Exception):
+    """File operation errors that should be retried"""
+    pass
+
+
+class SubprocessRetryableError(Exception):
+    """Subprocess errors that should be retried"""
+    pass
+
+
+# === ENHANCED RETRY DECORATORS ===
+
+def network_retry(
+    max_attempts: int = None,
+    base_delay: float = None,
+    operation_name: str = None
+):
+    """
+    Decorator specifically for network operations.
+    Uses config-based retry settings for downloads.
+    """
+    if max_attempts is None:
+        max_attempts = config.get('retry.download.max_attempts', 3)
+    if base_delay is None:
+        base_delay = config.get('retry.download.base_delay', 5.0)
+    
+    network_exceptions = (
+        requests.exceptions.RequestException,
+        requests.exceptions.ConnectionError,
+        requests.exceptions.Timeout,
+        requests.exceptions.HTTPError,
+        NetworkRetryableError,
+        OSError,
+        ConnectionResetError,
+        ConnectionRefusedError,
+        TimeoutError
+    )
+    
+    return retry_with_backoff(
+        max_attempts=max_attempts,
+        base_delay=base_delay,
+        exceptions=network_exceptions,
+        logger=logger
+    )
+
+
+def subprocess_retry_decorator(
+    max_attempts: int = None,
+    base_delay: float = None,
+    operation_name: str = None
+):
+    """
+    Decorator specifically for subprocess operations.
+    Uses config-based retry settings for subprocess operations.
+    """
+    if max_attempts is None:
+        max_attempts = config.get('retry.subprocess.max_attempts', 3)
+    if base_delay is None:
+        base_delay = config.get('retry.subprocess.base_delay', 2.0)
+    
+    subprocess_exceptions = (
+        subprocess.SubprocessError,
+        subprocess.CalledProcessError,
+        subprocess.TimeoutExpired,
+        SubprocessRetryableError,
+        OSError
+    )
+    
+    return retry_with_backoff(
+        max_attempts=max_attempts,
+        base_delay=base_delay,
+        exceptions=subprocess_exceptions,
+        logger=logger
+    )
+
+
+def file_operation_retry(
+    max_attempts: int = None,
+    base_delay: float = None,
+    operation_name: str = None
+):
+    """
+    Decorator specifically for file operations.
+    Uses shorter delays suitable for file I/O.
+    """
+    file_exceptions = (
+        IOError,
+        OSError,
+        PermissionError,
+        FileRetryableError
+    )
+    
+    return retry_with_backoff(
+        max_attempts=max_attempts or 3,
+        base_delay=base_delay or 0.5,
+        exceptions=file_exceptions,
+        logger=logger
+    )
+
+
+def calculate_delay_with_strategy(
+    attempt: int,
+    base_delay: float,
+    strategy: RetryStrategy,
+    max_delay: float,
+    jitter: bool = True
+) -> float:
+    """
+    Calculate delay based on retry strategy.
+    Enhanced version that supports multiple backoff strategies.
+    """
+    if strategy == RetryStrategy.EXPONENTIAL:
+        delay = base_delay * (2 ** attempt)
+    elif strategy == RetryStrategy.LINEAR:
+        delay = base_delay * (attempt + 1)
+    elif strategy == RetryStrategy.FIXED:
+        delay = base_delay
+    elif strategy == RetryStrategy.FIBONACCI:
+        delay = base_delay * _fibonacci(attempt + 1)
+    else:
+        delay = base_delay * (2 ** attempt)  # Default to exponential
+    
+    # Apply maximum delay cap
+    delay = min(delay, max_delay)
+    
+    # Add jitter if enabled
+    if jitter:
+        jitter_amount = delay * 0.1  # 10% jitter
+        delay += random.uniform(-jitter_amount, jitter_amount)
+        delay = max(0, delay)  # Ensure delay is not negative
+    
+    return delay
+
+
+def _fibonacci(n: int) -> int:
+    """Calculate nth Fibonacci number for Fibonacci backoff"""
+    if n <= 1:
+        return n
+    a, b = 0, 1
+    for _ in range(2, n + 1):
+        a, b = b, a + b
+    return b
 
 
 def exponential_backoff(
