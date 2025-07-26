@@ -532,7 +532,8 @@ class CSVManager:
     
     @staticmethod
     def create_record(person: Dict[str, Any], mode: str = 'basic', 
-                     doc_text: str = '', links: Optional[Dict[str, List[str]]] = None) -> Dict[str, str]:
+                     doc_text: str = '', links: Optional[Dict[str, List[str]]] = None,
+                     s3_uuids: Optional[Dict[str, Dict]] = None) -> Dict[str, str]:
         """
         Factory function to create CSV records in different modes (DRY).
         
@@ -542,6 +543,8 @@ class CSVManager:
             doc_text: Document text content (for text/full modes)
             links: Dictionary of extracted links (for full mode)
                   Should contain: 'youtube', 'drive_files', 'drive_folders', 'all_links'
+            s3_uuids: Dictionary with S3 UUID mappings (for full mode with streaming)
+                  Should contain: 'file_uuids' and 's3_paths' dictionaries
                   
         Returns:
             Dictionary with appropriate fields for the specified mode
@@ -583,22 +586,51 @@ class CSVManager:
                 google_drive_links = []
                 all_links = []
             
-            record.update({
-                'extracted_links': '|'.join(all_links) if all_links else '',
-                'youtube_playlist': '|'.join(youtube_links) if youtube_links else '',
-                'google_drive': '|'.join(google_drive_links) if google_drive_links else '',
-                'processed': 'yes',
-                'document_text': doc_text,
-                'youtube_status': '',
-                'youtube_files': '',
-                'youtube_media_id': '',
-                'drive_status': '',
-                'drive_files': '',
-                'drive_media_id': '',
-                'last_download_attempt': '',
-                'download_errors': '',
-                'permanent_failure': ''
-            })
+            # Handle S3 UUIDs if provided (from streaming integration)
+            if s3_uuids:
+                file_uuids = s3_uuids.get('file_uuids', {})
+                s3_paths = s3_uuids.get('s3_paths', {})
+                
+                record.update({
+                    'extracted_links': '|'.join(all_links) if all_links else '',
+                    'youtube_playlist': '|'.join(youtube_links) if youtube_links else '',
+                    'google_drive': '|'.join(google_drive_links) if google_drive_links else '',
+                    'processed': 'yes',
+                    'document_text': doc_text,
+                    'youtube_status': 'streamed' if any('YouTube' in desc for desc in file_uuids) else '',
+                    'youtube_files': '',
+                    'youtube_media_id': '',
+                    'drive_status': 'streamed' if any('Drive' in desc for desc in file_uuids) else '',
+                    'drive_files': '',
+                    'drive_media_id': '',
+                    'last_download_attempt': '',
+                    'download_errors': '',
+                    'permanent_failure': '',
+                    # S3 UUID mappings
+                    'file_uuids': json.dumps(file_uuids) if file_uuids else '{}',
+                    's3_paths': json.dumps(s3_paths) if s3_paths else '{}'
+                })
+            else:
+                # Original behavior without S3 streaming
+                record.update({
+                    'extracted_links': '|'.join(all_links) if all_links else '',
+                    'youtube_playlist': '|'.join(youtube_links) if youtube_links else '',
+                    'google_drive': '|'.join(google_drive_links) if google_drive_links else '',
+                    'processed': 'yes',
+                    'document_text': doc_text,
+                    'youtube_status': '',
+                    'youtube_files': '',
+                    'youtube_media_id': '',
+                    'drive_status': '',
+                    'drive_files': '',
+                    'drive_media_id': '',
+                    'last_download_attempt': '',
+                    'download_errors': '',
+                    'permanent_failure': '',
+                    # Empty S3 mappings
+                    'file_uuids': '{}',
+                    's3_paths': '{}'
+                })
             return record
         
         # Default to basic if mode not recognized

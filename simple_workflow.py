@@ -23,10 +23,12 @@ from selenium.webdriver.support import expected_conditions as EC
 
 # Import centralized configuration, path utilities, error handling, patterns, and CSV operations (DRY)
 from utils.config import get_config, ensure_parent_dir, ensure_directory, format_error_message, load_json_state, save_json_state
-from utils.patterns import PatternRegistry, extract_youtube_id, extract_drive_id, clean_url, normalize_whitespace, get_chrome_options, wait_and_scroll_page, get_selenium_driver, cleanup_selenium_driver
+from utils.patterns import PatternRegistry, extract_youtube_id, extract_drive_id, clean_url, normalize_whitespace, cleanup_selenium_driver
 from utils.extract_links import extract_google_doc_text, extract_actual_url, extract_text_with_retry
 from utils.csv_manager import CSVManager
 from utils.http_pool import get as http_get  # Centralized HTTP requests (DRY)
+from utils.streaming_integration import stream_extracted_links
+from utils.s3_manager import UnifiedS3Manager, S3Config, UploadMode
 
 
 # Configuration - centralized in config.yaml (DRY)
@@ -63,7 +65,8 @@ def step1_download_sheet():
     response.raise_for_status()
     
     # Save the HTML
-    with open("sheet.html", "w", encoding="utf-8") as f:
+    sheet_cache_path = get_config().get('paths.sheet_cache', 'sheet.html')
+    with open(sheet_cache_path, "w", encoding="utf-8") as f:
         f.write(response.text)
     
     print("✓ Sheet downloaded")
@@ -432,7 +435,7 @@ def filter_meaningful_links(links):
     }
 
 def step5_process_extracted_data(person, links, doc_text=""):
-    """Step 5: Process extracted data and format for CSV matching main system"""
+    """Step 5: Process extracted data and stream to S3, then format for CSV"""
     print("Step 5: Processing extracted data...")
     
     # Use centralized path utility (DRY)
@@ -441,8 +444,34 @@ def step5_process_extracted_data(person, links, doc_text=""):
     # Filter links to get only meaningful content links (like operators do)
     meaningful_links = filter_meaningful_links(links)
     
-    # Create record using centralized factory (DRY)
-    # Prepare links data for factory
+    # Check if we have any links to stream
+    total_links = (len(meaningful_links['youtube']) + 
+                  len(meaningful_links['drive_files']) + 
+                  len(meaningful_links['drive_folders']))
+    
+    s3_uuids = None
+    
+    if total_links > 0 and config.get("downloads.storage_mode") == "s3":
+        print(f"  🚀 Streaming {total_links} links directly to S3...")
+        
+        # Initialize S3 manager
+        s3_config = S3Config(
+            bucket_name=config.get("downloads.s3.default_bucket", "typing-clients-uuid-system"),
+            upload_mode=UploadMode.DIRECT_STREAMING,
+            organize_by_person=False,
+            add_metadata=True
+        )
+        s3_manager = UnifiedS3Manager(s3_config)
+        
+        # Stream links to S3 and get UUID mappings
+        try:
+            s3_uuids = stream_extracted_links(person, meaningful_links, s3_manager)
+            print(f"  ✅ Successfully streamed {len(s3_uuids.get('file_uuids', {}))} files to S3")
+        except Exception as e:
+            print(f"  ❌ Error streaming to S3: {str(e)}")
+            print(f"  ⚠️ Falling back to URL storage in CSV")
+    
+    # Prepare links data for factory (for backward compatibility)
     links_data = {
         'youtube': meaningful_links['youtube'],
         'drive_files': meaningful_links['drive_files'],
@@ -450,12 +479,21 @@ def step5_process_extracted_data(person, links, doc_text=""):
         'all_links': links['all_links']
     }
     
-    record = CSVManager.create_record(person, mode='full', doc_text=doc_text, links=links_data)
+    # Create record with S3 UUIDs if available, otherwise with URLs
+    record = CSVManager.create_record(
+        person, 
+        mode='full', 
+        doc_text=doc_text, 
+        links=links_data,
+        s3_uuids=s3_uuids  # Pass S3 UUIDs if streaming was successful
+    )
     
     print(f"✓ Processed record for {person['name']}")
     print(f"  Meaningful YouTube links: {len(meaningful_links['youtube'])}")
     print(f"  Drive Files: {len(meaningful_links['drive_files'])}")
     print(f"  Drive Folders: {len(meaningful_links['drive_folders'])}")
+    if s3_uuids:
+        print(f"  S3 files uploaded: {len(s3_uuids.get('file_uuids', {}))}")
     print(f"  Total links extracted: {len(links['all_links'])}")
     
     return record

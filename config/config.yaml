@@ -117,6 +117,8 @@ csv_columns:
     - last_download_attempt
     - download_errors
     - permanent_failure
+    - file_uuids
+    - s3_paths
 
 # Parallel Processing
 parallel:
