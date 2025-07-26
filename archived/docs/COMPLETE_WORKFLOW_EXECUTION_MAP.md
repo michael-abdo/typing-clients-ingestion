@@ -1,12 +1,18 @@
 # Complete Workflow Execution Map
 
 **Date**: July 26, 2025  
-**Status**: ✅ Complete  
-**Purpose**: Visual map of complete file/function call chain for the entire typing clients ingestion pipeline
+**Status**: ✅ Complete - Updated with integrated S3 streaming  
+**Purpose**: Visual map of complete file/function call chain for the entire typing clients ingestion pipeline with direct S3 streaming integration
 
 ## Overview
 
 This document provides a comprehensive ASCII visual representation of the complete workflow execution flow, showing every file and function called when running the pipeline from start to finish.
+
+### 🆕 Key Updates (July 26, 2025)
+- **S3 Streaming Integration**: Step 5 now streams media files directly to S3 during workflow execution
+- **Virus Scan Handling**: Large Google Drive files (>100MB) are properly handled with confirmation bypass
+- **Zero Local Storage**: All media flows directly from source to S3 without touching disk
+- **Automatic UUID Mapping**: S3 file locations are automatically saved to CSV columns
 
 ---
 
@@ -107,7 +113,24 @@ This document provides a comprehensive ASCII visual representation of the comple
 │        ├── step5_process_extracted_data(person, links, doc_text)
 │        │   ├── utils/config.py::ensure_directory() → Create output directories
 │        │   ├── filter_meaningful_links() → Secondary filtering
-│        │   ├── utils/csv_manager.py::create_record(mode='full')
+│        │   ├── 🚀 S3 STREAMING (when storage_mode="s3")
+│        │   │   ├── utils/streaming_integration.py::stream_extracted_links()
+│        │   │   │   ├── UUID generation for each file
+│        │   │   │   ├── YouTube streaming:
+│        │   │   │   │   └── utils/s3_manager.py::stream_youtube_to_s3()
+│        │   │   │   │       ├── yt-dlp with named pipe → No local storage
+│        │   │   │   │       └── Direct upload to S3 bucket
+│        │   │   │   ├── Google Drive file streaming:
+│        │   │   │   │   └── utils/s3_manager.py::stream_drive_to_s3()
+│        │   │   │   │       ├── Virus scan warning detection & bypass
+│        │   │   │   │       ├── Large file progress tracking
+│        │   │   │   │       └── Direct BytesIO → S3 upload
+│        │   │   │   ├── Google Drive folder streaming:
+│        │   │   │   │   ├── utils/download_drive.py::list_folder_files()
+│        │   │   │   │   └── Individual file streaming to S3
+│        │   │   │   └── Returns: {file_uuids: {}, s3_paths: {}}
+│        │   │   └── Progress tracking with real-time updates
+│        │   ├── utils/csv_manager.py::create_record(mode='full', s3_uuids=s3_results)
 │        │   │   ├── Field mapping: row_id, name, email, type, link
 │        │   │   ├── Links processing: youtube_playlist, google_drive JSON
 │        │   │   ├── Metadata: document_text, total_links, processing_info
@@ -135,10 +158,10 @@ This document provides a comprehensive ASCII visual representation of the comple
 
 ┌─────────────────────────────────────────────────────────────────────────────────┐
 │                              S3 STREAMING PIPELINE                              │
-│                        (When media files need processing)                        │
+│                   (Integrated into STEP 5 when storage_mode="s3")               │
 └─────────────────────────────────────────────────────────────────────────────────┘
 
-🔄 STREAMING EXECUTION: python core/stream_folder_contents_direct.py
+🔄 INTEGRATED STREAMING: Automatic during simple_workflow.py execution
 │
 ├── core/stream_folder_contents_direct.py::stream_drive_folders_direct()
 │   ├── utils/s3_manager.py::UnifiedS3Manager()
@@ -210,6 +233,13 @@ This document provides a comprehensive ASCII visual representation of the comple
 ├── save_json_state() → JSON state file saving
 └── format_error_message() → Standardized error formatting
 
+📁 utils/streaming_integration.py 🆕
+├── stream_extracted_links() → Main streaming orchestrator
+├── _stream_youtube_videos() → YouTube batch processing
+├── _stream_drive_files() → Drive file batch processing
+├── _stream_drive_folders() → Drive folder batch processing
+└── Progress tracking with real-time updates
+
 📁 utils/patterns.py
 ├── PatternRegistry class → Centralized regex patterns
 ├── extract_youtube_id() → Video ID extraction
@@ -243,6 +273,14 @@ This document provides a comprehensive ASCII visual representation of the comple
 ├── setup_logging() → Global logging configuration
 ├── print_section_header() → Formatted section output
 └── log_performance_metrics() → Execution timing
+
+📁 utils/s3_manager.py 🔄
+├── UnifiedS3Manager class → S3 operations orchestrator
+├── stream_youtube_to_s3() → Direct YouTube→S3 streaming
+├── stream_drive_to_s3() → Direct Drive→S3 with virus scan handling
+├── upload_file_to_s3() → Traditional file upload
+├── get_content_type() → MIME type detection
+└── generate_s3_key() → UUID-based key generation
 
 📁 utils/file_lock.py
 ├── file_lock() → Cross-process file locking
@@ -293,6 +331,8 @@ This document provides a comprehensive ASCII visual representation of the comple
 ⚡ PERFORMANCE OPTIMIZATIONS:
 ├── HTTP connection pooling → Reduced latency
 ├── Direct streaming → Zero local storage
+├── Virus scan warning bypass → Large file support
+├── Named pipe streaming → Memory efficient YouTube downloads
 ├── Atomic file operations → Data integrity
 ├── Progress state management → Resumable operations
 ├── Retry logic with backoff → Reliability
@@ -348,10 +388,11 @@ These operate independently but integrate with the main CSV via UUID mappings.
 
 | Component | Dependencies | Purpose |
 |-----------|-------------|---------|
-| `simple_workflow.py` | config, csv_manager, extract_links, patterns, http_pool | Main 6-step pipeline |
+| `simple_workflow.py` | config, csv_manager, extract_links, patterns, http_pool, streaming_integration | Main 6-step pipeline with S3 streaming |
 | `utils/csv_manager.py` | file_lock, sanitization, config, row_context, error_handling | CSV operations & S3 integration |
 | `utils/extract_links.py` | http_pool, config, logging_config, patterns, error_handling | Document scraping & link extraction |
-| `utils/s3_manager.py` | boto3, config, logging_config | S3 streaming operations |
+| `utils/streaming_integration.py` 🆕 | s3_manager, logging_config, uuid | S3 streaming orchestration |
+| `utils/s3_manager.py` | boto3, config, logging_config, requests | S3 streaming with virus scan handling |
 | `utils/patterns.py` | selenium, logging_config | Regex patterns & WebDriver management |
 | `core/stream_folder_contents_direct.py` | s3_manager, download_drive, logging_config | Direct Drive→S3 streaming |
 | `core/process_pending_metadata_downloads.py` | s3_manager, downloader, csv_manager, row_context | Metadata processing |
@@ -361,11 +402,12 @@ These operate independently but integrate with the main CSV via UUID mappings.
 
 ## 🚀 EXECUTION EXAMPLES
 
-### **Standard Full Pipeline**
+### **Standard Full Pipeline (with S3 Streaming)**
 ```bash
 python simple_workflow.py
-# Calls: All 6 steps + full CSV generation
-# Output: outputs/output.csv with complete data
+# Calls: All 6 steps + S3 streaming in Step 5 + full CSV generation
+# Output: outputs/output.csv with complete data + media files in S3
+# S3 Integration: Automatic when storage_mode="s3" in config.yaml
 ```
 
 ### **Basic Data Extraction Only**
