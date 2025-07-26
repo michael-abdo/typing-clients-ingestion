@@ -837,6 +837,131 @@ def handle_validation_errors(operation_name: str, return_on_error: Any = None,
 
 
 # ============================================================================
+# DRY ERROR HANDLING DECORATORS WITH TRACEBACK
+# ============================================================================
+
+def with_traceback_logging(operation_name: str = None, logger_name: str = None):
+    """
+    Decorator to automatically log exceptions with traceback.
+    
+    Args:
+        operation_name: Name of the operation for logging context
+        logger_name: Logger name to use (defaults to module logger)
+    
+    Example:
+        @with_traceback_logging("process_file")
+        def process_file(filename):
+            # code that might raise exceptions
+    """
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            import logging
+            logger = logging.getLogger(logger_name or func.__module__)
+            op_name = operation_name or func.__name__
+            
+            try:
+                return func(*args, **kwargs)
+            except Exception as e:
+                logger.error(f"Error in {op_name}: {str(e)}")
+                logger.error(f"Traceback:\n{traceback.format_exc()}")
+                raise
+        return wrapper
+    return decorator
+
+def try_except_log(default_return=None, logger_name: str = None, 
+                  reraise: bool = False, log_level: str = 'error'):
+    """
+    Decorator for standardized try/except with logging.
+    
+    Args:
+        default_return: Value to return on exception
+        logger_name: Logger name to use
+        reraise: Whether to re-raise the exception after logging
+        log_level: Logging level ('error', 'warning', 'info')
+    
+    Example:
+        @try_except_log(default_return=[], reraise=False)
+        def get_files():
+            # code that might fail
+    """
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            import logging
+            logger = logging.getLogger(logger_name or func.__module__)
+            log_func = getattr(logger, log_level, logger.error)
+            
+            try:
+                return func(*args, **kwargs)
+            except Exception as e:
+                context = f"{func.__name__}"
+                if args:
+                    # Add first arg to context if it's a simple type
+                    first_arg = args[0]
+                    if isinstance(first_arg, (str, int, float)):
+                        context += f"({first_arg})"
+                
+                log_func(f"Error in {context}: {str(e)}")
+                if log_level == 'error':
+                    log_func(f"Traceback:\n{traceback.format_exc()}")
+                
+                if reraise:
+                    raise
+                return default_return
+        return wrapper
+    return decorator
+
+def retry_with_traceback(max_attempts: int = 3, delay: float = 1.0, 
+                        backoff: float = 2.0, exceptions=(Exception,)):
+    """
+    Decorator to retry operations with traceback logging on failures.
+    
+    Args:
+        max_attempts: Maximum number of retry attempts
+        delay: Initial delay between retries in seconds
+        backoff: Backoff multiplier for delay
+        exceptions: Tuple of exceptions to catch and retry
+    
+    Example:
+        @retry_with_traceback(max_attempts=3, exceptions=(ConnectionError, TimeoutError))
+        def download_file(url):
+            # code that might fail transiently
+    """
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            import logging
+            import time
+            logger = logging.getLogger(func.__module__)
+            
+            current_delay = delay
+            last_exception = None
+            
+            for attempt in range(max_attempts):
+                try:
+                    if attempt > 0:
+                        logger.info(f"Retry attempt {attempt}/{max_attempts - 1} for {func.__name__}")
+                    return func(*args, **kwargs)
+                    
+                except exceptions as e:
+                    last_exception = e
+                    
+                    if attempt < max_attempts - 1:
+                        logger.warning(f"Attempt {attempt + 1} failed for {func.__name__}: {str(e)}")
+                        logger.debug(f"Traceback:\n{traceback.format_exc()}")
+                        time.sleep(current_delay)
+                        current_delay *= backoff
+                    else:
+                        logger.error(f"All {max_attempts} attempts failed for {func.__name__}")
+                        logger.error(f"Final error: {str(e)}")
+                        logger.error(f"Traceback:\n{traceback.format_exc()}")
+            
+            raise last_exception
+        return wrapper
+    return decorator
+
+# ============================================================================
 # HELPER FUNCTIONS
 # ============================================================================
 
@@ -879,5 +1004,7 @@ __all__ = [
     'ErrorSeverity', 'ErrorCategory', 'ErrorContext', 'ErrorHandler', 'ErrorMessages',
     'with_standard_error_handling', 'handle_file_operations', 'handle_network_operations',
     'handle_csv_operations', 'handle_download_operations', 'handle_validation_errors',
-    'file_error', 'network_error', 'validation_error', 'download_error', 'csv_error', 'system_error'
+    'file_error', 'network_error', 'validation_error', 'download_error', 'csv_error', 'system_error',
+    # DRY error handling decorators
+    'with_traceback_logging', 'try_except_log', 'retry_with_traceback'
 ]

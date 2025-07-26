@@ -4,6 +4,7 @@ import boto3
 import pandas as pd
 import json
 from datetime import datetime
+from utils.csv_manager import CSVManager
 
 def fix_s3_file_extensions():
     """Fix the .bin extensions on S3 files to proper media extensions."""
@@ -128,7 +129,9 @@ def fix_s3_file_extensions():
             
             if s3_paths and s3_paths not in ['[]', '{}', None]:
                 try:
-                    paths_dict = json.loads(s3_paths)
+                    # DRY: Use CSVManager for loading S3 paths
+                    row = df.loc[mask].iloc[0]
+                    paths_dict = CSVManager.load_s3_paths(row)
                     updated_paths = {}
                     
                     for uuid, old_path in paths_dict.items():
@@ -138,7 +141,8 @@ def fix_s3_file_extensions():
                         else:
                             updated_paths[uuid] = old_path
                     
-                    df.loc[mask, 's3_paths'] = json.dumps(updated_paths)
+                    # DRY: Use CSVManager for saving S3 paths
+                    df.loc[mask, 's3_paths'] = CSVManager.save_s3_paths(updated_paths)
                     
                 except Exception as e:
                     print(f"   ❌ Error updating CSV for row {row_id}: {e}")

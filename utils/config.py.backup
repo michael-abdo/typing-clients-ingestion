@@ -1,0 +1,1311 @@
+"""Configuration management module for centralized settings."""
+import os
+import yaml
+import importlib
+from pathlib import Path
+from typing import Dict, Any, Optional, Union, List
+import logging
+
+# Singleton pattern for configuration
+_config = None
+_config_path = None
+
+class Config:
+    """Configuration manager that loads settings from YAML file."""
+    
+    def __init__(self, config_path: Optional[str] = None):
+        """
+        Initialize configuration from YAML file.
+        
+        Args:
+            config_path: Path to config file. If None, looks for config.yaml in project root.
+        """
+        if config_path is None:
+            # Look for config.yaml in config directory (relative to project root)
+            utils_dir = Path(__file__).parent
+            project_root = utils_dir.parent
+            config_path = project_root / "config" / "config.yaml"
+        
+        self.config_path = Path(config_path)
+        self._data = {}
+        self._load_config()
+    
+    def _load_config(self):
+        """Load configuration from YAML file."""
+        if not self.config_path.exists():
+            raise FileNotFoundError(f"Configuration file not found: {self.config_path}")
+        
+        with open(self.config_path, 'r') as f:
+            self._data = yaml.safe_load(f)
+    
+    def get(self, key_path: str, default: Any = None) -> Any:
+        """
+        Get configuration value using dot notation.
+        
+        Args:
+            key_path: Dot-separated path to config value (e.g., "downloads.youtube.max_workers")
+            default: Default value if key not found
+        
+        Returns:
+            Configuration value or default
+        """
+        keys = key_path.split('.')
+        value = self._data
+        
+        for key in keys:
+            if isinstance(value, dict) and key in value:
+                value = value[key]
+            else:
+                return default
+        
+        return value
+    
+    def get_section(self, section: str) -> Dict[str, Any]:
+        """
+        Get entire configuration section.
+        
+        Args:
+            section: Section name (e.g., "downloads", "retry")
+        
+        Returns:
+            Dictionary containing section configuration
+        """
+        return self._data.get(section, {})
+    
+    def reload(self):
+        """Reload configuration from file."""
+        self._load_config()
+    
+    @property
+    def all(self) -> Dict[str, Any]:
+        """Get all configuration data."""
+        return self._data.copy()
+
+
+def get_config(config_path: Optional[str] = None) -> Config:
+    """
+    Get singleton configuration instance.
+    
+    Args:
+        config_path: Path to config file (only used on first call)
+    
+    Returns:
+        Configuration instance
+    """
+    global _config, _config_path
+    
+    if _config is None or (config_path and config_path != _config_path):
+        _config = Config(config_path)
+        _config_path = config_path
+    
+    return _config
+
+
+# Convenience functions for common config values
+def get_youtube_downloads_dir() -> str:
+    """Get YouTube downloads directory."""
+    return get_config().get("paths.youtube_downloads", "youtube_downloads")
+
+
+def get_drive_downloads_dir() -> str:
+    """Get Drive downloads directory."""
+    return get_config().get("paths.drive_downloads", "drive_downloads")
+
+
+def get_output_csv_path() -> str:
+    """Get output CSV file path."""
+    return get_config().get("paths.output_csv", "output.csv")
+
+
+def get_google_sheets_url() -> str:
+    """Get Google Sheets URL."""
+    return get_config().get("google_sheets.url", "")
+
+
+def get_retry_config() -> Dict[str, Any]:
+    """Get retry configuration."""
+    return get_config().get_section("retry")
+
+
+def get_timeout(timeout_type: str = "default") -> float:
+    """
+    Get timeout value.
+    
+    Args:
+        timeout_type: Type of timeout (default, file_lock, http_request, etc.)
+    
+    Returns:
+        Timeout value in seconds
+    """
+    return get_config().get(f"timeouts.{timeout_type}", 30.0)
+
+
+def create_download_dir(download_dir: str, logger=None) -> Path:
+    """
+    Create download directory if it doesn't exist.
+    
+    Args:
+        download_dir: Directory path to create
+        logger: Optional logger instance
+    
+    Returns:
+        Path object for the directory
+    """
+    downloads_path = Path(download_dir)
+    if not downloads_path.exists():
+        downloads_path.mkdir(parents=True)
+        if logger:
+            logger.info(f"Created downloads directory: {download_dir}")
+    return downloads_path
+
+
+def ensure_directory(dir_path: Union[str, Path], parents: bool = True, exist_ok: bool = True, logger=None) -> Path:
+    """
+    Ensure directory exists, creating it if necessary (DRY path utility).
+    Consolidates various directory creation patterns throughout codebase.
+    
+    Args:
+        dir_path: Directory path to ensure exists
+        parents: Create parent directories if needed
+        exist_ok: Don't raise error if directory already exists
+        logger: Optional logger instance
+    
+    Returns:
+        Path object for the directory
+    """
+    path = Path(dir_path)
+    if not path.exists():
+        path.mkdir(parents=parents, exist_ok=exist_ok)
+        if logger:
+            logger.info(f"Created directory: {dir_path}")
+    return path
+
+
+def ensure_parent_dir(file_path: Union[str, Path], logger=None) -> Path:
+    """
+    Ensure parent directory of a file exists (DRY path utility).
+    Common pattern for ensuring output files can be written.
+    
+    Args:
+        file_path: File path whose parent directory should exist
+        logger: Optional logger instance
+    
+    Returns:
+        Path object for the parent directory
+    """
+    file_path = Path(file_path)
+    parent_dir = file_path.parent
+    if not parent_dir.exists():
+        parent_dir.mkdir(parents=True, exist_ok=True)
+        if logger:
+            logger.info(f"Created parent directory: {parent_dir}")
+    return parent_dir
+
+
+def get_project_root() -> Path:
+    """
+    Get project root directory (DRY path utility).
+    
+    Returns:
+        Path object for project root
+    """
+    return Path(__file__).parent.parent
+
+
+def setup_project_imports() -> None:
+    """
+    Set up project imports by adding necessary directories to sys.path.
+    This eliminates the need for sys.path manipulation in individual files.
+    
+    Usage:
+        from utils.config import setup_project_imports
+        setup_project_imports()
+        
+        # Now you can import project modules normally
+        from utils.logging_config import setup_logging
+        from utils.s3_manager import S3Manager
+    """
+    import sys
+    project_root = get_project_root()
+    
+    # Add project root to sys.path if not already there
+    project_root_str = str(project_root)
+    if project_root_str not in sys.path:
+        sys.path.insert(0, project_root_str)
+    
+    # Add utils directory to sys.path if not already there
+    utils_dir = str(project_root / 'utils')
+    if utils_dir not in sys.path:
+        sys.path.insert(0, utils_dir)
+
+
+def get_outputs_dir() -> Path:
+    """
+    Get outputs directory, creating if necessary (DRY path utility).
+    
+    Returns:
+        Path object for outputs directory
+    """
+    config = get_config()
+    outputs_dir = get_project_root() / config.get("paths.output_dir", "outputs")
+    return ensure_directory(outputs_dir)
+
+
+def get_logs_dir() -> Path:
+    """
+    Get logs directory, creating if necessary (DRY path utility).
+    
+    Returns:
+        Path object for logs directory
+    """
+    config = get_config()
+    logs_dir = get_project_root() / config.get("paths.logs_dir", "logs")
+    return ensure_directory(logs_dir)
+
+
+def get_download_chunk_size(file_size: int) -> int:
+    """
+    Get appropriate chunk size based on file size.
+    
+    Args:
+        file_size: Size of file in bytes
+    
+    Returns:
+        Chunk size in bytes
+    """
+    config = get_config()
+    thresholds = config.get_section("downloads").get("drive", {})
+    
+    if file_size > thresholds.get("size_thresholds", {}).get("large", 104857600):
+        return thresholds.get("chunk_sizes", {}).get("large", 8388608)
+    elif file_size > thresholds.get("size_thresholds", {}).get("medium", 10485760):
+        return thresholds.get("chunk_sizes", {}).get("medium", 2097152)
+    else:
+        return thresholds.get("chunk_sizes", {}).get("small", 1048576)
+
+
+def get_parallel_config() -> Dict[str, Any]:
+    """Get parallel processing configuration."""
+    return get_config().get_section("parallel")
+
+
+def get_logging_config() -> Dict[str, Any]:
+    """Get logging configuration."""
+    return get_config().get_section("logging")
+
+
+def is_ssl_verify_enabled() -> bool:
+    """Check if SSL verification is enabled."""
+    return get_config().get("security.ssl_verify", True)
+
+
+def get_allowed_domains(service: str) -> list:
+    """
+    Get allowed domains for a service.
+    
+    Args:
+        service: Service name (youtube, drive)
+    
+    Returns:
+        List of allowed domains
+    """
+    return get_config().get(f"security.allowed_domains.{service}", [])
+
+
+def get_streaming_threshold() -> int:
+    """Get file size threshold for streaming operations."""
+    return get_config().get("file_processing.streaming_threshold", 5242880)
+
+
+def safe_import(module_names: Union[str, List[str]], from_items: Optional[Union[str, List[str]]] = None, 
+                package: Optional[str] = None) -> Any:
+    """
+    Centralized import management with automatic fallback for relative/absolute imports.
+    
+    Eliminates the need for try/except ImportError blocks throughout the codebase.
+    
+    Args:
+        module_names: Module name(s) to import from
+        from_items: Specific items to import (functions, classes, etc.)
+        package: Package name for relative imports
+    
+    Returns:
+        Imported module or specific items
+        
+    Examples:
+        # Import entire module
+        csv_tracker = safe_import('csv_tracker')
+        
+        # Import specific functions
+        reset_func = safe_import('csv_tracker', 'reset_all_download_status')
+        
+        # Import multiple items
+        funcs = safe_import('csv_tracker', ['reset_all_download_status', 'ensure_tracking_columns'])
+    """
+    if isinstance(module_names, str):
+        module_names = [module_names]
+    if isinstance(from_items, str):
+        from_items = [from_items]
+    
+    last_error = None
+    
+    # Try absolute import first
+    for module_name in module_names:
+        try:
+            module = importlib.import_module(module_name)
+            if from_items:
+                if len(from_items) == 1:
+                    return getattr(module, from_items[0])
+                else:
+                    return [getattr(module, item) for item in from_items]
+            return module
+        except ImportError as e:
+            last_error = e
+            continue
+    
+    # Try relative import as fallback
+    if package:
+        for module_name in module_names:
+            try:
+                module = importlib.import_module(f'.{module_name}', package=package)
+                if from_items:
+                    if len(from_items) == 1:
+                        return getattr(module, from_items[0])
+                    else:
+                        return [getattr(module, item) for item in from_items]
+                return module
+            except ImportError as e:
+                last_error = e
+                continue
+    
+    # If all imports fail, raise the last error
+    raise last_error
+
+
+# Simple error categorization utilities (DRY)
+def categorize_error(error: Exception) -> str:
+    """
+    Simple error categorization for consistent error handling (DRY).
+    Consolidates scattered error type checking throughout codebase.
+    
+    Args:
+        error: Exception to categorize
+    
+    Returns:
+        Error category string
+    """
+    error_str = str(error).lower()
+    
+    # Network-related errors
+    if any(keyword in error_str for keyword in ['timeout', 'connection', 'network', 'dns', 'ssl']):
+        return 'network'
+    elif any(keyword in error_str for keyword in ['rate limit', 'quota', '429', 'too many requests']):
+        return 'rate_limit'
+    elif any(keyword in error_str for keyword in ['http', '404', '403', '401', '500', '502', '503']):
+        return 'http'
+    
+    # File I/O errors
+    elif any(keyword in error_str for keyword in ['file not found', 'no such file', 'permission denied', 'access denied']):
+        return 'file_io'
+    elif any(keyword in error_str for keyword in ['disk', 'space', 'full']):
+        return 'disk_space'
+    
+    # Data errors
+    elif any(keyword in error_str for keyword in ['csv', 'parsing', 'format', 'decode', 'encode']):
+        return 'data_format'
+    
+    # System errors
+    elif any(keyword in error_str for keyword in ['memory', 'resource', 'system']):
+        return 'system'
+    
+    # Default category
+    else:
+        return 'unknown'
+
+
+def format_error_message(operation: str, error: Exception, context: str = None) -> str:
+    """
+    Format error message consistently (DRY).
+    Consolidates scattered error message formatting patterns.
+    
+    Args:
+        operation: Operation that failed
+        error: Exception that occurred
+        context: Optional context information
+    
+    Returns:
+        Formatted error message
+    """
+    category = categorize_error(error)
+    base_msg = f"✗ {operation} failed ({category}): {str(error)}"
+    
+    if context:
+        base_msg += f" | Context: {context}"
+    
+    return base_msg
+
+
+def load_json_state(filename: str, default: Optional[dict] = None) -> dict:
+    """
+    Load JSON state file with default fallback (DRY state management).
+    Consolidates progress/state loading patterns throughout codebase.
+    
+    Args:
+        filename: Path to JSON file
+        default: Default dict to return if file doesn't exist
+    
+    Returns:
+        Loaded JSON data or default
+    """
+    import json
+    filepath = Path(filename)
+    if filepath.exists():
+        try:
+            with open(filepath, 'r') as f:
+                return json.load(f)
+        except (json.JSONDecodeError, IOError) as e:
+            logging.warning(f"Failed to load JSON state from {filename}: {e}")
+            return default or {}
+    return default or {}
+
+
+def save_json_state(filename: str, data: dict) -> None:
+    """
+    Save state to JSON file (DRY state management).
+    Consolidates progress/state saving patterns throughout codebase.
+    
+    Args:
+        filename: Path to JSON file
+        data: Dict to save as JSON
+    """
+    import json
+    try:
+        with open(filename, 'w') as f:
+            json.dump(data, f, indent=2)
+    except IOError as e:
+        logging.error(f"Failed to save JSON state to {filename}: {e}")
+        raise
+
+
+# === STATUS FORMATTING FUNCTIONS (DRY) ===
+
+class StatusIcons:
+    """Centralized status icons for consistent output formatting"""
+    SUCCESS = "✓"
+    FAILURE = "✗"
+    WARNING = "⚠"
+    ERROR = "❌"
+    COMPLETE = "✅"
+    STATS = "📊"
+    CELEBRATE = "🎉"
+    FILE = "📄"
+    DATABASE = "🗄️"
+    PACKAGE = "📦"
+    ROCKET = "🚀"
+    
+    # Status prefixes
+    SUCCESS_PREFIX = "✓"
+    ERROR_PREFIX = "✗"
+    WARNING_PREFIX = "⚠️"
+    INFO_PREFIX = "📊"
+    
+
+def format_success(message: str, icon: bool = True) -> str:
+    """Format a success message (DRY)"""
+    return f"{StatusIcons.SUCCESS} {message}" if icon else message
+
+
+def format_error(message: str, icon: bool = True) -> str:
+    """Format an error message (DRY)"""
+    return f"{StatusIcons.ERROR} {message}" if icon else message
+
+
+def format_warning(message: str, icon: bool = True) -> str:
+    """Format a warning message (DRY)"""
+    return f"{StatusIcons.WARNING} {message}" if icon else message
+
+
+# === DRY PHASE 2: CONSOLIDATED FILE PATH OPERATIONS ===
+
+def ensure_download_directory(name: str = "downloads") -> Path:
+    """
+    Ensure download directory exists with standard name.
+    
+    Consolidates the repeated pattern found in 12+ files:
+        from pathlib import Path
+        path = Path("downloads")
+        path.mkdir(exist_ok=True)
+    
+    Args:
+        name: Directory name (default: "downloads")
+        
+    Returns:
+        Path object for the directory
+        
+    Example:
+        downloads_dir = ensure_download_directory()
+        youtube_dir = ensure_download_directory("youtube_downloads")
+    """
+    download_dir = get_project_root() / name
+    return ensure_directory(download_dir)
+
+
+def ensure_output_directory(name: str = "outputs") -> Path:
+    """
+    Ensure output directory exists with standard name.
+    
+    Consolidates the repeated pattern for output directories.
+    
+    Args:
+        name: Directory name (default: "outputs")
+        
+    Returns:
+        Path object for the directory
+        
+    Example:
+        outputs_dir = ensure_output_directory()
+        results_dir = ensure_output_directory("results")
+    """
+    output_dir = get_project_root() / name
+    return ensure_directory(output_dir)
+
+
+def ensure_logs_directory(name: str = "logs") -> Path:
+    """
+    Ensure logs directory exists with standard name.
+    
+    Consolidates the repeated pattern for log directories.
+    
+    Args:
+        name: Directory name (default: "logs")
+        
+    Returns:
+        Path object for the directory
+        
+    Example:
+        logs_dir = ensure_logs_directory()
+        debug_logs_dir = ensure_logs_directory("debug_logs")
+    """
+    logs_dir = get_project_root() / name
+    return ensure_directory(logs_dir)
+
+
+def get_standard_directories() -> Dict[str, Path]:
+    """
+    Get all standard directories used throughout the application.
+    
+    Consolidates directory access patterns and provides single source of truth.
+    
+    Returns:
+        Dictionary mapping directory names to Path objects
+        
+    Example:
+        dirs = get_standard_directories()
+        csv_path = dirs['outputs'] / 'output.csv'
+        log_path = dirs['logs'] / 'download.log'
+    """
+    return {
+        'project_root': get_project_root(),
+        'outputs': ensure_output_directory(),
+        'logs': ensure_logs_directory(),
+        'downloads': ensure_download_directory(),
+        'youtube_downloads': ensure_download_directory('youtube_downloads'),
+        'drive_downloads': ensure_download_directory('drive_downloads'),
+        'backups': ensure_output_directory('backups'),
+        'temp': ensure_download_directory('temp')
+    }
+
+
+def get_standard_file_paths() -> Dict[str, Path]:
+    """
+    Get standard file paths used throughout the application.
+    
+    Consolidates file path patterns and provides single source of truth.
+    
+    Returns:
+        Dictionary mapping file names to Path objects
+        
+    Example:
+        files = get_standard_file_paths()
+        df = pd.read_csv(files['output_csv'])
+    """
+    dirs = get_standard_directories()
+    
+    return {
+        'output_csv': dirs['outputs'] / 'output.csv',
+        'config_yaml': dirs['project_root'] / 'config' / 'config.yaml',
+        'download_log': dirs['logs'] / 'download.log',
+        'error_log': dirs['logs'] / 'error.log',
+        'status_json': dirs['outputs'] / 'status.json',
+        'progress_json': dirs['outputs'] / 'progress.json',
+        'stats_json': dirs['outputs'] / 'stats.json'
+    }
+
+
+def create_file_with_parents(file_path: Union[str, Path], content: str = "", 
+                           encoding: str = "utf-8") -> Path:
+    """
+    Create file with parent directories if they don't exist.
+    
+    Consolidates the repeated pattern:
+        from pathlib import Path
+        file_path = Path(filename)
+        file_path.parent.mkdir(parents=True, exist_ok=True)
+        file_path.write_text(content)
+    
+    Args:
+        file_path: Path to file to create
+        content: Content to write to file (default: empty string)
+        encoding: File encoding (default: utf-8)
+        
+    Returns:
+        Path object for the created file
+        
+    Example:
+        log_file = create_file_with_parents('logs/download.log')
+        csv_file = create_file_with_parents('outputs/results.csv', 'header1,header2\n')
+    """
+    file_path = Path(file_path)
+    ensure_parent_dir(file_path)
+    
+    with open(file_path, 'w', encoding=encoding) as f:
+        f.write(content)
+    
+    return file_path
+
+
+def safe_file_path(file_path: Union[str, Path], base_dir: Optional[Union[str, Path]] = None) -> Path:
+    """
+    Create safe file path within project boundaries.
+    
+    Prevents path traversal attacks and ensures files stay within project.
+    
+    Args:
+        file_path: File path to normalize
+        base_dir: Base directory to restrict to (default: project root)
+        
+    Returns:
+        Safe Path object within project boundaries
+        
+    Example:
+        safe_path = safe_file_path('../../../etc/passwd')  # Returns project_root/etc/passwd
+        safe_path = safe_file_path('outputs/data.csv')     # Returns project_root/outputs/data.csv
+    """
+    if base_dir is None:
+        base_dir = get_project_root()
+    
+    base_dir = Path(base_dir).resolve()
+    file_path = Path(file_path)
+    
+    # If absolute path, make it relative to base_dir
+    if file_path.is_absolute():
+        try:
+            file_path = file_path.relative_to(base_dir)
+        except ValueError:
+            # Path is outside base_dir, use just the filename
+            file_path = file_path.name
+    
+    # Resolve the path within base_dir
+    resolved_path = (base_dir / file_path).resolve()
+    
+    # Ensure the resolved path is still within base_dir
+    try:
+        resolved_path.relative_to(base_dir)
+        return resolved_path
+    except ValueError:
+        # Path escaped base_dir, return safe fallback
+        return base_dir / file_path.name
+
+
+def format_stats(label: str, value: Any, icon: bool = True) -> str:
+    """Format a statistics message (DRY)"""
+    return f"{StatusIcons.STATS} {label}: {value}" if icon else f"{label}: {value}"
+
+
+def format_status_line(status: str, message: str) -> str:
+    """Format a status line with appropriate icon (DRY)
+    
+    Args:
+        status: Status type ('success', 'error', 'warning', 'info', 'complete')
+        message: The message to format
+        
+    Returns:
+        Formatted status line
+    """
+    status_map = {
+        'success': StatusIcons.SUCCESS,
+        'error': StatusIcons.ERROR,
+        'warning': StatusIcons.WARNING,
+        'info': StatusIcons.STATS,
+        'complete': StatusIcons.COMPLETE,
+        'failure': StatusIcons.FAILURE,
+        'celebrate': StatusIcons.CELEBRATE,
+        'file': StatusIcons.FILE,
+        'database': StatusIcons.DATABASE,
+        'package': StatusIcons.PACKAGE,
+        'rocket': StatusIcons.ROCKET
+    }
+    
+    icon = status_map.get(status.lower(), '')
+    return f"{icon} {message}" if icon else message
+
+
+def format_batch_header(batch_num: int, total_batches: int, batch_size: int) -> str:
+    """Format batch processing header (DRY)"""
+    return f"\n{StatusIcons.PACKAGE} BATCH {batch_num}/{total_batches} ({batch_size} documents)"
+
+
+def format_progress_indicator(current: int, total: int, label: str = "Processing") -> str:
+    """Format progress indicator (DRY)"""
+    return f"[{current}/{total}] {label}"
+
+
+# Example usage
+if __name__ == "__main__":
+    # Test configuration loading
+    config = get_config()
+    
+    print("Configuration loaded successfully!")
+    print(f"YouTube downloads directory: {get_youtube_downloads_dir()}")
+    print(f"Default timeout: {get_timeout()} seconds")
+    print(f"Retry config: {get_retry_config()}")
+    print(f"Parallel workers: {get_parallel_config().get('max_workers', 4)}")
+    print(f"SSL verification: {is_ssl_verify_enabled()}")
+    
+    # Test getting nested values
+    print(f"YouTube max workers: {config.get('downloads.youtube.max_workers', 4)}")
+    print(f"Large file chunk size: {config.get('downloads.drive.chunk_sizes.large', 8388608)}")
+
+
+# ============================================================================
+# CLI ARGUMENT PARSER CONSOLIDATION (DRY Phase 2)
+# ============================================================================
+
+def create_standard_parser(description: str, **standard_args) -> 'argparse.ArgumentParser':
+    """
+    Create standardized ArgumentParser with common arguments (DRY consolidation).
+    
+    Eliminates duplicate argparse setup patterns across 20+ scripts.
+    
+    Args:
+        description: Description for the parser
+        **standard_args: Standard argument flags to include:
+            - csv: bool - Add --csv argument for CSV file path
+            - max_rows: bool - Add --max-rows argument  
+            - directory: bool - Add --directory argument
+            - debug: bool - Add --debug/--verbose arguments
+            - output: bool - Add --output argument
+            - dry_run: bool - Add --dry-run argument
+            
+    Returns:
+        Configured ArgumentParser instance
+    """
+    import argparse
+    
+    parser = argparse.ArgumentParser(description=description)
+    
+    # Standard CSV file argument
+    if standard_args.get('csv', False):
+        default_csv = get_config().get('paths.output_csv', 'outputs/output.csv')
+        parser.add_argument('--csv', default=default_csv,
+                          help=f'Path to CSV file (default: {default_csv})')
+    
+    # Standard max rows argument
+    if standard_args.get('max_rows', False):
+        parser.add_argument('--max-rows', type=int, default=None,
+                          help='Maximum number of rows to process')
+    
+    # Standard directory argument
+    if standard_args.get('directory', False):
+        parser.add_argument('--directory', default='youtube_downloads',
+                          help='Directory path (default: youtube_downloads)')
+    
+    # Standard debug/verbose arguments
+    if standard_args.get('debug', False):
+        parser.add_argument('--debug', action='store_true',
+                          help='Enable debug output')
+        parser.add_argument('--verbose', '-v', action='store_true',
+                          help='Enable verbose output')
+    
+    # Standard output argument
+    if standard_args.get('output', False):
+        parser.add_argument('--output', '-o', type=str,
+                          help='Output file path')
+    
+    # Standard dry run argument
+    if standard_args.get('dry_run', False):
+        parser.add_argument('--dry-run', action='store_true',
+                          help='Show what would be done without executing')
+    
+    return parser
+
+
+def standard_script_main(main_func, description: str, **parser_args):
+    """
+    Standard script entry point wrapper with error handling (DRY consolidation).
+    
+    Eliminates duplicate main() patterns across 78+ script files.
+    
+    Args:
+        main_func: Function to call with parsed args
+        description: Description for argument parser
+        **parser_args: Arguments to pass to create_standard_parser()
+        
+    Returns:
+        Exit code (0 for success, 1 for error)
+    """
+    try:
+        parser = create_standard_parser(description, **parser_args)
+        args = parser.parse_args()
+        result = main_func(args)
+        return result if isinstance(result, int) else 0
+    except KeyboardInterrupt:
+        print("\n⚠️  Script interrupted by user")
+        return 1
+    except Exception as e:
+        print(f"❌ Error: {e}")
+        return 1
+
+# ============================================================================
+# CONSOLIDATED CONSTANTS AND MAGIC NUMBERS (DRY Phase 2)
+# ============================================================================
+
+class Constants:
+    """Centralized constants to eliminate magic numbers across the codebase (DRY consolidation)."""
+    
+    # File size constants (bytes)
+    BYTES_PER_KB = 1024
+    BYTES_PER_MB = 1024 * 1024
+    BYTES_PER_GB = 1024 * 1024 * 1024
+    
+    # Progress display constants
+    DEFAULT_PROGRESS_BAR_WIDTH = 40
+    PROGRESS_UPDATE_INTERVAL = 1.0  # seconds
+    
+    # Default delays (seconds)
+    DEFAULT_DELAY = 2.0
+    SHORT_DELAY = 1.0
+    LONG_DELAY = 5.0
+
+
+def bytes_to_mb(bytes_value: int) -> float:
+    """Convert bytes to megabytes (DRY utility)."""
+    return bytes_value / Constants.BYTES_PER_MB
+
+
+def bytes_to_gb(bytes_value: int) -> float:
+    """Convert bytes to gigabytes (DRY utility)."""
+    return bytes_value / Constants.BYTES_PER_GB
+
+
+# ============================================================================
+# CONSOLIDATED CONFIGURATION VALUES (DRY Phase 2)
+# ============================================================================
+
+# AWS S3 Configuration
+def get_s3_config() -> Dict[str, Any]:
+    """Get S3 configuration with fallback defaults."""
+    return {
+        'bucket_name': get_config().get('aws.s3.bucket_name', 'typing-clients-storage-2025'),
+        'region': get_config().get('aws.s3.region', 'us-east-1'),
+        'create_public_urls': get_config().get('aws.s3.create_public_urls', True),
+        'organize_by_person': get_config().get('aws.s3.organize_by_person', True),
+        'add_metadata': get_config().get('aws.s3.add_metadata', True)
+    }
+
+
+def get_s3_bucket_name() -> str:
+    """Get S3 bucket name."""
+    return get_config().get('aws.s3.bucket_name', 'typing-clients-storage-2025')
+
+
+def get_s3_region() -> str:
+    """Get S3 region."""
+    return get_config().get('aws.s3.region', 'us-east-1')
+
+
+# Download Configuration
+def get_download_config() -> Dict[str, Any]:
+    """Get download configuration with all consolidated settings."""
+    return {
+        'output_dir': get_config().get('downloads.output_dir', 'downloads'),
+        'timeout': get_config().get('downloads.timeout', 120),
+        'max_retries': get_config().get('downloads.max_retries', 3),
+        'retry_delay': get_config().get('downloads.retry_delay', 2),
+        'create_metadata': get_config().get('downloads.create_metadata', True),
+        'show_progress': get_config().get('downloads.show_progress', True),
+        'youtube': get_youtube_download_config(),
+        'drive': get_drive_download_config()
+    }
+
+
+def get_youtube_download_config() -> Dict[str, Any]:
+    """Get YouTube-specific download configuration."""
+    return {
+        'default_format': get_config().get('downloads.youtube.default_format', 'mp3'),
+        'default_quality': get_config().get('downloads.youtube.default_quality', '128K'),
+        'audio_format': get_config().get('downloads.youtube.audio_format', 'mp3'),
+        'video_format': get_config().get('downloads.youtube.video_format', 'mp4'),
+        'extract_audio': get_config().get('downloads.youtube.extract_audio', True),
+        'no_playlist': get_config().get('downloads.youtube.no_playlist', True),
+        'quiet': get_config().get('downloads.youtube.quiet', True),
+        'no_warnings': get_config().get('downloads.youtube.no_warnings', True),
+        'timeout': get_config().get('downloads.youtube.timeout', 60)
+    }
+
+
+def get_drive_download_config() -> Dict[str, Any]:
+    """Get Google Drive download configuration."""
+    return {
+        'use_gdown': get_config().get('downloads.drive.use_gdown', True),
+        'fuzzy_matching': get_config().get('downloads.drive.fuzzy_matching', True),
+        'save_info_only': get_config().get('downloads.drive.save_info_only', False),
+        'timeout': get_config().get('downloads.drive.timeout', 120),
+        'chunk_size': get_config().get('downloads.drive.chunk_size', 1024*1024)
+    }
+
+
+# CSV Configuration
+def get_csv_config() -> Dict[str, Any]:
+    """Get CSV file configuration."""
+    return {
+        'input_file': get_config().get('csv.input_file', 'outputs/output.csv'),
+        'output_file': get_config().get('csv.output_file', 'outputs/output.csv'),
+        'backup_enabled': get_config().get('csv.backup_enabled', True),
+        'backup_dir': get_config().get('csv.backup_dir', 'backups'),
+        'columns': get_csv_columns_config()
+    }
+
+
+def get_csv_columns_config() -> Dict[str, Any]:
+    """Get CSV column configuration."""
+    return {
+        'youtube_column': get_config().get('csv.columns.youtube', 'youtube_playlist'),
+        'drive_column': get_config().get('csv.columns.drive', 'google_drive'),
+        's3_youtube_column': get_config().get('csv.columns.s3_youtube', 's3_youtube_urls'),
+        's3_drive_column': get_config().get('csv.columns.s3_drive', 's3_drive_urls'),
+        's3_all_column': get_config().get('csv.columns.s3_all', 's3_all_files'),
+        'delimiter': get_config().get('csv.columns.delimiter', '|')
+    }
+
+
+# Retry Strategy Configuration
+def get_retry_strategies() -> Dict[str, Any]:
+    """Get retry strategies configuration."""
+    return {
+        'no_retry': {
+            'max_attempts': 1,
+            'delay': 0,
+            'backoff_factor': 1.0
+        },
+        'basic_retry': {
+            'max_attempts': get_config().get('retry.basic.max_attempts', 3),
+            'delay': get_config().get('retry.basic.delay', 2),
+            'backoff_factor': get_config().get('retry.basic.backoff_factor', 1.0)
+        },
+        'aggressive_retry': {
+            'max_attempts': get_config().get('retry.aggressive.max_attempts', 5),
+            'delay': get_config().get('retry.aggressive.delay', 5),
+            'backoff_factor': get_config().get('retry.aggressive.backoff_factor', 2.0)
+        },
+        'no_timeout': {
+            'max_attempts': get_config().get('retry.no_timeout.max_attempts', 3),
+            'delay': get_config().get('retry.no_timeout.delay', 2),
+            'timeout': None
+        }
+    }
+
+
+# Error Handling Configuration
+def get_error_handling_config() -> Dict[str, Any]:
+    """Get error handling configuration."""
+    return {
+        'max_error_length': get_config().get('error_handling.max_error_length', 100),
+        'sanitize_errors': get_config().get('error_handling.sanitize_errors', True),
+        'log_full_errors': get_config().get('error_handling.log_full_errors', True),
+        'continue_on_error': get_config().get('error_handling.continue_on_error', True)
+    }
+
+
+# Progress Reporting Configuration
+def get_progress_config() -> Dict[str, Any]:
+    """Get progress reporting configuration."""
+    return {
+        'show_progress_bars': get_config().get('progress.show_bars', True),
+        'show_file_sizes': get_config().get('progress.show_file_sizes', True),
+        'show_download_speeds': get_config().get('progress.show_speeds', True),
+        'update_interval': get_config().get('progress.update_interval', 1.0),
+        'bar_width': get_config().get('progress.bar_width', 40)
+    }
+
+
+# Metadata Configuration
+def get_metadata_config() -> Dict[str, Any]:
+    """Get metadata configuration."""
+    return {
+        'create_metadata': get_config().get('metadata.create_metadata', True),
+        'include_timestamps': get_config().get('metadata.include_timestamps', True),
+        'include_file_sizes': get_config().get('metadata.include_file_sizes', True),
+        'include_source_urls': get_config().get('metadata.include_source_urls', True),
+        'include_download_config': get_config().get('metadata.include_download_config', True)
+    }
+
+
+# Directory Structure Configuration
+def get_directory_config() -> Dict[str, Any]:
+    """Get directory structure configuration."""
+    return {
+        'downloads_dir': get_config().get('directories.downloads', 'downloads'),
+        'outputs_dir': get_config().get('directories.outputs', 'outputs'),
+        'logs_dir': get_config().get('directories.logs', 'logs'),
+        'backups_dir': get_config().get('directories.backups', 'backups'),
+        'temp_dir': get_config().get('directories.temp', '/tmp'),
+        'organize_by_person': get_config().get('directories.organize_by_person', True),
+        'sanitize_names': get_config().get('directories.sanitize_names', True)
+    }
+
+
+# File Pattern Configuration
+def get_file_patterns() -> Dict[str, Any]:
+    """Get file patterns for different operations."""
+    return {
+        'youtube_video_pattern': get_config().get('patterns.youtube_video', r'youtube_([a-zA-Z0-9_-]{11})\.'),
+        'youtube_playlist_pattern': get_config().get('patterns.youtube_playlist', r'playlist_([a-zA-Z0-9_-]+)_info\.json'),
+        'drive_file_pattern': get_config().get('patterns.drive_file', r'drive_file_([a-zA-Z0-9_-]+)'),
+        'drive_folder_pattern': get_config().get('patterns.drive_folder', r'drive_folder_([a-zA-Z0-9_-]+)_info\.json'),
+        's3_key_pattern': get_config().get('patterns.s3_key', r'{row_id}/{person_name}/{filename}'),
+        'metadata_suffix': get_config().get('patterns.metadata_suffix', '_metadata.json')
+    }
+
+
+# Quality and Format Options
+def get_quality_options() -> Dict[str, Any]:
+    """Get quality and format options."""
+    return {
+        'youtube_audio_qualities': get_config().get('quality.youtube.audio', ['128K', '192K', '256K', '320K']),
+        'youtube_video_qualities': get_config().get('quality.youtube.video', ['720p', '1080p', '480p', '360p']),
+        'audio_formats': get_config().get('quality.audio_formats', ['mp3', 'm4a', 'wav']),
+        'video_formats': get_config().get('quality.video_formats', ['mp4', 'webm', 'mkv']),
+        'default_audio_quality': get_config().get('quality.default_audio', '128K'),
+        'default_video_quality': get_config().get('quality.default_video', '720p')
+    }
+
+
+# Utility Functions for Configuration Access
+def get_default_downloads_dir() -> str:
+    """Get default downloads directory."""
+    return get_config().get('directories.downloads', 'downloads')
+
+
+def get_default_csv_file() -> str:
+    """Get default CSV file path."""
+    return get_config().get('csv.input_file', 'outputs/output.csv')
+
+
+def get_default_timeout() -> int:
+    """Get default timeout in seconds."""
+    return get_config().get('downloads.timeout', 120)
+
+
+def get_youtube_audio_format() -> str:
+    """Get YouTube audio format."""
+    return get_config().get('downloads.youtube.audio_format', 'mp3')
+
+
+def get_youtube_audio_quality() -> str:
+    """Get YouTube audio quality."""
+    return get_config().get('downloads.youtube.default_quality', '128K')
+
+
+def get_drive_chunk_size() -> int:
+    """Get Drive download chunk size."""
+    return get_config().get('downloads.drive.chunk_size', 1024*1024)
+
+
+def should_create_metadata() -> bool:
+    """Check if metadata should be created."""
+    return get_config().get('metadata.create_metadata', True)
+
+
+def should_show_progress() -> bool:
+    """Check if progress should be shown."""
+    return get_config().get('progress.show_bars', True)
+
+
+def should_organize_by_person() -> bool:
+    """Check if files should be organized by person."""
+    return get_config().get('directories.organize_by_person', True)
+
+
+def get_csv_delimiter() -> str:
+    """Get CSV column delimiter for multiple values."""
+    return get_config().get('csv.columns.delimiter', '|')
+
+
+# Configuration Validation
+def validate_config() -> List[str]:
+    """Validate configuration and return list of issues."""
+    issues = []
+    config = get_config()
+    
+    # Check required directories
+    required_dirs = ['downloads', 'outputs', 'logs']
+    for dir_name in required_dirs:
+        if not config.get(f'directories.{dir_name}'):
+            issues.append(f"Missing required directory configuration: directories.{dir_name}")
+    
+    # Check S3 configuration
+    if not get_s3_bucket_name():
+        issues.append("Missing S3 bucket name configuration")
+    
+    # Check timeout values
+    timeout = get_default_timeout()
+    if timeout <= 0:
+        issues.append("Invalid timeout value: must be positive")
+    
+    # Check retry configuration
+    retry_config = get_retry_strategies()
+    for strategy_name, strategy_config in retry_config.items():
+        if strategy_config.get('max_attempts', 0) <= 0:
+            issues.append(f"Invalid retry configuration for {strategy_name}: max_attempts must be positive")
+    
+    return issues
+
+
+# Configuration Defaults Creation
+def create_default_config_dict() -> Dict[str, Any]:
+    """Create default configuration dictionary for new installations."""
+    return {
+        'aws': {
+            's3': {
+                'bucket_name': 'typing-clients-storage-2025',
+                'region': 'us-east-1',
+                'create_public_urls': True,
+                'organize_by_person': True,
+                'add_metadata': True
+            }
+        },
+        'downloads': {
+            'output_dir': 'downloads',
+            'timeout': 120,
+            'max_retries': 3,
+            'retry_delay': 2,
+            'create_metadata': True,
+            'show_progress': True,
+            'youtube': {
+                'default_format': 'mp3',
+                'default_quality': '128K',
+                'audio_format': 'mp3',
+                'video_format': 'mp4',
+                'extract_audio': True,
+                'no_playlist': True,
+                'quiet': True,
+                'no_warnings': True,
+                'timeout': 60
+            },
+            'drive': {
+                'use_gdown': True,
+                'fuzzy_matching': True,
+                'save_info_only': False,
+                'timeout': 120,
+                'chunk_size': 1048576
+            }
+        },
+        'csv': {
+            'input_file': 'outputs/output.csv',
+            'output_file': 'outputs/output.csv',
+            'backup_enabled': True,
+            'backup_dir': 'backups',
+            'columns': {
+                'youtube': 'youtube_playlist',
+                'drive': 'google_drive',
+                's3_youtube': 's3_youtube_urls',
+                's3_drive': 's3_drive_urls',
+                's3_all': 's3_all_files',
+                'delimiter': '|'
+            }
+        },
+        'directories': {
+            'downloads': 'downloads',
+            'outputs': 'outputs',
+            'logs': 'logs',
+            'backups': 'backups',
+            'temp': '/tmp',
+            'organize_by_person': True,
+            'sanitize_names': True
+        },
+        'retry': {
+            'basic': {
+                'max_attempts': 3,
+                'delay': 2,
+                'backoff_factor': 1.0
+            },
+            'aggressive': {
+                'max_attempts': 5,
+                'delay': 5,
+                'backoff_factor': 2.0
+            },
+            'no_timeout': {
+                'max_attempts': 3,
+                'delay': 2,
+                'timeout': None
+            }
+        },
+        'error_handling': {
+            'max_error_length': 100,
+            'sanitize_errors': True,
+            'log_full_errors': True,
+            'continue_on_error': True
+        },
+        'progress': {
+            'show_bars': True,
+            'show_file_sizes': True,
+            'show_speeds': True,
+            'update_interval': 1.0,
+            'bar_width': 40
+        },
+        'metadata': {
+            'create_metadata': True,
+            'include_timestamps': True,
+            'include_file_sizes': True,
+            'include_source_urls': True,
+            'include_download_config': True
+        },
+        'patterns': {
+            'youtube_video': r'youtube_([a-zA-Z0-9_-]{11})\.',
+            'youtube_playlist': r'playlist_([a-zA-Z0-9_-]+)_info\.json',
+            'drive_file': r'drive_file_([a-zA-Z0-9_-]+)',
+            'drive_folder': r'drive_folder_([a-zA-Z0-9_-]+)_info\.json',
+            's3_key': '{row_id}/{person_name}/{filename}',
+            'metadata_suffix': '_metadata.json'
+        },
+        'quality': {
+            'youtube': {
+                'audio': ['128K', '192K', '256K', '320K'],
+                'video': ['720p', '1080p', '480p', '360p']
+            },
+            'audio_formats': ['mp3', 'm4a', 'wav'],
+            'video_formats': ['mp4', 'webm', 'mkv'],
+            'default_audio': '128K',
+            'default_video': '720p'
+        }
+    }
+
+
+def save_default_config(config_path: Optional[str] = None) -> bool:
+    """Save default configuration to file."""
+    if not config_path:
+        config_path = Path(__file__).parent.parent / "config" / "config.yaml"
+    
+    config_path = Path(config_path)
+    config_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    try:
+        import yaml
+        with open(config_path, 'w') as f:
+            yaml.dump(create_default_config_dict(), f, default_flow_style=False, indent=2)
+        return True
+    except Exception as e:
+        logging.error(f"Failed to save default configuration: {e}")
+        return False
+

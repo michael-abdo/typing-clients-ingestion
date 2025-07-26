@@ -15,15 +15,15 @@ import argparse
 import json
 import logging
 import os
-import sys
 import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 import traceback
 
-# Add project root to path
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Standardized project imports
+from utils.config import setup_project_imports
+setup_project_imports()
 
 from utils.s3_manager import UnifiedS3Manager
 from utils.downloader import UnifiedDownloader, DownloadStrategy, DownloadConfig
@@ -137,7 +137,9 @@ class MetadataDownloadProcessor:
             
             # Create output directory
             output_dir = f"youtube_downloads/row_{row_context.row_id}_{row_context.name.replace(' ', '_')}"
-            os.makedirs(output_dir, exist_ok=True)
+            # DRY: Use ensure_directory from path_utils
+            from utils.path_utils import ensure_directory
+            ensure_directory(output_dir)
             
             # Extract playlist ID
             playlist_match = re.search(r'list=([a-zA-Z0-9_-]+)', url)
@@ -221,10 +223,9 @@ class MetadataDownloadProcessor:
             df = self.csv_manager.read('outputs/output.csv')
             for _, row in df.iterrows():
                 if str(row.get('row_id', '')).strip() == str(row_id):
-                    s3_paths = row.get('s3_paths', '{}')
-                    if s3_paths and s3_paths != '{}':
-                        paths = json.loads(s3_paths)
-                        if paths:
+                    # DRY: Use CSVManager for S3 path loading
+                    paths = CSVManager.load_s3_paths(row)
+                    if paths:
                             logger.info(f"Row {row_id} already has {len(paths)} files in S3")
                             return True
                             
@@ -303,17 +304,9 @@ class MetadataDownloadProcessor:
                 logger.warning(f"No files to update for row {row_id}")
                 return False
                 
-            # Read current CSV
-            df = self.csv_manager.read('outputs/output.csv')
-            
-            # Find the row to update
-            row_index = None
-            for idx, row in df.iterrows():
-                if str(row.get('row_id', '')).strip() == str(row_id):
-                    row_index = idx
-                    break
-                    
-            if row_index is None:
+            # DRY: Use CSVManager to find row
+            row = self.csv_manager.find_row_by_id(row_id)
+            if row is None:
                 logger.error(f"Row {row_id} not found in CSV")
                 return False
             
@@ -329,22 +322,23 @@ class MetadataDownloadProcessor:
                 s3_paths[file_uuid] = s3_file
                 file_uuids[filename] = file_uuid
             
-            # Update the row
-            df.at[row_index, 's3_paths'] = json.dumps(s3_paths)
-            df.at[row_index, 'file_uuids'] = json.dumps(file_uuids)
-            
-            # Save updated CSV with backup
-            backup_file = f'outputs/output.csv.backup_metadata_{datetime.now().strftime("%Y%m%d_%H%M%S")}'
-            import shutil
-            shutil.copy('outputs/output.csv', backup_file)
+            # Create backup before update
+            backup_file = self.csv_manager.create_backup(f'metadata_{datetime.now().strftime("%Y%m%d_%H%M%S")}')
             logger.info(f"Created CSV backup: {backup_file}")
             
-            # Write updated CSV
-            df.to_csv('outputs/output.csv', index=False)
+            # DRY: Use CSVManager to update row
+            updates = {
+                's3_paths': CSVManager.save_s3_paths(s3_paths),
+                'file_uuids': CSVManager.save_file_uuids(file_uuids)
+            }
+            
+            if not self.csv_manager.update_row_by_id(row_id, updates):
+                logger.error(f"Failed to update row {row_id}")
+                return False
             
             logger.info(f"Updated CSV row {row_id} with {len(downloaded_files)} files")
-            logger.info(f"  s3_paths: {json.dumps(s3_paths)}")
-            logger.info(f"  file_uuids: {json.dumps(file_uuids)}")
+            logger.info(f"  s3_paths: {CSVManager.save_s3_paths(s3_paths)}")
+            logger.info(f"  file_uuids: {CSVManager.save_file_uuids(file_uuids)}")
             
             self.stats['csv_updated'] += 1
             return True

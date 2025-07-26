@@ -650,3 +650,149 @@ def suppress_library_logging(library_names: List[str], level: str = "WARNING") -
     """
     for lib_name in library_names:
         logging.getLogger(lib_name).setLevel(getattr(logging, level.upper()))
+
+
+# ============================================================================
+# DRY STANDARDIZED LOGGING SETUP
+# ============================================================================
+
+def setup_module_logging(module_name: str, log_level: str = "INFO", 
+                        log_file: Optional[str] = None, 
+                        suppress_libs: Optional[List[str]] = None) -> logging.Logger:
+    """
+    Standardized logging setup for any module (DRY consolidation).
+    
+    Replaces the repeated pattern of:
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.setLevel(logging.INFO)
+        # ... handler setup ...
+    
+    Args:
+        module_name: Module name (typically __name__)
+        log_level: Logging level (default: "INFO")
+        log_file: Optional log file path
+        suppress_libs: List of third-party libraries to suppress
+        
+    Returns:
+        Configured logger instance
+        
+    Example:
+        # At the top of any module:
+        from utils.logging_config import setup_module_logging
+        logger = setup_module_logging(__name__, log_file="my_module.log")
+    """
+    # Get logger for module
+    logger = get_logger(module_name)
+    
+    # Set logging level
+    logger.setLevel(getattr(logging, log_level.upper()))
+    
+    # Clear existing handlers to avoid duplicates
+    logger.handlers.clear()
+    
+    # Console handler
+    console_handler = logging.StreamHandler(sys.stdout)
+    console_handler.setLevel(getattr(logging, log_level.upper()))
+    console_handler.setFormatter(logging.Formatter(LogFormats.DETAILED))
+    logger.addHandler(console_handler)
+    
+    # File handler if specified
+    if log_file:
+        file_handler = logging.FileHandler(log_file)
+        file_handler.setLevel(logging.DEBUG)  # File gets all messages
+        file_handler.setFormatter(logging.Formatter(LogFormats.DETAILED))
+        logger.addHandler(file_handler)
+    
+    # Suppress noisy libraries
+    if suppress_libs:
+        suppress_library_logging(suppress_libs)
+    else:
+        # Default suppression list
+        suppress_library_logging([
+            "urllib3", "requests", "botocore", "s3transfer", 
+            "urllib3.connectionpool", "googleapiclient.discovery"
+        ])
+    
+    return logger
+
+
+def get_component_logger(component: str, module_name: Optional[str] = None) -> logging.Logger:
+    """
+    Get a standardized logger for a specific component.
+    
+    Components: 'youtube', 'drive', 'scraper', 'main', 'errors'
+    
+    Args:
+        component: Component name
+        module_name: Optional module name (defaults to component name)
+        
+    Returns:
+        Configured logger instance
+        
+    Example:
+        logger = get_component_logger('youtube')
+        logger = get_component_logger('drive', __name__)
+    """
+    name = module_name or component
+    return get_logger(name, component)
+
+
+def log_function_call(logger: logging.Logger, func_name: str, 
+                     args: Optional[tuple] = None, kwargs: Optional[dict] = None):
+    """
+    Standardized function call logging (DRY consolidation).
+    
+    Args:
+        logger: Logger instance
+        func_name: Function name
+        args: Function arguments
+        kwargs: Function keyword arguments
+        
+    Example:
+        log_function_call(logger, "download_file", args=("https://example.com",))
+    """
+    arg_str = ""
+    if args:
+        arg_str = ", ".join(str(a) for a in args[:3])  # First 3 args only
+        if len(args) > 3:
+            arg_str += f", ... ({len(args)} total)"
+    
+    if kwargs:
+        kwarg_str = ", ".join(f"{k}={v}" for k, v in list(kwargs.items())[:3])
+        if len(kwargs) > 3:
+            kwarg_str += f", ... ({len(kwargs)} total)"
+        if arg_str:
+            arg_str += ", " + kwarg_str
+        else:
+            arg_str = kwarg_str
+    
+    logger.debug(f"Calling {func_name}({arg_str})")
+
+
+def log_result(logger: logging.Logger, func_name: str, success: bool, 
+               result: Any = None, error: Optional[Exception] = None,
+               duration: Optional[float] = None):
+    """
+    Standardized result logging (DRY consolidation).
+    
+    Args:
+        logger: Logger instance
+        func_name: Function name
+        success: Whether operation succeeded
+        result: Operation result (if successful)
+        error: Exception (if failed)
+        duration: Operation duration in seconds
+        
+    Example:
+        log_result(logger, "download_file", True, result="file.mp4", duration=5.2)
+        log_result(logger, "download_file", False, error=e)
+    """
+    duration_str = f" in {duration:.2f}s" if duration else ""
+    
+    if success:
+        result_str = f" -> {result}" if result else ""
+        logger.info(f"{func_name} completed successfully{duration_str}{result_str}")
+    else:
+        error_str = f": {str(error)}" if error else ""
+        logger.error(f"{func_name} failed{duration_str}{error_str}")

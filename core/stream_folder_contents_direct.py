@@ -5,14 +5,15 @@ import json
 import uuid
 import pandas as pd
 from datetime import datetime
-import sys
 
-# Add project root to path
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Standardized project imports
+from utils.config import setup_project_imports
+setup_project_imports()
 
 from utils.s3_manager import UnifiedS3Manager, S3Config, UploadMode
 from utils.download_drive import list_folder_files, extract_file_id
 from utils.logging_config import get_logger
+from utils.csv_manager import CSVManager
 
 logger = get_logger(__name__)
 
@@ -149,25 +150,19 @@ def stream_drive_folders_direct():
                     existing_uuids = df.loc[mask, 'file_uuids'].iloc[0]
                     existing_paths = df.loc[mask, 's3_paths'].iloc[0]
                     
-                    if existing_uuids and existing_uuids not in ['[]', '{}', None]:
-                        try:
-                            existing_uuids_dict = json.loads(existing_uuids)
-                            if isinstance(existing_uuids_dict, dict):
-                                file_uuids.update(existing_uuids_dict)
-                        except:
-                            pass
+                    # DRY: Use CSVManager for loading existing UUIDs
+                    existing_uuids_dict = CSVManager.load_file_uuids(df.loc[mask].iloc[0])
+                    if existing_uuids_dict:
+                        file_uuids.update(existing_uuids_dict)
                     
-                    if existing_paths and existing_paths not in ['[]', '{}', None]:
-                        try:
-                            existing_paths_dict = json.loads(existing_paths)
-                            if isinstance(existing_paths_dict, dict):
-                                s3_paths.update(existing_paths_dict)
-                        except:
-                            pass
+                    # DRY: Use CSVManager for loading existing paths
+                    existing_paths_dict = CSVManager.load_s3_paths(df.loc[mask].iloc[0])
+                    if existing_paths_dict:
+                        s3_paths.update(existing_paths_dict)
                     
-                    # Update DataFrame
-                    df.loc[mask, 'file_uuids'] = json.dumps(file_uuids)
-                    df.loc[mask, 's3_paths'] = json.dumps(s3_paths)
+                    # DRY: Use CSVManager for S3 mapping updates
+                    df.loc[mask, 'file_uuids'] = CSVManager.save_file_uuids(file_uuids)
+                    df.loc[mask, 's3_paths'] = CSVManager.save_s3_paths(s3_paths)
                     
                     logger.info(f"✅ Updated CSV with {len(uploaded_files)} files for {person_name}")
                 else:

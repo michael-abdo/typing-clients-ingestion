@@ -16,7 +16,7 @@ import glob
 import re
 import warnings
 from pathlib import Path
-from typing import List, Optional, Dict, Any, Callable
+from typing import List, Optional, Dict, Any, Callable, Union
 from datetime import datetime
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -665,6 +665,194 @@ class CSVManager:
                 doc_text=f"EXTRACTION_FAILED: {error_message}",
                 links=None
             )
+    
+    # === S3 PATH/UUID JSON OPERATIONS (DRY) ===
+    
+    @staticmethod
+    def load_s3_paths(row: pd.Series) -> Dict[str, str]:
+        """
+        Load s3_paths from CSV row with proper JSON parsing.
+        
+        Args:
+            row: DataFrame row
+            
+        Returns:
+            Dictionary of UUID to S3 path mappings
+        """
+        s3_paths = row.get('s3_paths', '{}')
+        if not s3_paths or s3_paths in ['{}', '[]', None, 'nan']:
+            return {}
+        try:
+            return json.loads(s3_paths)
+        except (json.JSONDecodeError, TypeError):
+            logger.warning(f"Invalid s3_paths JSON: {s3_paths}")
+            return {}
+    
+    @staticmethod
+    def load_file_uuids(row: pd.Series) -> Dict[str, str]:
+        """
+        Load file_uuids from CSV row with proper JSON parsing.
+        
+        Args:
+            row: DataFrame row
+            
+        Returns:
+            Dictionary of UUID to file description mappings
+        """
+        file_uuids = row.get('file_uuids', '{}')
+        if not file_uuids or file_uuids in ['{}', '[]', None, 'nan']:
+            return {}
+        try:
+            return json.loads(file_uuids)
+        except (json.JSONDecodeError, TypeError):
+            logger.warning(f"Invalid file_uuids JSON: {file_uuids}")
+            return {}
+    
+    @staticmethod
+    def save_s3_paths(s3_paths: Dict[str, str]) -> str:
+        """
+        Convert s3_paths dictionary to JSON string for CSV storage.
+        
+        Args:
+            s3_paths: Dictionary of UUID to S3 path mappings
+            
+        Returns:
+            JSON string representation
+        """
+        return json.dumps(s3_paths) if s3_paths else '{}'
+    
+    @staticmethod
+    def save_file_uuids(file_uuids: Dict[str, str]) -> str:
+        """
+        Convert file_uuids dictionary to JSON string for CSV storage.
+        
+        Args:
+            file_uuids: Dictionary of UUID to file description mappings
+            
+        Returns:
+            JSON string representation
+        """
+        return json.dumps(file_uuids) if file_uuids else '{}'
+    
+    def update_s3_mappings(self, row_id: int, s3_paths: Dict[str, str], 
+                          file_uuids: Dict[str, str]) -> bool:
+        """
+        Update s3_paths and file_uuids for a specific row.
+        
+        Args:
+            row_id: Row ID to update
+            s3_paths: New s3_paths dictionary
+            file_uuids: New file_uuids dictionary
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            df = self.read_csv_safe()
+            mask = df['row_id'].astype(str) == str(row_id)
+            
+            if not df[mask].empty:
+                df.loc[mask, 's3_paths'] = self.save_s3_paths(s3_paths)
+                df.loc[mask, 'file_uuids'] = self.save_file_uuids(file_uuids)
+                self.write_csv(df)
+                return True
+            else:
+                logger.warning(f"Row ID {row_id} not found in CSV")
+                return False
+        except Exception as e:
+            logger.error(f"Error updating S3 mappings: {e}")
+            return False
+    
+    # === CSV ROW OPERATIONS (DRY) ===
+    
+    def find_row_by_id(self, row_id: Union[int, str]) -> Optional[pd.Series]:
+        """
+        Find a row by row_id.
+        
+        Args:
+            row_id: Row ID to find
+            
+        Returns:
+            Row as pandas Series or None if not found
+        """
+        df = self.read_csv_safe()
+        mask = df['row_id'].astype(str) == str(row_id)
+        
+        if mask.any():
+            return df[mask].iloc[0]
+        return None
+    
+    def find_rows_by_criteria(self, criteria: Dict[str, Any]) -> pd.DataFrame:
+        """
+        Find rows matching multiple criteria.
+        
+        Args:
+            criteria: Dictionary of column:value pairs to match
+            
+        Returns:
+            DataFrame with matching rows
+        """
+        df = self.read_csv_safe()
+        mask = pd.Series([True] * len(df))
+        
+        for column, value in criteria.items():
+            if column in df.columns:
+                mask &= (df[column] == value)
+        
+        return df[mask]
+    
+    def update_row_by_id(self, row_id: Union[int, str], updates: Dict[str, Any]) -> bool:
+        """
+        Update a row by row_id with given values.
+        
+        Args:
+            row_id: Row ID to update
+            updates: Dictionary of column:value pairs to update
+            
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            df = self.read_csv_safe()
+            mask = df['row_id'].astype(str) == str(row_id)
+            
+            if not mask.any():
+                logger.warning(f"Row ID {row_id} not found in CSV")
+                return False
+            
+            # Get the index of the row
+            row_index = df.index[mask].tolist()[0]
+            
+            # Update each field
+            for column, value in updates.items():
+                if column in df.columns:
+                    df.at[row_index, column] = value
+                else:
+                    logger.warning(f"Column '{column}' not found in CSV")
+            
+            # Save the updated dataframe
+            self.write_csv(df)
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error updating row {row_id}: {e}")
+            return False
+    
+    def iterate_rows(self, filter_func=None):
+        """
+        Iterator for rows with optional filtering.
+        
+        Args:
+            filter_func: Optional function to filter rows
+            
+        Yields:
+            Tuple of (index, row) for each matching row
+        """
+        df = self.read_csv_safe()
+        
+        for idx, row in df.iterrows():
+            if filter_func is None or filter_func(row):
+                yield idx, row
     
     # === BACKUP & UTILITY OPERATIONS ===
     
