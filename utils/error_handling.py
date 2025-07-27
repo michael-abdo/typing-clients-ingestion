@@ -96,9 +96,9 @@ class ErrorMessages:
         'SCHEMA_VALIDATION_FAILED': "Schema validation failed: {details}"
     }
     
-    # Download-specific errors
+    # Download-specific errors (DRY CONSOLIDATION STEP 4 - Enhanced templates)
     DOWNLOAD = {
-        'DOWNLOAD_FAILED': "Download failed for {url}: {error}",
+        'DOWNLOAD_FAILED': "Download failed for {file_type} '{identifier}': {reason}",
         'YOUTUBE_ERROR': "YouTube download error for {video_id}: {details}",
         'DRIVE_ERROR': "Google Drive download error for {file_id}: {details}",
         'QUOTA_EXCEEDED': "Download quota exceeded for {service}",
@@ -151,7 +151,10 @@ class ErrorMessages:
     @staticmethod
     def format_error(category: str, error_type: str, **kwargs) -> str:
         """
-        Format error message with provided context
+        Format error message with provided context (DRY CONSOLIDATION STEP 4).
+        
+        ELIMINATES: Inconsistent error messages across modules
+        STANDARDIZES: Error message length and format consistency
         
         Args:
             category: Error category (NETWORK, FILE_OPERATIONS, etc.)
@@ -159,7 +162,7 @@ class ErrorMessages:
             **kwargs: Template variables for string formatting
             
         Returns:
-            Formatted error message
+            Formatted error message with length limit applied
         """
         category_dict = getattr(ErrorMessages, category.upper(), {})
         template = category_dict.get(error_type.upper())
@@ -168,7 +171,20 @@ class ErrorMessages:
             return f"Unknown error: {category}.{error_type}"
         
         try:
-            return template.format(**kwargs)
+            message = template.format(**kwargs)
+            
+            # Apply length limit from CoreDefaults (DRY CONSOLIDATION)
+            try:
+                from .config import CoreDefaults
+                max_length = CoreDefaults.MAX_ERROR_MESSAGE_LENGTH
+                if len(message) > max_length:
+                    message = message[:max_length-3] + "..."
+            except ImportError:
+                # Fallback if config not available
+                if len(message) > 500:
+                    message = message[:497] + "..."
+                    
+            return message
         except KeyError as e:
             return f"Error message template missing variable {e}: {template}"
 

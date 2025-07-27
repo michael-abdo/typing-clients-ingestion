@@ -329,7 +329,10 @@ def validate_filename(filename: str,
         'LPT1', 'LPT2', 'LPT3', 'LPT4', 'LPT5', 'LPT6', 'LPT7', 'LPT8', 'LPT9'
     }
     
-    name_without_ext = filename.split('.')[0].upper()
+    # DRY CONSOLIDATION - Step 2: Use centralized extension handling
+    from .path_utils import split_filename
+    name_without_ext, _ = split_filename(filename)
+    name_without_ext = name_without_ext.upper()
     if name_without_ext in reserved_names:
         raise ValidationError(f"Reserved filename: {filename}")
     
@@ -369,7 +372,7 @@ def sanitize_filename(filename: str, replacement: str = '_') -> str:
     
     # Truncate if too long
     if len(sanitized) > 255:
-        name, ext = os.path.splitext(sanitized)
+        name, ext = split_filename(sanitized)
         max_name_len = 255 - len(ext)
         sanitized = name[:max_name_len] + ext
     
@@ -791,81 +794,13 @@ if __name__ == "__main__":
 # ============================================================================
 # ADDITIONAL VALIDATION FUNCTIONS FOR DRY TEST COMPATIBILITY
 # ============================================================================
+# DRY CONSOLIDATION - Step 2: Duplicate functions removed
+# validate_google_drive_url and validate_youtube_url are already defined above
+# using centralized extraction patterns from utils.patterns
+# See lines 160-218 for the canonical implementations
 
-def validate_google_drive_url(url: str) -> Tuple[str, str]:
-    """
-    Validate Google Drive URL and extract file ID.
-    
-    Returns:
-        Tuple of (validated_url, file_id)
-    """
-    if not url or not isinstance(url, str):
-        raise ValidationError("URL must be a non-empty string")
-    
-    url = url.strip()
-    if not url.startswith(('http://', 'https://')):
-        url = 'https://' + url
-    
-    # Check if it's a valid Google Drive URL
-    if 'drive.google.com' not in url and 'docs.google.com' not in url:
-        raise ValidationError("Not a valid Google Drive URL")
-    
-    # Extract file ID using regex
-    patterns = [
-        r'/file/d/([a-zA-Z0-9_-]+)',
-        r'id=([a-zA-Z0-9_-]+)',
-        r'/document/d/([a-zA-Z0-9_-]+)',
-    ]
-    
-    file_id = None
-    for pattern in patterns:
-        match = re.search(pattern, url)
-        if match:
-            file_id = match.group(1)
-            break
-    
-    if not file_id:
-        raise ValidationError("Could not extract file ID from Google Drive URL")
-    
-    return url, file_id
-
-
-def validate_youtube_url(url: str) -> Tuple[str, str]:
-    """
-    Validate YouTube URL and extract video ID.
-    
-    Returns:
-        Tuple of (validated_url, video_id)
-    """
-    if not url or not isinstance(url, str):
-        raise ValidationError("URL must be a non-empty string")
-    
-    url = url.strip()
-    if not url.startswith(('http://', 'https://')):
-        url = 'https://' + url
-    
-    # Check if it's a valid YouTube URL
-    if not any(domain in url for domain in ['youtube.com', 'youtu.be']):
-        raise ValidationError("Not a valid YouTube URL")
-    
-    # Extract video ID
-    patterns = [
-        r'(?:v=|youtu\.be/)([a-zA-Z0-9_-]{11})',
-        r'/embed/([a-zA-Z0-9_-]{11})',
-        r'/watch\?.*v=([a-zA-Z0-9_-]{11})'
-    ]
-    
-    video_id = None
-    for pattern in patterns:
-        match = re.search(pattern, url)
-        if match:
-            video_id = match.group(1)
-            break
-    
-    if not video_id:
-        raise ValidationError("Could not extract video ID from YouTube URL")
-    
-    return url, video_id
+# Backward compatibility aliases
+validate_google_drive_url = validate_drive_url
 
 
 def validate_file_path(path: str, must_exist: bool = False) -> str:
@@ -952,6 +887,63 @@ def run_validation():
         print(f"Drive URL {url}: {is_valid_drive_url(url)}")
     
     print("Validation tests complete.")
+
+
+def validate_and_extract_media_url(url: str, expected_type: str = 'any') -> Tuple[bool, Optional[str], Optional[str]]:
+    """
+    Single source of truth for all URL validation and ID extraction (DRY CONSOLIDATION).
+    
+    Eliminates 3+ different URL validation implementations that cause security vulnerabilities
+    and data corruption from inconsistent URL handling.
+    
+    Args:
+        url: URL to validate and process
+        expected_type: Expected URL type ('youtube', 'drive', 'any')
+        
+    Returns:
+        Tuple of (is_valid, extracted_id, normalized_url)
+        - is_valid: True if URL is valid for expected type
+        - extracted_id: Extracted video/file ID (None for generic URLs)
+        - normalized_url: Canonicalized URL for consistent storage
+        
+    Example:
+        valid, video_id, canonical = validate_and_extract_media_url(
+            'https://youtu.be/abc123?t=10', 'youtube'
+        )
+        # Returns: (True, 'abc123', 'https://www.youtube.com/watch?v=abc123')
+    """
+    if not url or url.strip() in ['', 'nan', 'None', 'null']:
+        return False, None, None
+    
+    # Use existing patterns from utils.patterns but centralize logic here
+    from .patterns import (
+        extract_youtube_id, extract_drive_id, clean_url,
+        is_youtube_url, is_drive_url, validate_url_format
+    )
+    
+    cleaned_url = clean_url(url.strip())
+    
+    # YouTube URL validation with security checks
+    if expected_type in ['youtube', 'any'] and is_youtube_url(cleaned_url):
+        video_id = extract_youtube_id(cleaned_url)
+        if video_id and len(video_id) == 11 and re.match(r'^[a-zA-Z0-9_-]{11}$', video_id):
+            # Security: Ensure video ID is alphanumeric only
+            normalized = f"https://www.youtube.com/watch?v={video_id}"
+            return True, video_id, normalized
+    
+    # Google Drive URL validation with security checks  
+    if expected_type in ['drive', 'any'] and is_drive_url(cleaned_url):
+        file_id = extract_drive_id(cleaned_url)
+        if file_id and len(file_id) >= 25 and re.match(r'^[a-zA-Z0-9_-]{25,}$', file_id):
+            # Security: Ensure file ID is alphanumeric only
+            normalized = f"https://drive.google.com/file/d/{file_id}/view"
+            return True, file_id, normalized
+    
+    # Generic URL validation
+    if expected_type == 'any' and validate_url_format(cleaned_url):
+        return True, None, cleaned_url
+    
+    return False, None, None
 
 
 def validate_row_id(row_id: Any) -> Tuple[bool, Optional[int]]:

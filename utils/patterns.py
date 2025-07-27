@@ -12,6 +12,8 @@ from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.common.by import By
+# DRY CONSOLIDATION - Step 1: Import centralized URL patterns
+from .constants import URLPatterns
 
 
 class PatternRegistry:
@@ -90,23 +92,27 @@ CLEANING_PATTERNS = {
 }
 
 
+# DRY CONSOLIDATION - Step 2: Import centralized extraction functions
+try:
+    from .url_utils import extract_youtube_id as _extract_youtube_id
+    from .url_utils import extract_drive_id as _extract_drive_id
+except ImportError:
+    from url_utils import extract_youtube_id as _extract_youtube_id
+    from url_utils import extract_drive_id as _extract_drive_id
+
 # Convenience functions for common operations
 def extract_youtube_id(url: str) -> str:
-    """Extract YouTube video ID from URL"""
-    for pattern in [PatternRegistry.YOUTUBE_VIDEO_URL, PatternRegistry.YOUTUBE_SHORT_URL]:
-        match = pattern.search(url)
-        if match:
-            return match.group(1)
-    return ""
+    """Extract YouTube video ID from URL (DRY CONSOLIDATION - Step 2)"""
+    # Use centralized extraction logic from url_utils
+    result = _extract_youtube_id(url)
+    return result if result else ""
 
 
 def extract_drive_id(url: str) -> str:
-    """Extract Google Drive file ID from URL"""
-    for pattern in [PatternRegistry.DRIVE_FILE_URL, PatternRegistry.DRIVE_OPEN_URL]:
-        match = pattern.search(url)
-        if match:
-            return match.group(1)
-    return ""
+    """Extract Google Drive file ID from URL (DRY CONSOLIDATION - Step 2)"""
+    # Use centralized extraction logic from url_utils
+    result = _extract_drive_id(url)
+    return result if result else ""
 
 
 def extract_google_doc_id(url: str) -> str:
@@ -417,16 +423,19 @@ def normalize_url_for_comparison(url: str) -> str:
         # Extract video ID and normalize
         video_id = extract_youtube_video_id(url)
         if video_id:
-            return f"https://www.youtube.com/watch?v={video_id}"
+            # DRY CONSOLIDATION - Step 1: Use centralized URL construction
+            return URLPatterns.youtube_watch_url(video_id)
     
     # Normalize Google Drive URLs
     if 'drive.google.com' in url:
         drive_id = extract_drive_id(url)
         if drive_id:
             if '/folders/' in url:
-                return f"https://drive.google.com/drive/folders/{drive_id}"
+                # DRY CONSOLIDATION - Step 1: Use centralized URL construction
+                return URLPatterns.drive_folder_url(drive_id)
             else:
-                return f"https://drive.google.com/file/d/{drive_id}"
+                # DRY CONSOLIDATION - Step 1: Use centralized URL construction
+                return URLPatterns.drive_file_url(drive_id, view=False)
     
     return url.strip()
 
@@ -442,7 +451,8 @@ def normalize_url_for_truth_comparison(url: str) -> str:
             
             if 'youtu.be/' in url:
                 video_id = url.split('youtu.be/')[-1].split('?')[0]
-                return f"https://www.youtube.com/watch?v={video_id}"
+                # DRY CONSOLIDATION - Step 1: Use centralized URL construction
+                return URLPatterns.youtube_watch_url(video_id)
             
             if 'drive.google.com/file/d/' in url and not url.endswith('/view'):
                 url = url.rstrip('/') + '/view'
@@ -469,7 +479,8 @@ def normalize_url_for_truth_comparison(url: str) -> str:
     # Normalize YouTube short URLs to standard format
     if 'youtu.be/' in url:
         video_id = url.split('youtu.be/')[-1].split('?')[0]
-        return f"https://www.youtube.com/watch?v={video_id}"
+        # DRY CONSOLIDATION - Step 1: Use centralized URL construction
+        return URLPatterns.youtube_watch_url(video_id)
     
     # Ensure Drive URLs end with /view for consistent comparison
     if 'drive.google.com/file/d/' in url and not url.endswith('/view'):

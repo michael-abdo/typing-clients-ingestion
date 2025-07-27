@@ -130,7 +130,9 @@ def stream_youtube_link(url: str, person: Dict[str, Any], s3_results: Dict,
         
         # Generate UUID and S3 key
         file_uuid = str(uuid.uuid4())
-        s3_key = f"files/{file_uuid}.mp4"
+        # DRY CONSOLIDATION - Step 1: Use centralized S3 key generation
+        from .s3_manager import UnifiedS3Manager
+        s3_key = UnifiedS3Manager.generate_uuid_s3_key(file_uuid, '.mp4')
         
         logger.info(f"   UUID: {file_uuid}")
         logger.info(f"   S3 Key: {s3_key}")
@@ -174,7 +176,7 @@ def stream_drive_file(url: str, person: Dict[str, Any], s3_results: Dict,
         file_uuid = str(uuid.uuid4())
         # Note: Using .bin extension as we don't know file type yet
         # This can be fixed later with fix_s3_extensions.py if needed
-        s3_key = f"files/{file_uuid}.bin"
+        s3_key = UnifiedS3Manager.generate_uuid_s3_key(file_uuid, '.bin')
         
         logger.info(f"   UUID: {file_uuid}")
         logger.info(f"   S3 Key: {s3_key}")
@@ -242,12 +244,11 @@ def stream_drive_folder(folder_url: str, person: Dict[str, Any], s3_results: Dic
             file_uuid = str(uuid.uuid4())
             
             # Try to preserve file extension
-            if '.' in file_name:
-                file_ext = '.' + file_name.split('.')[-1].lower()
-            else:
-                file_ext = '.bin'
+            # DRY CONSOLIDATION - Step 2: Use centralized extension handling
+            from .path_utils import get_extension_or_default
+            file_ext = get_extension_or_default(file_name, '.bin')
             
-            s3_key = f"files/{file_uuid}{file_ext}"
+            s3_key = UnifiedS3Manager.generate_uuid_s3_key(file_uuid, file_ext)
             
             logger.info(f"      UUID: {file_uuid}")
             logger.info(f"      S3 Key: {s3_key}")

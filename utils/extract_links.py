@@ -587,33 +587,34 @@ def extract_drive_links_from_html(html):
     """Extract Google Drive links directly from HTML content"""
     import re
     
-    # Comprehensive pattern to match Google Drive links in HTML
-    # This matches the file ID in drive.google.com/file/d/ or drive.google.com/open?id= links
-    file_pattern = re.compile(r'https?://drive\.google\.com/(?:file/d/|open\?id=)([a-zA-Z0-9_\-]+)')
-    folder_pattern = re.compile(r'https?://drive\.google\.com/drive/folders/([a-zA-Z0-9_\-]+)')
+    # DRY CONSOLIDATION - Step 2: Use centralized patterns and URL construction
+    try:
+        from .patterns import DRIVE_PATTERNS, extract_drive_id
+        from .constants import URLPatterns
+    except ImportError:
+        from patterns import DRIVE_PATTERNS, extract_drive_id
+        from constants import URLPatterns
     
-    # Find all file and folder IDs
-    file_ids = file_pattern.findall(html)
-    folder_ids = folder_pattern.findall(html)
+    # Use centralized patterns for extraction
+    drive_urls = []
+    for pattern_name, pattern in DRIVE_PATTERNS.items():
+        if pattern_name.endswith('_full'):  # Use full patterns for HTML extraction
+            matches = pattern.findall(html)
+            drive_urls.extend(matches)
     
-    # Construct clean URLs
-    drive_links = []
-    
-    # Add file links
-    for file_id in file_ids:
-        drive_links.append(f"https://drive.google.com/file/d/{file_id}/view")
-    
-    # Add folder links
-    for folder_id in folder_ids:
-        drive_links.append(f"https://drive.google.com/drive/folders/{folder_id}")
-    
-    # Remove duplicates while preserving order
-    seen = set()
+    # Process found URLs and extract IDs
+    seen_ids = set()
     unique_links = []
-    for link in drive_links:
-        if link not in seen:
-            seen.add(link)
-            unique_links.append(link)
+    
+    for url in drive_urls:
+        drive_id = extract_drive_id(url)
+        if drive_id and drive_id not in seen_ids:
+            seen_ids.add(drive_id)
+            # Determine if it's a folder or file
+            if '/folders/' in url or 'folders/' in url:
+                unique_links.append(URLPatterns.drive_folder_url(drive_id))
+            else:
+                unique_links.append(URLPatterns.drive_file_url(drive_id, view=True))
     
     return unique_links
 
@@ -645,22 +646,23 @@ def extract_drive_links(links, html=None):
     return drive_urls
 
 def extract_youtube_ids(links):
+    # DRY CONSOLIDATION - Step 2: Use centralized YouTube ID extraction
+    try:
+        from .patterns import extract_youtube_id
+    except ImportError:
+        from patterns import extract_youtube_id
+    
     yt_ids = set()
     for link in links:
         try:
             # Skip non-URL links like mailto: or invalid URLs
             if not link.startswith('http'):
                 continue
-                
-            parsed = urlparse(link)
-            if "youtube.com" in parsed.netloc:
-                qs = parse_qs(parsed.query)
-                if "v" in qs:
-                    yt_ids.update(qs["v"])
-            elif "youtu.be" in parsed.netloc:
-                yt_id = parsed.path.lstrip("/")
-                if yt_id:
-                    yt_ids.add(yt_id)
+            
+            # Use centralized extraction function
+            video_id = extract_youtube_id(link)
+            if video_id:
+                yt_ids.add(video_id)
         except Exception as e:
             print(f"Error parsing link {link}: {str(e)}")
             continue
@@ -700,8 +702,14 @@ def extract_youtube_playlists(links):
     return playlists
 
 def build_youtube_playlist_url(yt_ids):
+    # DRY CONSOLIDATION - Step 2: Use centralized URL pattern
+    try:
+        from .constants import URLPatterns
+    except ImportError:
+        from constants import URLPatterns
+    
     if yt_ids:
-        return "https://www.youtube.com/watch_videos?video_ids=" + ",".join(yt_ids)
+        return URLPatterns.YOUTUBE_WATCH_VIDEOS + ",".join(yt_ids)
     return None
 
 def process_url(url, limit=1, debug=False):
@@ -884,8 +892,12 @@ class HttpExtractionStrategy(ExtractionStrategy):
             url
         ]
         
+        # DRY CONSOLIDATION - Step 5: Use centralized HTTP header configuration
+        from .config import get_config
+        config = get_config()
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            'User-Agent': config.get('web_scraping.user_agent', 
+                                   'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36')
         }
         
         for test_url in urls_to_try:
