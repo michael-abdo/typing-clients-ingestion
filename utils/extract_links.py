@@ -822,7 +822,8 @@ class SeleniumExtractionStrategy(ExtractionStrategy):
         chrome_options.add_argument("--window-size=1920,1080")
         
         try:
-            driver = webdriver.Chrome(options=chrome_options)
+            # DRY CONSOLIDATION: Use centralized Selenium driver
+            driver = get_selenium_driver()
             logger.info("Loading document...")
             driver.get(url)
             

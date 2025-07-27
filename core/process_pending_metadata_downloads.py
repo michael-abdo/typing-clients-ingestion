@@ -30,8 +30,6 @@ from utils.downloader import UnifiedDownloader, DownloadStrategy, DownloadConfig
 from utils.csv_manager import CSVManager
 from utils.row_context import RowContext
 from utils.logging_config import get_logger, print_section_header
-import boto3
-
 # Setup logging
 logger = get_logger(__name__)
 
@@ -43,7 +41,9 @@ class MetadataDownloadProcessor:
     
     def __init__(self, dry_run: bool = False):
         self.dry_run = dry_run
-        self.s3_client = boto3.client('s3')
+        # DRY CONSOLIDATION: Use centralized S3 client
+        from utils.s3_manager import get_s3_client
+        self.s3_client = get_s3_client()
         self.bucket_name = 'typing-clients-uuid-system'
         self.s3_manager = UnifiedS3Manager()
         self.csv_manager = CSVManager()

@@ -52,8 +52,9 @@ def stream_drive_folders_direct():
     os.system(f"cp outputs/output.csv {backup_path}")
     logger.info(f"✅ Created CSV backup: {backup_path}")
     
-    # Read CSV
-    df = pd.read_csv('outputs/output.csv')
+    # DRY CONSOLIDATION: Use CSVManager instead of direct pandas
+    csv_manager = CSVManager('outputs/output.csv')
+    df = csv_manager.read_csv_safe()
     
     all_uploaded_files = {}
     

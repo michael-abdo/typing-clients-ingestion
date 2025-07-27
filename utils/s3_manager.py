@@ -38,6 +38,35 @@ except ImportError:
     from database_manager import get_database_manager
 
 
+def get_s3_client(region_name: str = 'us-east-1') -> boto3.client:
+    """
+    Get standardized S3 client with centralized configuration (DRY consolidation).
+    
+    Consolidates the repeated pattern found in 91+ files:
+        s3_client = boto3.client('s3')
+        s3 = boto3.client('s3', region_name='us-east-1')
+        s3_client = boto3.client('s3', region_name=region)
+    
+    Args:
+        region_name: AWS region name
+        
+    Returns:
+        Configured boto3 S3 client
+        
+    Example:
+        s3_client = get_s3_client()
+        s3_client = get_s3_client('us-west-2')
+    """
+    try:
+        # Get region from config if available
+        config = get_config()
+        aws_region = config.get('aws_region', region_name)
+    except Exception:
+        aws_region = region_name
+    
+    return boto3.client('s3', region_name=aws_region)
+
+
 class UploadMode(Enum):
     """S3 upload mode options"""
     LOCAL_THEN_UPLOAD = "local_then_upload"
@@ -83,8 +112,8 @@ class UnifiedS3Manager:
         if self.config.bucket_name is None:
             self.config.bucket_name = get_s3_bucket()
         
-        # Initialize S3 client
-        self.s3_client = boto3.client('s3', region_name=self.config.region)
+        # DRY CONSOLIDATION: Use centralized S3 client initialization
+        self.s3_client = get_s3_client(region_name=self.config.region)
         
         # Initialize paths
         self.downloads_dir = Path(self.config.downloads_dir)

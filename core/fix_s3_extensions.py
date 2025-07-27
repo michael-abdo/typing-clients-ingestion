@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
 
-import boto3
 import pandas as pd
 import json
 from datetime import datetime
 from utils.csv_manager import CSVManager
 from utils.config import get_s3_bucket
+from utils.s3_manager import get_s3_client
 
 def fix_s3_file_extensions():
     """Fix the .bin extensions on S3 files to proper media extensions."""
     
-    s3_client = boto3.client('s3')
+    # DRY CONSOLIDATION: Use centralized S3 client
+    s3_client = get_s3_client()
     # DRY: Use centralized S3 bucket configuration
     bucket_name = get_s3_bucket()
     
