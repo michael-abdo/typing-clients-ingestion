@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """Test cases for URL cleaning and extraction with control characters"""
 
+# Standardized project imports
+from utils.config import setup_project_imports
+setup_project_imports()
+
 import unittest
 import sys
 import os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
 from utils.extract_links import clean_url
-
 
 class TestURLCleaning(unittest.TestCase):
     """Test URL cleaning with various control characters and edge cases"""
@@ -115,7 +116,6 @@ class TestURLCleaning(unittest.TestCase):
                 self.assertNotIn("\x0b", result)
                 self.assertNotIn("\\u", result)
                 self.assertNotIn("\n", result)
-
 
 if __name__ == "__main__":
     unittest.main()

@@ -28,6 +28,7 @@ from utils.extract_links import extract_google_doc_text, extract_actual_url, ext
 from utils.csv_manager import CSVManager
 from utils.http_pool import get as http_get  # Centralized HTTP requests (DRY)
 from utils.streaming_integration import stream_extracted_links
+from utils.constants import CSVConstants
 from utils.s3_manager import UnifiedS3Manager, S3Config, UploadMode
 
 
@@ -210,6 +211,9 @@ def step4_extract_links(doc_content, doc_text=""):
         'all_links': []
     }
     
+    # DRY CONSOLIDATION - Step 2: Use centralized patterns and URL construction
+    from utils.constants import URLPatterns
+    
     # Use centralized YouTube patterns (DRY)
     youtube_patterns = [
         PatternRegistry.YOUTUBE_VIDEO_FULL,
@@ -221,9 +225,9 @@ def step4_extract_links(doc_content, doc_text=""):
         matches = pattern.findall(combined_content)
         for match in matches:
             if pattern == PatternRegistry.YOUTUBE_PLAYLIST_FULL:
-                clean_link = f'https://www.youtube.com/playlist?list={match}'
+                clean_link = URLPatterns.youtube_playlist_url(match)
             else:
-                clean_link = f'https://www.youtube.com/watch?v={match}'
+                clean_link = URLPatterns.youtube_watch_url(match)
             
             if clean_link not in links['youtube']:
                 links['youtube'].append(clean_link)
@@ -233,7 +237,7 @@ def step4_extract_links(doc_content, doc_text=""):
     escaped_playlist_pattern = re.compile(r'youtube\.com/playlist\?list\\u003d([a-zA-Z0-9_-]+)')
     escaped_matches = escaped_playlist_pattern.findall(combined_content)
     for match in escaped_matches:
-        clean_link = f'https://www.youtube.com/playlist?list={match}'
+        clean_link = URLPatterns.youtube_playlist_url(match)
         if clean_link not in links['youtube']:
             links['youtube'].append(clean_link)
     
@@ -248,11 +252,11 @@ def step4_extract_links(doc_content, doc_text=""):
         matches = pattern.findall(combined_content)
         for match in matches:
             if pattern == PatternRegistry.DRIVE_FOLDER_FULL:
-                clean_link = f'https://drive.google.com/drive/folders/{match}'
+                clean_link = URLPatterns.drive_folder_url(match)
                 if clean_link not in links['drive_folders']:
                     links['drive_folders'].append(clean_link)
             else:
-                clean_link = f'https://drive.google.com/file/d/{match}/view'
+                clean_link = URLPatterns.drive_file_url(match, view=True)
                 if clean_link not in links['drive_files']:
                     links['drive_files'].append(clean_link)
     
@@ -365,61 +369,56 @@ def filter_meaningful_links(links):
     # Process YouTube links
     for link in links.get('youtube', []):
         if is_meaningful_link(link):
-            # Normalize YouTube URLs to standard format
+            # Normalize YouTube URLs to standard format using centralized extraction
             if '/watch?v=' in link:
-                match = re.search(r'v=([a-zA-Z0-9_-]{11})', link)
-                if match:
-                    meaningful_youtube.append(f"https://www.youtube.com/watch?v={match.group(1)}")
+                video_id = extract_youtube_id(link)
+                if video_id:
+                    meaningful_youtube.append(URLPatterns.youtube_watch_url(video_id))
             elif '/playlist?list=' in link:
                 match = re.search(r'list=([a-zA-Z0-9_-]+)', link)
                 if match:
-                    meaningful_youtube.append(f"https://www.youtube.com/playlist?list={match.group(1)}")
+                    meaningful_youtube.append(URLPatterns.youtube_playlist_url(match.group(1)))
             elif 'youtu.be/' in link:
-                video_id = link.split('/')[-1].split('?')[0]  # Remove parameters
-                if len(video_id) == 11:
-                    meaningful_youtube.append(f"https://www.youtube.com/watch?v={video_id}")
+                video_id = extract_youtube_id(link)
+                if video_id:
+                    meaningful_youtube.append(URLPatterns.youtube_watch_url(video_id))
     
     # Process Drive files
     for link in links.get('drive_files', []):
         if is_meaningful_link(link):
-            # Normalize Drive file URLs
-            match = re.search(r'file/d/([a-zA-Z0-9_-]+)', link)
-            if match:
-                meaningful_drive_files.append(f"https://drive.google.com/file/d/{match.group(1)}/view")
+            # Normalize Drive file URLs using centralized extraction
+            file_id = extract_drive_id(link)
+            if file_id:
+                meaningful_drive_files.append(URLPatterns.drive_file_url(file_id, view=True))
     
     # Process Drive folders  
     for link in links.get('drive_folders', []):
         if is_meaningful_link(link):
-            # Normalize Drive folder URLs
-            match = re.search(r'drive/folders/([a-zA-Z0-9_-]+)', link)
-            if match:
-                meaningful_drive_folders.append(f"https://drive.google.com/drive/folders/{match.group(1)}")
+            # Normalize Drive folder URLs using centralized extraction
+            folder_id = extract_drive_id(link)
+            if folder_id:
+                meaningful_drive_folders.append(URLPatterns.drive_folder_url(folder_id))
     
     # Also check all_links for any missed content links
     for link in links.get('all_links', []):
         if is_meaningful_link(link):
             if any(pattern in link.lower() for pattern in ['youtube.com', 'youtu.be']) and link not in meaningful_youtube:
-                # Process as YouTube
-                if '/watch?v=' in link:
-                    match = re.search(r'v=([a-zA-Z0-9_-]{11})', link)
-                    if match:
-                        meaningful_youtube.append(f"https://www.youtube.com/watch?v={match.group(1)}")
+                # Process as YouTube using centralized extraction
+                video_id = extract_youtube_id(link)
+                if video_id:
+                    meaningful_youtube.append(URLPatterns.youtube_watch_url(video_id))
                 elif '/playlist?list=' in link:
                     match = re.search(r'list=([a-zA-Z0-9_-]+)', link)
                     if match:
-                        meaningful_youtube.append(f"https://www.youtube.com/playlist?list={match.group(1)}")
-                elif 'youtu.be/' in link:
-                    video_id = link.split('/')[-1].split('?')[0]
-                    if len(video_id) == 11:
-                        meaningful_youtube.append(f"https://www.youtube.com/watch?v={video_id}")
+                        meaningful_youtube.append(URLPatterns.youtube_playlist_url(match.group(1)))
             elif 'drive.google.com/file' in link and link not in meaningful_drive_files:
-                match = re.search(r'file/d/([a-zA-Z0-9_-]+)', link)
-                if match:
-                    meaningful_drive_files.append(f"https://drive.google.com/file/d/{match.group(1)}/view")
+                file_id = extract_drive_id(link)
+                if file_id:
+                    meaningful_drive_files.append(URLPatterns.drive_file_url(file_id, view=True))
             elif 'drive.google.com/drive/folders' in link and link not in meaningful_drive_folders:
-                match = re.search(r'drive/folders/([a-zA-Z0-9_-]+)', link)
-                if match:
-                    meaningful_drive_folders.append(f"https://drive.google.com/drive/folders/{match.group(1)}")
+                folder_id = extract_drive_id(link)
+                if folder_id:
+                    meaningful_drive_folders.append(URLPatterns.drive_folder_url(folder_id))
     
     # Remove duplicates and sort
     meaningful_youtube = sorted(list(set(meaningful_youtube)))
@@ -552,18 +551,18 @@ def step6_map_data(processed_records, basic_mode=False, text_mode=False, output_
         return None
     
     print(f"  📊 Total records: {len(df)}")
-    print(f"  📊 Records with links: {len(df[df['link'] != ''])}")
+    print(f"  📊 Records with links: {len(df[df[CSVConstants.Columns.LINK] != ''])}")
     
     # Additional stats only for full mode
     if not basic_mode and not text_mode:
-        print(f"  📊 Records with YouTube: {len(df[df['youtube_playlist'] != ''])}")
-        print(f"  📊 Records with Drive: {len(df[df['google_drive'] != ''])}")
+        print(f"  📊 Records with YouTube: {len(df[df[CSVConstants.Columns.YOUTUBE_PLAYLIST] != ''])}")
+        print(f"  📊 Records with Drive: {len(df[df[CSVConstants.Columns.GOOGLE_DRIVE] != ''])}")
     
     # Text mode specific stats
     if text_mode:
         if 'document_text' in df.columns:
-            successful_extractions = len(df[(df['document_text'] != '') & (~df['document_text'].str.startswith('EXTRACTION_FAILED', na=False))])
-            failed_extractions = len(df[df['document_text'].str.startswith('EXTRACTION_FAILED', na=False)])
+            successful_extractions = len(df[(df[CSVConstants.Columns.DOCUMENT_TEXT] != '') & (~df[CSVConstants.Columns.DOCUMENT_TEXT].str.startswith('EXTRACTION_FAILED', na=False))])
+            failed_extractions = len(df[df[CSVConstants.Columns.DOCUMENT_TEXT].str.startswith('EXTRACTION_FAILED', na=False)])
             print(f"  📊 Successful text extractions: {successful_extractions}")
             print(f"  📊 Failed text extractions: {failed_extractions}")
     

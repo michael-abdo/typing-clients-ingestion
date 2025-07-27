@@ -1,3 +1,0 @@
-[2025-07-26T02:23:10.838461] INFO: Recovery session started | Data: {"session_id": "41429a9c", "timestamp": "2025-07-26T02:23:10.838214"}
-[2025-07-26T02:23:11.025661] INFO: Starting deep file content analysis | Data: {"method": "content_analysis"}
-[2025-07-26T02:23:33.699810] ERROR: Error in smart_mapping | Data: {"timestamp": "2025-07-26T02:23:33.699787", "error_type": "smart_mapping_error", "error_message": "name 'os' is not defined", "context": {}}

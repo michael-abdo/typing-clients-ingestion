@@ -1191,3 +1191,121 @@ if __name__ == "__main__":
         print(f"⚠️ Could not test with actual CSV (expected in test environment): {e}")
     
     print("📋 CSV Manager ready with DRY consolidation!")
+
+# ============================================================================
+# SIMPLIFIED CSV OPERATIONS API (DRY ITERATION 1 - Step 2)
+# ============================================================================
+
+def process_csv_safely(csv_path: str, process_func: Callable[[Dict], Dict],
+                      filter_func: Optional[Callable[[Dict], bool]] = None,
+                      backup: bool = True) -> Tuple[bool, int, Optional[str]]:
+    """
+    Safely process a CSV file with automatic locking, backup, and error handling.
+    
+    CONSOLIDATES THE PATTERN found in 20+ utility scripts that do:
+        with open(csv, 'r') as f:
+            reader = csv.DictReader(f)
+            with open(temp, 'w') as out:
+                writer = csv.DictWriter(out)
+                for row in reader:
+                    # process row
+                    writer.writerow(row)
+    
+    Args:
+        csv_path: Path to CSV file
+        process_func: Function that takes a row dict and returns modified row dict
+        filter_func: Optional function to filter rows (return True to keep row)
+        backup: Whether to create backup before processing
+        
+    Returns:
+        Tuple of (success, rows_processed, error_message)
+        
+    Example:
+        # Replace this pattern:
+        with open(csv_file, 'r') as f:
+            reader = csv.DictReader(f)
+            # ... process rows ...
+            
+        # With this:
+        def update_links(row):
+            if 'drive.google.com' in row.get('link', ''):
+                row['google_drive'] = row['link']
+            return row
+            
+        success, count, error = process_csv_safely(
+            'output.csv',
+            update_links,
+            filter_func=lambda row: row.get('status') == 'pending'
+        )
+    """
+    manager = CSVManager(csv_path, auto_backup=backup)
+    rows_processed = 0
+    
+    try:
+        # Read all rows
+        df = manager.read()
+        if df.empty:
+            return True, 0, None
+        
+        # Convert to list of dicts for processing
+        rows = df.to_dict('records')
+        processed_rows = []
+        
+        for row in rows:
+            # Apply filter if provided
+            if filter_func and not filter_func(row):
+                processed_rows.append(row)
+                continue
+            
+            # Process row
+            try:
+                processed_row = process_func(row)
+                processed_rows.append(processed_row)
+                rows_processed += 1
+            except Exception as e:
+                logger.error(f"Error processing row {row.get('row_id', 'unknown')}: {e}")
+                processed_rows.append(row)  # Keep original on error
+        
+        # Write back atomically
+        success = manager.atomic_write(processed_rows)
+        return success, rows_processed, None
+        
+    except Exception as e:
+        error_msg = f"CSV processing failed: {str(e)}"
+        logger.error(error_msg)
+        return False, rows_processed, error_msg
+
+
+def update_csv_column(csv_path: str, column_name: str, 
+                     value_func: Callable[[Dict], Any],
+                     condition_func: Optional[Callable[[Dict], bool]] = None) -> Tuple[bool, int]:
+    """
+    Update a specific column in CSV based on a function.
+    
+    CONSOLIDATES PATTERN of updating single columns found in multiple scripts.
+    
+    Args:
+        csv_path: Path to CSV file
+        column_name: Column to update
+        value_func: Function that takes row and returns new column value
+        condition_func: Optional condition for which rows to update
+        
+    Returns:
+        Tuple of (success, rows_updated)
+        
+    Example:
+        # Update google_drive column for rows with drive links
+        success, count = update_csv_column(
+            'output.csv',
+            'google_drive',
+            lambda row: extract_drive_links(row['extracted_links']),
+            lambda row: 'drive.google.com' in row.get('link', '')
+        )
+    """
+    def process_row(row):
+        if condition_func is None or condition_func(row):
+            row[column_name] = value_func(row)
+        return row
+    
+    success, count, _ = process_csv_safely(csv_path, process_row)
+    return success, count

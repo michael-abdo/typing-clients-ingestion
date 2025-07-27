@@ -6,6 +6,7 @@ from datetime import datetime
 from utils.csv_manager import CSVManager
 from utils.config import get_s3_bucket
 from utils.s3_manager import get_s3_client
+from utils.constants import CSVConstants
 
 def fix_s3_file_extensions():
     """Fix the .bin extensions on S3 files to proper media extensions."""
@@ -68,9 +69,12 @@ def fix_s3_file_extensions():
     
     fixed_mappings = {}
     
+    # DRY CONSOLIDATION - Step 1: Import S3Manager for key generation
+    from utils.s3_manager import UnifiedS3Manager
+    
     for uuid, info in file_mappings.items():
-        old_key = f"files/{uuid}.bin"
-        new_key = f"files/{uuid}{info['extension']}"
+        old_key = UnifiedS3Manager.generate_uuid_s3_key(uuid, '.bin')
+        new_key = UnifiedS3Manager.generate_uuid_s3_key(uuid, info['extension'])
         filename = info['filename']
         content_type = info['content_type']
         
@@ -123,12 +127,15 @@ def fix_s3_file_extensions():
     # Update CSV with corrected S3 paths
     print(f"\\n📝 Updating CSV with corrected file paths...")
     
-    df = pd.read_csv('outputs/output.csv')
+    # DRY CONSOLIDATION - Step 1: Use atomic CSV operations to prevent corruption
+    from utils.csv_manager import CSVManager
+    csv_manager = CSVManager('outputs/output.csv')
+    df = csv_manager.safe_csv_read('outputs/output.csv')
     
     for row_id in [476, 484]:
-        mask = df['row_id'] == row_id
+        mask = df[CSVConstants.Columns.ROW_ID] == row_id
         if mask.any():
-            s3_paths = df.loc[mask, 's3_paths'].iloc[0]
+            s3_paths = df.loc[mask, CSVConstants.Columns.S3_PATHS].iloc[0]
             
             if s3_paths and s3_paths not in ['[]', '{}', None]:
                 try:
@@ -145,13 +152,13 @@ def fix_s3_file_extensions():
                             updated_paths[uuid] = old_path
                     
                     # DRY: Use CSVManager for saving S3 paths
-                    df.loc[mask, 's3_paths'] = CSVManager.save_s3_paths(updated_paths)
+                    df.loc[mask, CSVConstants.Columns.S3_PATHS] = CSVManager.save_s3_paths(updated_paths)
                     
                 except Exception as e:
                     print(f"   ❌ Error updating CSV for row {row_id}: {e}")
     
-    # Save updated CSV
-    df.to_csv('outputs/output.csv', index=False)
+    # Save updated CSV atomically to prevent corruption
+    csv_manager.safe_csv_write(df, "fix_s3_extensions")
     print(f"\\n✅ CSV updated with corrected file extensions")
     
     # Summary

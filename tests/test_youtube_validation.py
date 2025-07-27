@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """Test cases for YouTube URL validation"""
 
+# Standardized project imports
+from utils.config import setup_project_imports
+setup_project_imports()
+
 import unittest
 import sys
 import os
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
 from utils.validation import validate_youtube_url, validate_youtube_playlist_url, validate_youtube_video_id, ValidationError
-
 
 class TestYouTubeValidation(unittest.TestCase):
     """Test YouTube URL validation functions"""
@@ -131,7 +132,6 @@ class TestYouTubeValidation(unittest.TestCase):
         result_url, video_ids = validate_youtube_playlist_url(url)
         self.assertEqual(video_ids, ["kCTS91Sded4"])
         self.assertEqual(result_url, "https://www.youtube.com/watch_videos?video_ids=kCTS91Sded4")
-
 
 if __name__ == "__main__":
     unittest.main()

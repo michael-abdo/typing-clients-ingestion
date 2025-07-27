@@ -16,7 +16,7 @@ a single source of truth for all system constants.
 
 import re
 from enum import Enum
-from typing import Dict, List, Set, Pattern
+from typing import Dict, List, Set, Pattern, Optional
 
 
 # ============================================================================
@@ -175,6 +175,17 @@ class CSVConstants:
         FILE_PATH = 'file_path'
         ERROR_MESSAGE = 'error_message'
         LAST_MODIFIED = 'last_modified'
+        
+        # Additional columns from codebase usage
+        CREATED_AT = 'created_at'
+        DOWNLOAD_ERRORS = 'download_errors'
+        DRIVE_STATUS = 'drive_status'
+        FILE_ID = 'file_id'
+        FILE_UUIDS = 'file_uuids'
+        LAST_DOWNLOAD_ATTEMPT = 'last_download_attempt'
+        NOTES = 'notes'
+        S3_PATHS = 's3_paths'
+        YOUTUBE_STATUS = 'youtube_status'
 
 
 # ============================================================================
@@ -336,6 +347,68 @@ class URLPatterns:
     # Drive ID validation  
     DRIVE_ID_MIN_LENGTH = 25
     DRIVE_ID_PATTERN = re.compile(r'^[a-zA-Z0-9_-]{25,}$')
+    
+    # DRY CONSOLIDATION - Step 1: Centralized URL construction methods
+    @staticmethod
+    def youtube_watch_url(video_id: str) -> str:
+        """Construct YouTube watch URL from video ID."""
+        return f"{URLPatterns.YOUTUBE_WATCH}{video_id}"
+    
+    @staticmethod
+    def youtube_short_url(video_id: str) -> str:
+        """Construct YouTube short URL from video ID."""
+        return f"{URLPatterns.YOUTUBE_SHORT}{video_id}"
+    
+    @staticmethod
+    def youtube_playlist_url(playlist_id: str) -> str:
+        """Construct YouTube playlist URL from playlist ID."""
+        return f"{URLPatterns.YOUTUBE_PLAYLIST}{playlist_id}"
+    
+    @staticmethod
+    def drive_file_url(file_id: str, view: bool = True) -> str:
+        """Construct Google Drive file URL from file ID."""
+        base_url = f"{URLPatterns.DRIVE_FILE}{file_id}"
+        return f"{base_url}/view" if view else base_url
+    
+    @staticmethod
+    def drive_open_url(file_id: str) -> str:
+        """Construct Google Drive open URL from file ID."""
+        return f"{URLPatterns.DRIVE_OPEN}{file_id}"
+    
+    @staticmethod
+    def drive_folder_url(folder_id: str) -> str:
+        """Construct Google Drive folder URL from folder ID."""
+        return f"{URLPatterns.DRIVE_FOLDER}{folder_id}"
+    
+    @staticmethod
+    def drive_download_url(file_id: str, confirm: Optional[str] = None) -> str:
+        """Construct Google Drive download URL from file ID."""
+        url = f"{URLPatterns.DRIVE_DOWNLOAD}{file_id}"
+        if confirm:
+            url += f"&confirm={confirm}"
+        return url
+    
+    @staticmethod
+    def drive_direct_download_url(file_id: str, uuid: Optional[str] = None, confirm: Optional[str] = None) -> str:
+        """Construct Google Drive direct download URL with parameters."""
+        params = [f"id={file_id}", "export=download"]
+        if confirm:
+            params.append(f"confirm={confirm}")
+        if uuid:
+            params.append(f"uuid={uuid}")
+        return f"{URLPatterns.DRIVE_DIRECT_DOWNLOAD}?{'&'.join(params)}"
+    
+    @staticmethod
+    def docs_document_url(doc_id: str, edit: bool = False) -> str:
+        """Construct Google Docs document URL from doc ID."""
+        base_url = f"{URLPatterns.DRIVE_DOCUMENT}{doc_id}"
+        return f"{base_url}/edit" if edit else base_url
+    
+    @staticmethod
+    def docs_spreadsheet_url(sheet_id: str, edit: bool = False) -> str:
+        """Construct Google Sheets spreadsheet URL from sheet ID."""
+        base_url = f"{URLPatterns.DRIVE_SPREADSHEET}{sheet_id}"
+        return f"{base_url}/edit" if edit else base_url
 
 
 # ============================================================================
@@ -557,6 +630,10 @@ class S3Constants:
     KEY_PATTERN_PERSON = '{row_id}_{name}'
     KEY_PATTERN_MEDIA = 'media/{uuid}.{ext}'
     KEY_PATTERN_DOCUMENT = 'documents/{uuid}.{ext}'
+    
+    # UUID-based storage patterns (DRY CONSOLIDATION - Step 1)
+    UUID_FILES_PREFIX = 'files/'  # Standard prefix for UUID-based storage
+    KEY_PATTERN_UUID_FILE = 'files/{uuid}{ext}'  # e.g., files/abc123.mp3
 
 
 # ============================================================================

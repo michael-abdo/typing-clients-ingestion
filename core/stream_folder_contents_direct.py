@@ -14,6 +14,7 @@ from utils.s3_manager import UnifiedS3Manager, S3Config, UploadMode
 from utils.download_drive import list_folder_files, extract_file_id
 from utils.logging_config import get_logger
 from utils.csv_manager import CSVManager
+from utils.constants import CSVConstants
 
 logger = get_logger(__name__)
 
@@ -92,12 +93,13 @@ def stream_drive_folders_direct():
                 file_uuid = str(uuid.uuid4())
                 
                 # Determine file extension from name
-                if '.' in file_name:
-                    file_ext = '.' + file_name.split('.')[-1].lower()
-                else:
-                    file_ext = '.bin'  # Default for unknown types
+                # DRY CONSOLIDATION - Step 2: Use centralized extension handling
+                from utils.path_utils import get_extension_or_default
+                file_ext = get_extension_or_default(file_name, '.bin')
                 
-                s3_key = f"files/{file_uuid}{file_ext}"
+                # DRY CONSOLIDATION - Step 1: Use centralized S3 key generation
+                from utils.s3_manager import UnifiedS3Manager
+                s3_key = UnifiedS3Manager.generate_uuid_s3_key(file_uuid, file_ext)
                 
                 logger.info(f"\\n📤 Streaming: {file_name}")
                 logger.info(f"   Drive ID: {file_id}")
@@ -145,11 +147,11 @@ def stream_drive_folders_direct():
                     s3_paths[file_info['uuid']] = file_info['s3_key']
                 
                 # Find row in DataFrame and update
-                mask = df['row_id'] == row_id
+                mask = df[CSVConstants.Columns.ROW_ID] == row_id
                 if mask.any():
                     # Get existing mappings and merge
-                    existing_uuids = df.loc[mask, 'file_uuids'].iloc[0]
-                    existing_paths = df.loc[mask, 's3_paths'].iloc[0]
+                    existing_uuids = df.loc[mask, CSVConstants.Columns.FILE_UUIDS].iloc[0]
+                    existing_paths = df.loc[mask, CSVConstants.Columns.S3_PATHS].iloc[0]
                     
                     # DRY: Use CSVManager for loading existing UUIDs
                     existing_uuids_dict = CSVManager.load_file_uuids(df.loc[mask].iloc[0])
@@ -162,8 +164,8 @@ def stream_drive_folders_direct():
                         s3_paths.update(existing_paths_dict)
                     
                     # DRY: Use CSVManager for S3 mapping updates
-                    df.loc[mask, 'file_uuids'] = CSVManager.save_file_uuids(file_uuids)
-                    df.loc[mask, 's3_paths'] = CSVManager.save_s3_paths(s3_paths)
+                    df.loc[mask, CSVConstants.Columns.FILE_UUIDS] = CSVManager.save_file_uuids(file_uuids)
+                    df.loc[mask, CSVConstants.Columns.S3_PATHS] = CSVManager.save_s3_paths(s3_paths)
                     
                     logger.info(f"✅ Updated CSV with {len(uploaded_files)} files for {person_name}")
                 else:

@@ -1,2 +1,0 @@
-[2025-07-26T02:25:14.617972] INFO: Recovery session started | Data: {"session_id": "deef9be6", "timestamp": "2025-07-26T02:25:14.617752"}
-[2025-07-26T02:25:35.902918] SUCCESS: Kaioxys files recovered successfully | Data: {"client_row_id": 472, "client_name": "Kaioxys DarkMacro", "files_recovered": 11, "total_size_mb": 936.7996377944946}

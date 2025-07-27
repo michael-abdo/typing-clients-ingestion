@@ -2,6 +2,10 @@
 """
 Unit tests for file locking module - critical for preventing race conditions.
 """
+
+# Standardized project imports
+from utils.config import setup_project_imports
+setup_project_imports()
 import unittest
 import sys
 import os
@@ -10,10 +14,7 @@ import threading
 import time
 from pathlib import Path
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-
 from utils.file_lock import FileLock, file_lock, atomic_write_with_lock
-
 
 class TestFileLock(unittest.TestCase):
     """Test file locking functionality"""
@@ -153,7 +154,6 @@ class TestFileLock(unittest.TestCase):
         with file_lock(self.test_file, exclusive=True, timeout=0.1) as lock:
             self.assertIsNotNone(lock)
 
-
 class TestFileLockIntegration(unittest.TestCase):
     """Integration tests for file locking with real file operations"""
     
@@ -215,7 +215,6 @@ class TestFileLockIntegration(unittest.TestCase):
         # Check all IDs present
         ids = [int(row[0]) for row in rows[1:]]
         self.assertEqual(sorted(ids), list(range(10)))
-
 
 if __name__ == "__main__":
     unittest.main()

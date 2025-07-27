@@ -2,19 +2,20 @@
 """
 Unit tests for validation module - critical security functions.
 """
+
+# Standardized project imports
+from utils.config import setup_project_imports
+setup_project_imports()
 import unittest
 import sys
 import os
 from pathlib import Path
-
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from utils.validation import (
     validate_url, validate_youtube_url, validate_google_drive_url,
     validate_file_path, ValidationError
 )
 from utils.sanitization import sanitize_csv_field as sanitize_csv_value
-
 
 class TestURLValidation(unittest.TestCase):
     """Test URL validation functions"""
@@ -125,7 +126,6 @@ class TestURLValidation(unittest.TestCase):
         with self.assertRaises(ValidationError):
             validate_google_drive_url("https://drive.google.com/notavalidpath")
 
-
 class TestFilePathValidation(unittest.TestCase):
     """Test file path validation functions"""
     
@@ -181,7 +181,6 @@ class TestFilePathValidation(unittest.TestCase):
             # The path should be properly escaped/safe
             self.assertIn(path.replace('/', ''), str(validated))
 
-
 class TestCSVSanitization(unittest.TestCase):
     """Test CSV value sanitization"""
     
@@ -227,7 +226,6 @@ class TestCSVSanitization(unittest.TestCase):
         self.assertEqual(sanitize_csv_value(123), "123")
         self.assertEqual(sanitize_csv_value(45.67), "45.67")
         self.assertEqual(sanitize_csv_value(True), "True")
-
 
 if __name__ == "__main__":
     unittest.main()

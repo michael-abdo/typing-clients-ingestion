@@ -17,6 +17,8 @@ try:
     from sanitization import sanitize_error_message, SafeDownloadError, validate_csv_field_safety
     from config import get_drive_downloads_dir, create_download_dir, Constants
     from download_utils import download_file_with_progress
+    # DRY CONSOLIDATION - Step 1: Import centralized URL patterns
+    from constants import URLPatterns
 except ImportError:
     from .logging_config import get_logger
     from .validation import validate_google_drive_url, validate_file_path, ValidationError
@@ -27,6 +29,8 @@ except ImportError:
     from .sanitization import sanitize_error_message, SafeDownloadError, validate_csv_field_safety
     from .config import get_drive_downloads_dir, create_download_dir, Constants
     from .download_utils import download_file_with_progress
+    # DRY CONSOLIDATION - Step 1: Import centralized URL patterns
+    from .constants import URLPatterns
 
 # Setup module logger
 logger = get_logger(__name__)
@@ -175,7 +179,8 @@ def list_folder_files(folder_url, logger=None):
             from .http_pool import get as http_get
         
         # Try to access the folder page
-        folder_page_url = f"https://drive.google.com/drive/folders/{folder_id}"
+        # DRY CONSOLIDATION - Step 1: Use centralized URL construction
+        folder_page_url = URLPatterns.drive_folder_url(folder_id)
         logger.info(f"Attempting to list files in folder: {folder_id}")
         
         response = http_get(folder_page_url, timeout=30)
@@ -242,7 +247,8 @@ def list_folder_files(folder_url, logger=None):
             files.append({
                 'id': file_id,
                 'name': name,
-                'url': f"https://drive.google.com/file/d/{file_id}/view"
+                # DRY CONSOLIDATION - Step 1: Use centralized URL construction
+                'url': URLPatterns.drive_file_url(file_id, view=True)
             })
         
         # Remove duplicates based on file ID
@@ -457,7 +463,8 @@ def download_drive_file(file_id, output_filename=None, logger=None):
         return None
     
     # Direct download URL format
-    download_url = f"https://drive.google.com/uc?export=download&id={file_id}"
+    # DRY CONSOLIDATION - Step 1: Use centralized URL construction
+    download_url = URLPatterns.drive_download_url(file_id)
     
     # For large files, Google Drive shows a confirmation page
     # We need to handle this case properly

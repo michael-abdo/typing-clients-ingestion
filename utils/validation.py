@@ -159,7 +159,9 @@ def _validate_url_domain(netloc: str, allowed_domains: List[str]) -> None:
 
 def validate_youtube_url(url: str) -> Tuple[str, str]:
     """
-    Validate YouTube URL and extract video ID.
+    Validate YouTube URL and extract video ID (DRY CONSOLIDATION - Step 1).
+    
+    Consolidates URL validation from url_utils.py with enhanced validation logic.
     
     Args:
         url: YouTube URL
@@ -173,6 +175,7 @@ def validate_youtube_url(url: str) -> Tuple[str, str]:
     Example:
         url, video_id = validate_youtube_url('https://youtu.be/abc123')
     """
+    # Clean and validate URL first
     url = validate_url(url, allowed_domains=['youtube.com', 'youtu.be'])
     
     if not is_youtube_url(url):
@@ -189,9 +192,34 @@ def validate_youtube_url(url: str) -> Tuple[str, str]:
     return url, video_id
 
 
+def normalize_youtube_url(url: str) -> str:
+    """
+    Normalize YouTube URL to standard format (DRY CONSOLIDATION - Step 1).
+    
+    Consolidates functionality from url_utils.py into validation module.
+    
+    Args:
+        url: YouTube URL to normalize
+        
+    Returns:
+        Normalized YouTube URL
+        
+    Raises:
+        ValidationError: If URL is invalid
+        
+    Example:
+        normalized = normalize_youtube_url('https://youtu.be/abc123')
+        # Returns: 'https://www.youtube.com/watch?v=abc123'
+    """
+    _, video_id = validate_youtube_url(url)
+    return f"https://www.youtube.com/watch?v={video_id}"
+
+
 def validate_drive_url(url: str) -> Tuple[str, str]:
     """
-    Validate Google Drive URL and extract file ID.
+    Validate Google Drive URL and extract file ID (DRY CONSOLIDATION - Step 1).
+    
+    Consolidates URL validation from url_utils.py with enhanced validation logic.
     
     Args:
         url: Google Drive URL
@@ -199,9 +227,13 @@ def validate_drive_url(url: str) -> Tuple[str, str]:
     Returns:
         Tuple of (validated_url, file_id)
         
+    Raises:
+        ValidationError: If URL is invalid
+        
     Example:
         url, file_id = validate_drive_url('https://drive.google.com/file/d/abc123/view')
     """
+    # Clean and validate URL first  
     url = validate_url(url, allowed_domains=['drive.google.com', 'docs.google.com'])
     
     if not is_drive_url(url):
@@ -216,6 +248,61 @@ def validate_drive_url(url: str) -> Tuple[str, str]:
         raise ValidationError(f"Invalid Google Drive file ID format: {file_id}")
     
     return url, file_id
+
+
+def normalize_drive_url(url: str) -> str:
+    """
+    Normalize Google Drive URL to standard format (DRY CONSOLIDATION - Step 1).
+    
+    Consolidates functionality from url_utils.py into validation module.
+    
+    Args:
+        url: Google Drive URL to normalize
+        
+    Returns:
+        Normalized Google Drive URL
+        
+    Raises:
+        ValidationError: If URL is invalid
+        
+    Example:
+        normalized = normalize_drive_url('https://drive.google.com/file/d/abc123/edit')
+        # Returns: 'https://drive.google.com/file/d/abc123/view'
+    """
+    _, file_id = validate_drive_url(url)
+    return f"https://drive.google.com/file/d/{file_id}/view"
+
+
+def parse_url_links(text: str, separator: str = '|') -> List[str]:
+    """
+    Parse pipe-separated URLs from text (DRY CONSOLIDATION - Step 1).
+    
+    Consolidates URL parsing logic from url_utils.py into validation module.
+    
+    Args:
+        text: Text containing URLs
+        separator: URL separator character
+        
+    Returns:
+        List of clean URLs
+        
+    Example:
+        urls = parse_url_links('url1|url2|url3')
+        # Returns: ['url1', 'url2', 'url3']
+    """
+    if not text or text == 'nan':
+        return []
+    
+    # Handle pandas NaN values
+    try:
+        import pandas as pd
+        if pd.isna(text):
+            return []
+    except ImportError:
+        pass
+    
+    links = str(text).split(separator)
+    return [link.strip() for link in links if link.strip() and link.strip() != 'nan']
 
 
 # ============================================================================
@@ -987,3 +1074,297 @@ def validate_row_id(row_id: Any) -> Tuple[bool, Optional[int]]:
         
     except (ValueError, TypeError, OverflowError):
         return False, None
+
+
+# ============================================================================
+# UNIFIED VALIDATION SYSTEM (DRY ITERATION 3 - Step 3)
+# ============================================================================
+
+class UnifiedValidator:
+    """
+    Unified validation system to eliminate duplication across codebase.
+    
+    CONSOLIDATES PATTERNS FROM:
+    - 15+ files with different file extension validation
+    - 10+ files with different CSV field validation
+    - Multiple URL validation implementations
+    - Inconsistent data type validation
+    
+    BUSINESS IMPACT: Prevents data corruption from inconsistent validation
+    """
+    
+    # CSV field size limits (consistent across system)
+    CSV_FIELD_MAX_LENGTH = 32000  # Standard limit
+    CSV_FIELD_SAFE_LENGTH = 30000  # Conservative limit with buffer
+    
+    # Common file extensions grouped by type
+    FILE_EXTENSIONS = {
+        'video': {'.mp4', '.avi', '.mov', '.mkv', '.webm', '.flv', '.m4v', '.wmv'},
+        'audio': {'.mp3', '.wav', '.flac', '.aac', '.ogg', '.m4a', '.wma'},
+        'image': {'.jpg', '.jpeg', '.png', '.gif', '.bmp', '.svg', '.webp'},
+        'document': {'.pdf', '.doc', '.docx', '.txt', '.odt', '.rtf'},
+        'archive': {'.zip', '.rar', '.7z', '.tar', '.gz', '.bz2'},
+        'data': {'.csv', '.json', '.xml', '.yaml', '.yml'},
+    }
+    
+    @classmethod
+    def validate_file_extension(cls, filename: str, allowed_types: Union[str, List[str]] = 'all') -> Tuple[bool, str]:
+        """
+        Unified file extension validation.
+        
+        ELIMINATES PATTERNS:
+        - ext = os.path.splitext(filename)[1]
+        - file_ext = Path(file_path).suffix.lower()
+        - extension = filename.split('.')[-1] if '.' in filename else ''
+        
+        Args:
+            filename: Filename to validate
+            allowed_types: 'all', specific type ('video', 'audio'), or list of extensions
+            
+        Returns:
+            Tuple of (is_valid, normalized_extension)
+            
+        Example:
+            valid, ext = UnifiedValidator.validate_file_extension('video.MP4', 'video')
+            # Returns: (True, '.mp4')
+        """
+        if not filename:
+            return False, ''
+        
+        # Normalize and extract extension
+        filename = str(filename).strip()
+        parts = filename.rsplit('.', 1)
+        
+        if len(parts) < 2 or not parts[1]:
+            return False, ''
+        
+        # Normalize extension
+        extension = f".{parts[1].lower()}"
+        
+        # Check against allowed types
+        if allowed_types == 'all':
+            all_extensions = set()
+            for ext_set in cls.FILE_EXTENSIONS.values():
+                all_extensions.update(ext_set)
+            return extension in all_extensions, extension
+        
+        elif isinstance(allowed_types, str):
+            if allowed_types in cls.FILE_EXTENSIONS:
+                return extension in cls.FILE_EXTENSIONS[allowed_types], extension
+            else:
+                return False, extension
+                
+        elif isinstance(allowed_types, list):
+            normalized_allowed = {ext.lower() if ext.startswith('.') else f'.{ext.lower()}' 
+                                for ext in allowed_types}
+            return extension in normalized_allowed, extension
+        
+        return False, extension
+    
+    @classmethod
+    def validate_csv_field(cls, value: Any, field_name: str = 'field',
+                          max_length: Optional[int] = None,
+                          sanitize: bool = True) -> Tuple[bool, str, Optional[str]]:
+        """
+        Unified CSV field validation with consistent rules.
+        
+        CONSOLIDATES PATTERNS:
+        - if len(value) > 32000:  # Some files
+        - if len(str(value)) > 65535:  # Other files  
+        - if '\\x00' in value:  # Security checks in some places only
+        
+        Args:
+            value: Value to validate
+            field_name: Name of field for error messages
+            max_length: Maximum allowed length (default: CSV_FIELD_MAX_LENGTH)
+            sanitize: Whether to sanitize the value
+            
+        Returns:
+            Tuple of (is_valid, sanitized_value, error_message)
+            
+        Example:
+            valid, clean_val, err = UnifiedValidator.validate_csv_field(user_input, 'description')
+        """
+        max_length = max_length or cls.CSV_FIELD_MAX_LENGTH
+        
+        # Convert to string
+        if value is None:
+            return True, '', None
+        
+        str_value = str(value)
+        
+        # Security validation - check for null bytes
+        if '\x00' in str_value:
+            return False, '', f"{field_name} contains null bytes (security risk)"
+        
+        # Check for CSV injection patterns
+        dangerous_starts = ('=', '+', '-', '@', '\t', '\r')
+        if str_value.strip() and str_value.strip()[0] in dangerous_starts:
+            if sanitize:
+                str_value = '_' + str_value.strip()
+            else:
+                return False, str_value, f"{field_name} starts with potentially dangerous character"
+        
+        # Length validation
+        if len(str_value) > max_length:
+            if sanitize:
+                str_value = str_value[:max_length - 3] + '...'
+            else:
+                return False, str_value, f"{field_name} exceeds maximum length of {max_length}"
+        
+        # Remove problematic characters if sanitizing
+        if sanitize:
+            # Remove control characters
+            str_value = re.sub(r'[\x00-\x1f\x7f-\x9f]', ' ', str_value)
+            # Normalize whitespace
+            str_value = ' '.join(str_value.split())
+        
+        return True, str_value, None
+    
+    @classmethod
+    def validate_s3_key(cls, key: str, check_uuid: bool = True) -> Tuple[bool, Optional[str]]:
+        """
+        Unified S3 key validation.
+        
+        CONSOLIDATES PATTERN: f"files/{uuid}{ext}" repeated in 10+ files
+        
+        Args:
+            key: S3 key to validate
+            check_uuid: Whether to validate UUID format
+            
+        Returns:
+            Tuple of (is_valid, error_message)
+            
+        Example:
+            valid, err = UnifiedValidator.validate_s3_key('files/123e4567-e89b.mp4')
+        """
+        if not key or not isinstance(key, str):
+            return False, "S3 key must be a non-empty string"
+        
+        # Check basic format
+        if not key.startswith('files/'):
+            return False, "S3 key must start with 'files/'"
+        
+        # Extract filename part
+        filename = key[6:]  # Remove 'files/' prefix
+        if not filename:
+            return False, "S3 key missing filename"
+        
+        # Validate extension
+        valid_ext, _ = cls.validate_file_extension(filename, 'all')
+        if not valid_ext:
+            return False, f"Invalid file extension in S3 key: {filename}"
+        
+        # Validate UUID if requested
+        if check_uuid:
+            # Extract UUID part (before extension)
+            uuid_part = filename.rsplit('.', 1)[0]
+            # Basic UUID format check (simplified)
+            if not re.match(r'^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$', 
+                          uuid_part, re.IGNORECASE):
+                return False, f"Invalid UUID format in S3 key: {uuid_part}"
+        
+        # Check for dangerous characters
+        if any(char in key for char in ['..', '//', '\\', '\x00', ' ', '\t', '\n', '\r']):
+            return False, "S3 key contains invalid characters"
+        
+        return True, None
+
+
+def validate_and_sanitize_input(value: Any, input_type: str = 'text',
+                              max_length: int = 1000,
+                              allowed_patterns: Optional[List[str]] = None) -> Tuple[bool, Any, Optional[str]]:
+    """
+    Universal input validation and sanitization function.
+    
+    CONSOLIDATES validation logic scattered across the codebase.
+    
+    Args:
+        value: Input value to validate
+        input_type: Type of input ('text', 'url', 'email', 'number', 'json', 'csv_field')
+        max_length: Maximum allowed length
+        allowed_patterns: Optional list of regex patterns to match
+        
+    Returns:
+        Tuple of (is_valid, sanitized_value, error_message)
+        
+    Example:
+        valid, clean, err = validate_and_sanitize_input(user_input, 'url')
+        valid, clean, err = validate_and_sanitize_input(data, 'json')
+    """
+    if value is None:
+        return True, None, None
+    
+    try:
+        if input_type == 'text':
+            str_val = str(value).strip()
+            if len(str_val) > max_length:
+                return False, str_val[:max_length], f"Text exceeds {max_length} characters"
+            # Remove control characters
+            clean_val = re.sub(r'[\x00-\x1f\x7f-\x9f]', '', str_val)
+            return True, clean_val, None
+            
+        elif input_type == 'url':
+            try:
+                return True, validate_url(str(value)), None
+            except ValidationError as e:
+                return False, str(value), str(e)
+                
+        elif input_type == 'email':
+            email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+            str_val = str(value).strip().lower()
+            if re.match(email_pattern, str_val):
+                return True, str_val, None
+            return False, str_val, "Invalid email format"
+            
+        elif input_type == 'number':
+            try:
+                if isinstance(value, (int, float)):
+                    return True, value, None
+                num_val = float(str(value))
+                return True, num_val, None
+            except (ValueError, TypeError):
+                return False, value, "Invalid number format"
+                
+        elif input_type == 'json':
+            if isinstance(value, str):
+                try:
+                    parsed = json.loads(value)
+                    return True, parsed, None
+                except json.JSONDecodeError as e:
+                    return False, value, f"Invalid JSON: {str(e)}"
+            # Already a dict/list
+            return True, value, None
+            
+        elif input_type == 'csv_field':
+            return UnifiedValidator.validate_csv_field(value, max_length=max_length)
+            
+        else:
+            return False, value, f"Unknown input type: {input_type}"
+            
+    except Exception as e:
+        return False, value, f"Validation error: {str(e)}"
+
+
+# ============================================================================
+# MIGRATION HELPERS
+# ============================================================================
+
+def get_file_extension(filename: str) -> str:
+    """
+    DEPRECATED: Use UnifiedValidator.validate_file_extension() instead.
+    
+    Backward compatibility wrapper.
+    """
+    valid, ext = UnifiedValidator.validate_file_extension(filename)
+    return ext if valid else ''
+
+
+def is_valid_csv_field(value: Any, max_length: int = 32000) -> bool:
+    """
+    DEPRECATED: Use UnifiedValidator.validate_csv_field() instead.
+    
+    Backward compatibility wrapper.
+    """
+    valid, _, _ = UnifiedValidator.validate_csv_field(value, max_length=max_length)
+    return valid

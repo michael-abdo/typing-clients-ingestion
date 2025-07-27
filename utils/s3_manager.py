@@ -20,7 +20,7 @@ import tempfile
 import json
 import re
 from datetime import datetime
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Tuple, Union, Callable
 from dataclasses import dataclass
 from enum import Enum
 import mimetypes
@@ -160,6 +160,68 @@ class UnifiedS3Manager:
             return f"{row_id}/{clean_name}/{filename}"
         else:
             return f"{row_id}/{filename}"
+    
+    @staticmethod
+    def generate_uuid_s3_key(file_uuid: str, extension: str) -> str:
+        """
+        Generate S3 key for UUID-based storage (DRY CONSOLIDATION - Step 1).
+        
+        Centralizes the pattern `f"files/{file_uuid}{ext}"` found in:
+        - core/process_pending_metadata_downloads.py:200
+        - core/stream_folder_contents_direct.py:100
+        - core/fix_s3_extensions.py:72-73
+        - utils/streaming_integration.py:133
+        
+        Args:
+            file_uuid: UUID for the file
+            extension: File extension (with or without leading dot)
+            
+        Returns:
+            S3 key in format "files/{uuid}{ext}"
+            
+        Example:
+            s3_key = S3Manager.generate_uuid_s3_key("abc123", ".mp3")
+            # Returns: "files/abc123.mp3"
+        """
+        from .constants import S3Constants
+        
+        # Ensure extension starts with dot
+        if extension and not extension.startswith('.'):
+            extension = f'.{extension}'
+        
+        return S3Constants.KEY_PATTERN_UUID_FILE.format(uuid=file_uuid, ext=extension)
+    
+    @staticmethod
+    def parse_uuid_from_s3_key(s3_key: str) -> Tuple[str, str]:
+        """
+        Parse UUID and extension from S3 key (DRY CONSOLIDATION - Step 1).
+        
+        Centralizes UUID extraction logic scattered across files.
+        
+        Args:
+            s3_key: S3 key like "files/abc123.mp3"
+            
+        Returns:
+            Tuple of (uuid, extension) or (None, None) if invalid
+            
+        Example:
+            uuid, ext = S3Manager.parse_uuid_from_s3_key("files/abc123.mp3")
+            # Returns: ("abc123", ".mp3")
+        """
+        from .constants import S3Constants
+        
+        if not s3_key or not s3_key.startswith(S3Constants.UUID_FILES_PREFIX):
+            return None, None
+        
+        # Remove prefix
+        filename = s3_key[len(S3Constants.UUID_FILES_PREFIX):]
+        
+        # Split UUID and extension
+        if '.' in filename:
+            uuid_part, ext = filename.rsplit('.', 1)
+            return uuid_part, f'.{ext}'
+        else:
+            return filename, ''
     
     def upload_file_to_s3(self, local_path: Union[str, Path], s3_key: str, 
                          content_type: Optional[str] = None) -> UploadResult:
@@ -820,3 +882,334 @@ if __name__ == "__main__":
         
         # Run upload process
         results = manager.run_upload_process()
+
+
+# ============================================================================
+# UNIFIED S3 OPERATIONS (DRY ITERATION 3 - Step 4)
+# ============================================================================
+
+class UnifiedS3Operations:
+    """
+    Unified S3 operations to eliminate duplication across codebase.
+    
+    CONSOLIDATES PATTERNS FROM:
+    - 91+ files with s3_client = boto3.client('s3') variations
+    - 30+ locations with different S3 upload implementations
+    - Multiple S3 key generation patterns
+    - Inconsistent error handling for S3 operations
+    
+    BUSINESS IMPACT: Prevents S3 operation failures and ensures consistent behavior
+    """
+    
+    # Singleton S3 client instance
+    _s3_client = None
+    _bucket_name = None
+    
+    @classmethod
+    def get_client(cls) -> boto3.client:
+        """
+        Get singleton S3 client instance.
+        
+        ELIMINATES 91+ boto3.client('s3') initializations.
+        
+        Returns:
+            Shared S3 client instance
+            
+        Example:
+            s3 = UnifiedS3Operations.get_client()
+            s3.list_objects_v2(Bucket='my-bucket')
+        """
+        if cls._s3_client is None:
+            cls._s3_client = get_s3_client()
+        return cls._s3_client
+    
+    @classmethod
+    def get_bucket_name(cls) -> str:
+        """Get configured S3 bucket name."""
+        if cls._bucket_name is None:
+            cls._bucket_name = get_s3_bucket()
+        return cls._bucket_name
+    
+    @classmethod
+    def upload_file(cls, local_path: Union[str, Path], s3_key: str,
+                   bucket_name: Optional[str] = None,
+                   metadata: Optional[Dict[str, str]] = None,
+                   public_read: bool = False) -> UploadResult:
+        """
+        Unified file upload with consistent error handling.
+        
+        CONSOLIDATES 30+ S3 upload implementations.
+        
+        Args:
+            local_path: Path to local file
+            s3_key: S3 object key
+            bucket_name: S3 bucket (uses default if None)
+            metadata: Optional object metadata
+            public_read: Whether to make object publicly readable
+            
+        Returns:
+            UploadResult with status and details
+            
+        Example:
+            result = UnifiedS3Operations.upload_file('video.mp4', 'files/uuid.mp4')
+        """
+        from utils.error_handling import s3_retry
+        
+        bucket_name = bucket_name or cls.get_bucket_name()
+        local_path = Path(local_path)
+        
+        if not local_path.exists():
+            return UploadResult(
+                success=False,
+                s3_key=s3_key,
+                error=f"File not found: {local_path}"
+            )
+        
+        start_time = datetime.now()
+        
+        try:
+            # Get file size
+            file_size = local_path.stat().st_size
+            
+            # Prepare upload args
+            upload_args = {
+                'Filename': str(local_path),
+                'Bucket': bucket_name,
+                'Key': s3_key
+            }
+            
+            # Add metadata if provided
+            if metadata:
+                upload_args['ExtraArgs'] = {'Metadata': metadata}
+            
+            # Add public read ACL if requested
+            if public_read:
+                if 'ExtraArgs' not in upload_args:
+                    upload_args['ExtraArgs'] = {}
+                upload_args['ExtraArgs']['ACL'] = 'public-read'
+            
+            # Upload with retry
+            s3_client = cls.get_client()
+            s3_retry.retry_operation(
+                s3_client.upload_file,
+                **upload_args,
+                operation_name=f"Upload {s3_key}"
+            )
+            
+            # Generate URL
+            s3_url = None
+            if public_read:
+                s3_url = f"https://{bucket_name}.s3.amazonaws.com/{s3_key}"
+            
+            upload_time = (datetime.now() - start_time).total_seconds()
+            
+            return UploadResult(
+                success=True,
+                s3_key=s3_key,
+                s3_url=s3_url,
+                file_size=file_size,
+                upload_time=upload_time
+            )
+            
+        except Exception as e:
+            return UploadResult(
+                success=False,
+                s3_key=s3_key,
+                error=f"Upload failed: {str(e)}"
+            )
+    
+    @classmethod
+    def upload_fileobj(cls, file_obj: BytesIO, s3_key: str,
+                      bucket_name: Optional[str] = None,
+                      content_type: Optional[str] = None) -> UploadResult:
+        """
+        Upload file object (for streaming).
+        
+        Args:
+            file_obj: File-like object
+            s3_key: S3 object key
+            bucket_name: S3 bucket
+            content_type: MIME content type
+            
+        Returns:
+            UploadResult
+        """
+        from utils.error_handling import s3_retry
+        
+        bucket_name = bucket_name or cls.get_bucket_name()
+        start_time = datetime.now()
+        
+        try:
+            # Prepare upload args
+            upload_args = {
+                'Fileobj': file_obj,
+                'Bucket': bucket_name,
+                'Key': s3_key
+            }
+            
+            if content_type:
+                upload_args['ExtraArgs'] = {'ContentType': content_type}
+            
+            # Upload with retry
+            s3_client = cls.get_client()
+            s3_retry.retry_operation(
+                s3_client.upload_fileobj,
+                **upload_args,
+                operation_name=f"Stream upload {s3_key}"
+            )
+            
+            upload_time = (datetime.now() - start_time).total_seconds()
+            
+            return UploadResult(
+                success=True,
+                s3_key=s3_key,
+                upload_time=upload_time
+            )
+            
+        except Exception as e:
+            return UploadResult(
+                success=False,
+                s3_key=s3_key,
+                error=f"Stream upload failed: {str(e)}"
+            )
+    
+    @classmethod
+    def generate_uuid_s3_key(cls, extension: str, folder: str = "files") -> str:
+        """
+        Generate standardized UUID-based S3 key.
+        
+        CONSOLIDATES PATTERN: f"files/{uuid}{ext}" repeated in 10+ files
+        
+        Args:
+            extension: File extension (with or without dot)
+            folder: S3 folder (default: "files")
+            
+        Returns:
+            S3 key like "files/123e4567-e89b-12d3-a456-426614174000.mp4"
+            
+        Example:
+            s3_key = UnifiedS3Operations.generate_uuid_s3_key('.mp4')
+        """
+        import uuid
+        
+        # Normalize extension
+        if not extension.startswith('.'):
+            extension = f'.{extension}'
+        extension = extension.lower()
+        
+        # Generate UUID
+        file_uuid = str(uuid.uuid4())
+        
+        # Construct key
+        return f"{folder}/{file_uuid}{extension}"
+    
+    @classmethod
+    def check_exists(cls, s3_key: str, bucket_name: Optional[str] = None) -> bool:
+        """
+        Check if S3 object exists.
+        
+        Args:
+            s3_key: S3 object key
+            bucket_name: S3 bucket
+            
+        Returns:
+            True if object exists
+        """
+        bucket_name = bucket_name or cls.get_bucket_name()
+        s3_client = cls.get_client()
+        
+        try:
+            s3_client.head_object(Bucket=bucket_name, Key=s3_key)
+            return True
+        except:
+            return False
+    
+    @classmethod
+    def batch_upload(cls, file_mappings: List[Tuple[str, str]],
+                    bucket_name: Optional[str] = None,
+                    progress_callback: Optional[Callable] = None) -> List[UploadResult]:
+        """
+        Batch upload multiple files with progress tracking.
+        
+        Args:
+            file_mappings: List of (local_path, s3_key) tuples
+            bucket_name: S3 bucket
+            progress_callback: Optional callback(current, total, filename)
+            
+        Returns:
+            List of UploadResult objects
+            
+        Example:
+            files = [('video1.mp4', 'files/uuid1.mp4'), ('video2.mp4', 'files/uuid2.mp4')]
+            results = UnifiedS3Operations.batch_upload(files)
+        """
+        results = []
+        total = len(file_mappings)
+        
+        for i, (local_path, s3_key) in enumerate(file_mappings):
+            if progress_callback:
+                progress_callback(i + 1, total, Path(local_path).name)
+            
+            result = cls.upload_file(local_path, s3_key, bucket_name)
+            results.append(result)
+        
+        return results
+
+
+# ============================================================================
+# S3 KEY GENERATION HELPERS
+# ============================================================================
+
+def generate_s3_key_for_file(file_path: Union[str, Path], 
+                           person_name: Optional[str] = None,
+                           use_uuid: bool = True) -> str:
+    """
+    Generate S3 key for a file with consistent format.
+    
+    CONSOLIDATES multiple S3 key generation patterns.
+    
+    Args:
+        file_path: Path to file
+        person_name: Optional person name for organization
+        use_uuid: Whether to use UUID (True) or preserve filename
+        
+    Returns:
+        S3 key
+        
+    Example:
+        key = generate_s3_key_for_file('video.mp4', 'John Doe')
+        # Returns: "files/123e4567-e89b.mp4" or "John Doe/video.mp4"
+    """
+    file_path = Path(file_path)
+    
+    if use_uuid:
+        # UUID-based key
+        return UnifiedS3Operations.generate_uuid_s3_key(file_path.suffix)
+    else:
+        # Name-based key
+        if person_name:
+            # Sanitize person name for S3
+            safe_name = re.sub(r'[^a-zA-Z0-9\s\-_]', '', person_name).strip()
+            safe_name = re.sub(r'\s+', '_', safe_name)
+            return f"{safe_name}/{file_path.name}"
+        else:
+            return f"files/{file_path.name}"
+
+
+# ============================================================================
+# MIGRATION HELPERS
+# ============================================================================
+
+# Global S3 client for backward compatibility
+_global_s3_client = None
+
+def get_global_s3_client():
+    """
+    DEPRECATED: Use UnifiedS3Operations.get_client() instead.
+    
+    Backward compatibility function.
+    """
+    global _global_s3_client
+    if _global_s3_client is None:
+        _global_s3_client = UnifiedS3Operations.get_client()
+    return _global_s3_client

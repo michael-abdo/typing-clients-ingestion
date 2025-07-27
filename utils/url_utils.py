@@ -7,10 +7,14 @@ Consolidates URL parsing and processing patterns.
 import re
 from typing import Optional, Tuple, List
 from urllib.parse import urlparse, parse_qs
+# DRY CONSOLIDATION - Step 2: Import centralized patterns
+from .constants import URLPatterns
 
 def extract_youtube_id(url: str) -> Optional[str]:
     """
-    Extract YouTube video ID from various URL formats.
+    Extract YouTube video ID from various URL formats (DRY CONSOLIDATION - Step 2).
+    
+    Uses centralized regex pattern from URLPatterns for consistency.
     
     Args:
         url: YouTube URL
@@ -18,21 +22,26 @@ def extract_youtube_id(url: str) -> Optional[str]:
     Returns:
         YouTube video ID or None if not found
     """
-    patterns = [
-        r'(?:youtube\.com/watch\?v=|youtu\.be/|youtube\.com/embed/)([a-zA-Z0-9_-]+)',
-        r'youtube\.com/v/([a-zA-Z0-9_-]+)',
-        r'youtube\.com/.*[?&]v=([a-zA-Z0-9_-]+)'
-    ]
+    # Use centralized pattern which handles all YouTube URL formats
+    match = URLPatterns.YOUTUBE_VIDEO_ID.search(url)
+    if match:
+        return match.group(1)
     
-    for pattern in patterns:
-        match = re.search(pattern, url)
-        if match:
-            return match.group(1)
+    # Handle edge cases not covered by main pattern
+    # Extract from query parameters for complex URLs
+    parsed = urlparse(url)
+    if parsed.hostname and 'youtube' in parsed.hostname:
+        query_params = parse_qs(parsed.query)
+        if 'v' in query_params:
+            return query_params['v'][0]
+    
     return None
 
 def extract_drive_id(url: str) -> Optional[str]:
     """
-    Extract Google Drive file ID from various URL formats.
+    Extract Google Drive file ID from various URL formats (DRY CONSOLIDATION - Step 2).
+    
+    Uses centralized regex pattern from URLPatterns for consistency.
     
     Args:
         url: Google Drive URL
@@ -40,17 +49,23 @@ def extract_drive_id(url: str) -> Optional[str]:
     Returns:
         Drive file ID or None if not found
     """
-    patterns = [
-        r'/d/([a-zA-Z0-9_-]+)',
-        r'id=([a-zA-Z0-9_-]+)',
-        r'/file/d/([a-zA-Z0-9_-]+)',
-        r'drive\.google\.com/.*?/([a-zA-Z0-9_-]+)'
-    ]
+    # Use centralized pattern for file IDs
+    match = URLPatterns.DRIVE_FILE_ID.search(url)
+    if match:
+        return match.group(1)
     
-    for pattern in patterns:
-        match = re.search(pattern, url)
-        if match:
-            return match.group(1)
+    # Also check for folder IDs
+    folder_match = URLPatterns.DRIVE_FOLDER_ID.search(url)
+    if folder_match:
+        return folder_match.group(1)
+    
+    # Handle edge cases with query parameters
+    parsed = urlparse(url)
+    if parsed.hostname and 'drive' in parsed.hostname:
+        query_params = parse_qs(parsed.query)
+        if 'id' in query_params:
+            return query_params['id'][0]
+    
     return None
 
 def validate_youtube_url(url: str) -> Tuple[bool, Optional[str]]:

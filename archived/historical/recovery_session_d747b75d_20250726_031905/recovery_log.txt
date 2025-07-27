@@ -1,1 +1,0 @@
-[2025-07-26T03:19:05.892274] INFO: Recovery session started | Data: {"session_id": "d747b75d", "timestamp": "2025-07-26T03:19:05.892059"}

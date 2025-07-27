@@ -927,3 +927,352 @@ if __name__ == "__main__":
         # Create completion report
         report = create_completion_report(df, ['youtube_playlist', 'google_drive'])
         print(json.dumps(report, indent=2))
+
+# ============================================================================
+# UNIFIED DATA TRANSFORMATION WORKFLOWS (DRY ITERATION 2 - Step 5)
+# ============================================================================
+
+class DataTransformationPipeline:
+    """
+    Unified data transformation pipeline (DRY CONSOLIDATION - Step 5).
+    
+    CONSOLIDATES TRANSFORMATION PATTERNS FROM:
+    - Multiple CSV processing scripts with similar transformation steps  
+    - Repeated data cleaning operations across files
+    - Inconsistent error handling in transformation workflows
+    
+    BUSINESS IMPACT: Prevents data corruption and ensures consistent transformations
+    """
+    
+    def __init__(self, name: str = "default_pipeline"):
+        self.name = name
+        self.steps = []
+        self.logger = get_logger(f"{__name__}.{name}")
+        self.stats = {
+            'processed_rows': 0,
+            'errors': 0,
+            'transformations_applied': 0,
+            'start_time': None,
+            'end_time': None
+        }
+    
+    def add_step(self, func: Callable, description: str = None, **kwargs) -> 'DataTransformationPipeline':
+        """Add a transformation step to the pipeline."""
+        step = {
+            'function': func,
+            'description': description or func.__name__,
+            'kwargs': kwargs,
+            'applied_count': 0,
+            'error_count': 0
+        }
+        self.steps.append(step)
+        return self
+    
+    def transform(self, data: Union[pd.DataFrame, Dict, List], 
+                 progress_callback: Optional[Callable] = None) -> Union[pd.DataFrame, Dict, List]:
+        """
+        Execute the transformation pipeline.
+        
+        Args:
+            data: Input data (DataFrame, dict, or list)
+            progress_callback: Optional callback for progress updates
+            
+        Returns:
+            Transformed data
+        """
+        self.stats['start_time'] = datetime.now()
+        self.logger.info(f"🔄 Starting transformation pipeline '{self.name}' with {len(self.steps)} steps")
+        
+        current_data = data
+        total_steps = len(self.steps)
+        
+        for i, step in enumerate(self.steps):
+            step_start = datetime.now()
+            
+            try:
+                self.logger.info(f"Step {i+1}/{total_steps}: {step['description']}")
+                
+                # Apply transformation step
+                if isinstance(current_data, pd.DataFrame):
+                    original_length = len(current_data)
+                else:
+                    original_length = len(current_data) if hasattr(current_data, '__len__') else 1
+                
+                current_data = step['function'](current_data, **step['kwargs'])
+                
+                # Update statistics
+                step['applied_count'] += 1
+                self.stats['transformations_applied'] += 1
+                
+                if isinstance(current_data, pd.DataFrame):
+                    new_length = len(current_data)
+                    self.logger.info(f"  ✅ Transformed {original_length} → {new_length} rows")
+                else:
+                    self.logger.info(f"  ✅ Step completed")
+                
+                # Progress callback
+                if progress_callback:
+                    progress_callback(i + 1, total_steps, step['description'])
+                
+                step_duration = (datetime.now() - step_start).total_seconds()
+                self.logger.debug(f"  ⏱️ Step duration: {step_duration:.2f}s")
+                
+            except Exception as e:
+                step['error_count'] += 1
+                self.stats['errors'] += 1
+                error_msg = f"Step {i+1} failed: {step['description']} - {str(e)}"
+                self.logger.error(error_msg)
+                raise RuntimeError(error_msg)
+        
+        # Final statistics
+        self.stats['end_time'] = datetime.now()
+        total_duration = (self.stats['end_time'] - self.stats['start_time']).total_seconds()
+        
+        if isinstance(current_data, pd.DataFrame):
+            self.stats['processed_rows'] = len(current_data)
+        
+        self.logger.info(f"✅ Pipeline '{self.name}' completed in {total_duration:.2f}s")
+        self.logger.info(f"📊 Stats: {self.stats['processed_rows']} rows, {self.stats['transformations_applied']} transformations")
+        
+        return current_data
+    
+    def get_stats(self) -> Dict[str, Any]:
+        """Get pipeline execution statistics."""
+        return self.stats.copy()
+
+
+class CSVTransformationWorkflow:
+    """
+    Specialized CSV transformation workflow (DRY CONSOLIDATION - Step 5).
+    
+    ELIMINATES REPETITIVE PATTERNS:
+    - CSV loading with error handling
+    - Column validation and normalization  
+    - Data cleaning and validation
+    - Safe CSV writing with backups
+    
+    BUSINESS IMPACT: Standardizes CSV processing to prevent data corruption
+    """
+    
+    @staticmethod
+    def create_standard_csv_pipeline(required_columns: List[str] = None) -> DataTransformationPipeline:
+        """Create a standard CSV processing pipeline."""
+        pipeline = DataTransformationPipeline("standard_csv")
+        
+        # Step 1: Validate required columns
+        if required_columns:
+            pipeline.add_step(
+                CSVTransformationWorkflow._validate_columns,
+                f"Validate required columns: {required_columns}",
+                required_columns=required_columns
+            )
+        
+        # Step 2: Clean string columns
+        pipeline.add_step(
+            CSVTransformationWorkflow._clean_string_data,
+            "Clean string data and remove invalid characters"
+        )
+        
+        # Step 3: Normalize data types
+        pipeline.add_step(
+            CSVTransformationWorkflow._normalize_data_types,
+            "Normalize data types and handle missing values"
+        )
+        
+        return pipeline
+    
+    @staticmethod
+    def _validate_columns(df: pd.DataFrame, required_columns: List[str]) -> pd.DataFrame:
+        """Validate that required columns exist."""
+        missing_columns = [col for col in required_columns if col not in df.columns]
+        if missing_columns:
+            raise ValueError(f"Missing required columns: {missing_columns}")
+        return df
+    
+    @staticmethod
+    def _clean_string_data(df: pd.DataFrame) -> pd.DataFrame:
+        """Clean string data in all object columns."""
+        for col in df.select_dtypes(include=['object']).columns:
+            df[col] = df[col].astype(str).str.strip()
+            # Remove null string representations
+            df[col] = df[col].replace(['nan', 'None', 'null', ''], pd.NA)
+        return df
+    
+    @staticmethod
+    def _normalize_data_types(df: pd.DataFrame) -> pd.DataFrame:
+        """Normalize data types and handle missing values."""
+        # Convert numeric columns
+        for col in df.columns:
+            if col.endswith('_id') or col in ['row_id']:
+                df[col] = pd.to_numeric(df[col], errors='coerce')
+            elif 'date' in col.lower() or 'time' in col.lower():
+                try:
+                    df[col] = pd.to_datetime(df[col], errors='coerce')
+                except:
+                    pass  # Keep as string if conversion fails
+        
+        return df
+
+
+def batch_process_files(file_pattern: str, 
+                       transformation_func: Callable,
+                       output_pattern: str = None,
+                       progress_callback: Callable = None) -> Dict[str, Any]:
+    """
+    Batch process multiple files with consistent error handling.
+    
+    CONSOLIDATES PATTERN FROM:
+    - Multiple scripts that process batches of CSV files
+    - Inconsistent error handling across batch operations
+    - Repeated file discovery and output naming logic
+    
+    Args:
+        file_pattern: Glob pattern for input files
+        transformation_func: Function to apply to each file
+        output_pattern: Pattern for output files (optional)
+        progress_callback: Progress callback function
+        
+    Returns:
+        Dictionary with processing results and statistics
+    """
+    import glob
+    
+    files = glob.glob(file_pattern)
+    if not files:
+        raise ValueError(f"No files found matching pattern: {file_pattern}")
+    
+    results = {
+        'processed_files': [],
+        'failed_files': [],
+        'total_files': len(files),
+        'start_time': datetime.now(),
+        'end_time': None
+    }
+    
+    logger.info(f"🚀 Starting batch processing of {len(files)} files")
+    
+    for i, file_path in enumerate(files):
+        try:
+            logger.info(f"📁 Processing file {i+1}/{len(files)}: {Path(file_path).name}")
+            
+            # Apply transformation
+            result = transformation_func(file_path)
+            
+            # Save output if pattern provided
+            if output_pattern:
+                output_path = output_pattern.format(
+                    name=Path(file_path).stem,
+                    timestamp=datetime.now().strftime('%Y%m%d_%H%M%S')
+                )
+                
+                if hasattr(result, 'to_csv'):
+                    write_csv_safe(result, output_path)
+                elif isinstance(result, dict):
+                    write_json_safe(result, output_path)
+            
+            results['processed_files'].append({
+                'input_file': file_path,
+                'output_file': output_path if output_pattern else None,
+                'success': True
+            })
+            
+            # Progress callback
+            if progress_callback:
+                progress_callback(i + 1, len(files), Path(file_path).name)
+                
+        except Exception as e:
+            error_msg = f"Failed to process {file_path}: {str(e)}"
+            logger.error(error_msg)
+            
+            results['failed_files'].append({
+                'input_file': file_path,
+                'error': error_msg
+            })
+    
+    results['end_time'] = datetime.now()
+    duration = (results['end_time'] - results['start_time']).total_seconds()
+    
+    logger.info(f"✅ Batch processing completed in {duration:.2f}s")
+    logger.info(f"📊 Results: {len(results['processed_files'])} succeeded, {len(results['failed_files'])} failed")
+    
+    return results
+
+
+def aggregate_csv_data(file_paths: List[str], 
+                      key_column: str = 'row_id',
+                      aggregation_rules: Dict[str, str] = None) -> pd.DataFrame:
+    """
+    Aggregate data from multiple CSV files with consistent handling.
+    
+    CONSOLIDATES PATTERN FROM:
+    - Multiple scripts that combine CSV data from different sources
+    - Inconsistent aggregation logic across files
+    - Different approaches to handling duplicate keys
+    
+    Args:
+        file_paths: List of CSV file paths to aggregate
+        key_column: Column to use as aggregation key
+        aggregation_rules: Rules for handling column conflicts
+        
+    Returns:
+        Aggregated DataFrame
+    """
+    if not file_paths:
+        raise ValueError("No file paths provided for aggregation")
+    
+    aggregation_rules = aggregation_rules or {}
+    logger.info(f"🔗 Aggregating data from {len(file_paths)} CSV files")
+    
+    # Load all DataFrames
+    dataframes = []
+    for file_path in file_paths:
+        try:
+            df = read_csv_safe(file_path, required_columns=[key_column])
+            if not df.empty:
+                df['_source_file'] = Path(file_path).name
+                dataframes.append(df)
+                logger.info(f"  📄 Loaded {len(df)} rows from {Path(file_path).name}")
+        except Exception as e:
+            logger.warning(f"  ⚠️ Skipped {file_path}: {str(e)}")
+    
+    if not dataframes:
+        logger.warning("No valid DataFrames to aggregate")
+        return pd.DataFrame()
+    
+    # Perform aggregation
+    logger.info("🔄 Performing data aggregation...")
+    
+    # Start with the first DataFrame
+    result_df = dataframes[0].copy()
+    
+    # Merge subsequent DataFrames
+    for df in dataframes[1:]:
+        # Merge on key column
+        result_df = result_df.merge(
+            df, 
+            on=key_column, 
+            how='outer', 
+            suffixes=('', '_new')
+        )
+        
+        # Apply aggregation rules for duplicate columns
+        for col in df.columns:
+            if col \!= key_column and col in result_df.columns:
+                new_col = f"{col}_new"
+                if new_col in result_df.columns:
+                    rule = aggregation_rules.get(col, 'keep_first')
+                    
+                    if rule == 'keep_first':
+                        result_df[col] = result_df[col].fillna(result_df[new_col])
+                    elif rule == 'keep_last':
+                        result_df[col] = result_df[new_col].fillna(result_df[col])
+                    elif rule == 'combine':
+                        # Combine non-null values
+                        mask = result_df[col].isna()  < /dev/null |  (result_df[col] == '')
+                        result_df.loc[mask, col] = result_df.loc[mask, new_col]
+                    
+                    # Remove the temporary column
+                    result_df = result_df.drop(columns=[new_col])
+    
+    logger.info(f"✅ Aggregation complete: {len(result_df)} total rows")
+    return result_df

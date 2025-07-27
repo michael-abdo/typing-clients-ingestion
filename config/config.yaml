@@ -210,7 +210,7 @@ database:
   port: 5432
   name: "typing_clients_uuid"
   user: "migration_user"
-  password: "simple123"
+  password: "${DB_PASSWORD:-}"  # Set via environment variable
   connection_pool:
     min_connections: 1
     max_connections: 10

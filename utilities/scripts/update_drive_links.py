@@ -2,6 +2,7 @@
 import csv
 import os
 import re
+from utils.constants import CSVConstants
 
 def is_drive_link(url):
     """Check if a URL is a Google Drive link"""
@@ -23,11 +24,11 @@ with open(input_file, 'r', newline='', encoding='utf-8') as csvfile, \
     
     for row in reader:
         # Check extracted_links for Google Drive links
-        links = row['extracted_links'].split('|') if row['extracted_links'] else []
+        links = row[CSVConstants.Columns.EXTRACTED_LINKS].split('|') if row[CSVConstants.Columns.EXTRACTED_LINKS] else []
         
         # Also check the main link column
-        if row['link'] and is_drive_link(row['link']):
-            links.append(row['link'])
+        if row[CSVConstants.Columns.LINK] and is_drive_link(row[CSVConstants.Columns.LINK]):
+            links.append(row[CSVConstants.Columns.LINK])
         
         # Extract Google Drive links
         drive_links = []
@@ -37,12 +38,12 @@ with open(input_file, 'r', newline='', encoding='utf-8') as csvfile, \
                 drive_links_found += 1
         
         # Update the google_drive column
-        row['google_drive'] = '|'.join(drive_links)
+        row[CSVConstants.Columns.GOOGLE_DRIVE] = '|'.join(drive_links)
         
         # Also check if there are YouTube links that should go in youtube_playlist
-        if not row['youtube_playlist'] and any('youtube.com' in link or 'youtu.be' in link for link in links):
+        if not row[CSVConstants.Columns.YOUTUBE_PLAYLIST] and any('youtube.com' in link or 'youtu.be' in link for link in links):
             youtube_links = [link for link in links if 'youtube.com' in link or 'youtu.be' in link]
-            row['youtube_playlist'] = youtube_links[0] if youtube_links else ''
+            row[CSVConstants.Columns.YOUTUBE_PLAYLIST] = youtube_links[0] if youtube_links else ''
         
         writer.writerow(row)
 

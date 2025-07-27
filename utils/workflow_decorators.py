@@ -154,55 +154,40 @@ def retry_on_failure(max_retries: int = 3, delay: float = 1.0, backoff: float = 
     """
     Decorator to retry workflow steps on failure.
     
+    This decorator now delegates to the centralized retry_utils module
+    for consistent retry behavior across the codebase.
+    
     Args:
         max_retries: Maximum number of retry attempts
         delay: Initial delay between retries in seconds
-        backoff: Backoff multiplier for delay
+        backoff: Backoff multiplier for delay (kept for compatibility)
         
     Returns:
         Decorated function
     """
+    # Import centralized retry utilities
+    from .retry_utils import retry_with_backoff
+    
     def decorator(func: Callable) -> Callable:
         @functools.wraps(func)
         def wrapper(*args, **kwargs) -> Any:
+            # Extract logger from args for compatibility
             logger = None
             if args and hasattr(args[0], 'logger'):
                 logger = args[0].logger
             
-            current_delay = delay
-            last_exception = None
+            # Delegate to centralized retry implementation
+            # Note: retry_with_backoff expects max_attempts = max_retries + 1
+            retry_decorator = retry_with_backoff(
+                max_attempts=max_retries + 1,
+                base_delay=delay,
+                exceptions=(Exception,),
+                logger=logger
+            )
             
-            for attempt in range(max_retries + 1):
-                try:
-                    if attempt > 0:
-                        msg = f"Retry attempt {attempt}/{max_retries} for {func.__name__}"
-                        if logger:
-                            logger.info(msg)
-                        else:
-                            print(msg)
-                    
-                    return func(*args, **kwargs)
-                    
-                except Exception as e:
-                    last_exception = e
-                    
-                    if attempt < max_retries:
-                        msg = f"Attempt {attempt + 1} failed: {str(e)}. Retrying in {current_delay}s..."
-                        if logger:
-                            logger.warning(msg)
-                        else:
-                            print(msg)
-                        
-                        time.sleep(current_delay)
-                        current_delay *= backoff
-                    else:
-                        msg = f"All {max_retries + 1} attempts failed for {func.__name__}"
-                        if logger:
-                            logger.error(msg)
-                        else:
-                            print(msg)
-            
-            raise last_exception
+            # Apply the centralized retry decorator
+            retried_func = retry_decorator(func)
+            return retried_func(*args, **kwargs)
         
         return wrapper
     return decorator

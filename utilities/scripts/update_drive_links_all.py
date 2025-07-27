@@ -6,6 +6,7 @@ import csv
 import os
 import sys
 from extract_links import process_url
+from utils.constants import CSVConstants
 
 def update_drive_links(csv_path, rows_to_process=None):
     """Update Google Drive links for all rows in the CSV file"""
@@ -26,10 +27,10 @@ def update_drive_links(csv_path, rows_to_process=None):
                 writer.writerow(row)
                 continue
             
-            link = row.get('link', '')
+            link = row.get(CSVConstants.Columns.LINK, '')
             if link and 'docs.google.com/document' in link:
                 # Only process Google Docs links
-                print(f"Processing {i+1}: {row['name']} - {link}")
+                print(f"Processing {i+1}: {row[CSVConstants.Columns.NAME]} - {link}")
                 
                 try:
                     # Get links, YouTube playlist, and Drive links
@@ -37,7 +38,7 @@ def update_drive_links(csv_path, rows_to_process=None):
                     
                     # Only update if we found Drive links
                     if drive_links:
-                        old_drive_links = row.get('google_drive', '').split('|') if row.get('google_drive') else []
+                        old_drive_links = row.get(CSVConstants.Columns.GOOGLE_DRIVE, '').split('|') if row.get(CSVConstants.Columns.GOOGLE_DRIVE) else []
                         old_drive_links = [l for l in old_drive_links if l]  # Remove empty strings
                         
                         # Combine existing and new drive links
@@ -47,7 +48,7 @@ def update_drive_links(csv_path, rows_to_process=None):
                                 combined_links.append(link)
                         
                         # Update row
-                        row['google_drive'] = '|'.join(combined_links)
+                        row[CSVConstants.Columns.GOOGLE_DRIVE] = '|'.join(combined_links)
                         updated_count += 1
                         
                         print(f"  Found {len(drive_links)} Drive links, updated to {len(combined_links)} total")

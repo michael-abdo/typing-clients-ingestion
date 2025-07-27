@@ -5,6 +5,8 @@ import importlib
 from pathlib import Path
 from typing import Dict, Any, Optional, Union, List
 import logging
+from datetime import datetime
+import functools
 
 # Singleton pattern for configuration
 _config = None
@@ -4321,5 +4323,267 @@ def create_exception_summary_report() -> dict:
             reverse=True
         )[:10]
     }
+
+
+# ============================================================================
+# STANDARDIZED CONFIGURATION ACCESS (DRY ITERATION 1 - Step 3)
+# ============================================================================
+
+def get_config_value(key_path: str, default: Any = None, 
+                    env_var: Optional[str] = None,
+                    required: bool = False) -> Any:
+    """
+    Standardized configuration access with environment variable fallback.
+    
+    CONSOLIDATES PATTERNS:
+    - config.get() usage across 50+ files
+    - Mixed hardcoded defaults
+    - Inconsistent environment variable handling
+    
+    Args:
+        key_path: Dot-separated config path (e.g., "downloads.youtube.max_workers")
+        default: Default value if not found
+        env_var: Environment variable name to check first
+        required: If True, raises ValueError when value not found
+        
+    Returns:
+        Configuration value
+        
+    Raises:
+        ValueError: If required=True and value not found
+        
+    Example:
+        # Replace mixed patterns:
+        max_workers = config.get('downloads.youtube.max_workers', 4)
+        timeout = config['timeout']  # UNSAFE
+        bucket = os.environ.get('S3_BUCKET', 'default-bucket')
+        
+        # With standardized pattern:
+        max_workers = get_config_value('downloads.youtube.max_workers', 4)
+        timeout = get_config_value('network.timeout', required=True)
+        bucket = get_config_value('s3.bucket', 'default-bucket', env_var='S3_BUCKET')
+    """
+    # Check environment variable first if provided
+    if env_var and env_var in os.environ:
+        value = os.environ[env_var]
+        # Convert common types
+        if value.lower() in ('true', 'false'):
+            return value.lower() == 'true'
+        try:
+            # Try int conversion
+            return int(value)
+        except ValueError:
+            try:
+                # Try float conversion
+                return float(value)
+            except ValueError:
+                # Return as string
+                return value
+    
+    # Get from config
+    config = get_config()
+    value = config.get(key_path, default)
+    
+    if required and value is None:
+        raise ValueError(f"Required configuration key '{key_path}' not found")
+    
+    return value
+
+
+def get_path_config(key_path: str, default: Optional[str] = None,
+                   create_dirs: bool = False) -> Path:
+    """
+    Get path configuration with automatic path resolution.
+    
+    CONSOLIDATES PATH HANDLING patterns across modules.
+    
+    Args:
+        key_path: Config path to directory/file path
+        default: Default path if not in config
+        create_dirs: Whether to create parent directories
+        
+    Returns:
+        Resolved Path object
+        
+    Example:
+        # Replace patterns like:
+        csv_path = config.get("paths.output_csv", "outputs/output.csv")
+        output_dir = Path(config.get("paths.outputs", "outputs"))
+        
+        # With:
+        csv_path = get_path_config("paths.output_csv", "outputs/output.csv")
+        output_dir = get_path_config("paths.outputs", "outputs", create_dirs=True)
+    """
+    path_str = get_config_value(key_path, default)
+    if path_str is None:
+        raise ValueError(f"Path configuration '{key_path}' not found and no default provided")
+    
+    path = Path(path_str)
+    
+    # Make relative paths relative to project root
+    if not path.is_absolute():
+        project_root = Path(__file__).parent.parent
+        path = project_root / path
+    
+    if create_dirs:
+        if path.suffix:  # It's a file path, create parent dirs
+            path.parent.mkdir(parents=True, exist_ok=True)
+        else:  # It's a directory path
+            path.mkdir(parents=True, exist_ok=True)
+    
+    return path
+
+
+class ConfigSection:
+    """
+    Wrapper for configuration sections with validation and defaults.
+    
+    ELIMINATES need for repeated config.get_section() calls and provides
+    consistent access patterns with validation.
+    """
+    
+    def __init__(self, section_name: str, defaults: Optional[Dict] = None):
+        self.section_name = section_name
+        self.defaults = defaults or {}
+        self._config = get_config()
+        self._section = self._config.get_section(section_name)
+    
+    def get(self, key: str, default: Any = None, 
+           env_var: Optional[str] = None) -> Any:
+        """Get value from section with environment fallback."""
+        full_key = f"{self.section_name}.{key}"
+        return get_config_value(full_key, default, env_var)
+    
+    def get_all(self) -> Dict[str, Any]:
+        """Get all values in section merged with defaults."""
+        result = self.defaults.copy()
+        result.update(self._section)
+        return result
+    
+    def validate_required(self, required_keys: List[str]) -> None:
+        """Validate that all required keys exist in section."""
+        missing = []
+        for key in required_keys:
+            if key not in self._section:
+                missing.append(key)
+        
+        if missing:
+            raise ValueError(f"Missing required configuration keys in section '{self.section_name}': {missing}")
+
+
+# Standard configuration sections
+def get_database_config() -> ConfigSection:
+    """Get database configuration section."""
+    return ConfigSection('database', defaults={
+        'host': 'localhost',
+        'port': 5432,
+        'timeout': 30,
+        'max_connections': 10
+    })
+
+
+def get_s3_config() -> ConfigSection:
+    """Get S3 configuration section."""
+    return ConfigSection('s3', defaults={
+        'region': 'us-east-1',
+        'timeout': 300,
+        'max_retries': 3
+    })
+
+
+def get_download_config() -> ConfigSection:
+    """Get download configuration section."""
+    return ConfigSection('downloads', defaults={
+        'max_workers': 4,
+        'timeout': 300,
+        'chunk_size': 8192,
+        'max_retries': 3
+    })
+
+
+def get_retry_config() -> ConfigSection:
+    """Get retry configuration section."""
+    return ConfigSection('retry', defaults={
+        'max_attempts': 3,
+        'initial_delay': 1.0,
+        'backoff_factor': 2.0,
+        'max_delay': 60.0
+    })
+
+
+# ============================================================================
+# MIGRATION HELPERS
+# ============================================================================
+
+def migrate_config_access(old_patterns: Dict[str, str]) -> Dict[str, str]:
+    """
+    Helper to show migration from old config access patterns.
+    
+    Args:
+        old_patterns: Dict of old pattern -> recommended replacement
+        
+    Returns:
+        Migration suggestions
+    """
+    return {
+        # Direct access (UNSAFE)
+        "config['key']": "get_config_value('key', default_value)",
+        
+        # Nested gets
+        "config.get('section').get('key')": "get_config_value('section.key', default)",
+        
+        # Mixed environment
+        "os.environ.get('VAR', config.get('key'))": "get_config_value('key', default, env_var='VAR')",
+        
+        # Path handling
+        "Path(config.get('paths.output'))": "get_path_config('paths.output')",
+        
+        # Section access
+        "config.get_section('db')": "get_database_config().get_all()",
+    }
+
+
+def validate_configuration() -> Dict[str, Any]:
+    """
+    Validate current configuration and return report.
+    
+    Returns:
+        Dictionary with validation results
+    """
+    report = {
+        'valid': True,
+        'errors': [],
+        'warnings': [],
+        'sections_found': [],
+        'timestamp': datetime.now().isoformat()
+    }
+    
+    config = get_config()
+    
+    # Check critical sections exist
+    critical_sections = ['paths', 'downloads', 's3']
+    for section in critical_sections:
+        if section in config.all:
+            report['sections_found'].append(section)
+        else:
+            report['errors'].append(f"Missing critical section: {section}")
+            report['valid'] = False
+    
+    # Check critical paths
+    critical_paths = [
+        'paths.output_csv',
+        'paths.downloads',
+        'paths.logs'
+    ]
+    
+    for path_key in critical_paths:
+        try:
+            path = get_path_config(path_key)
+            if not path.parent.exists():
+                report['warnings'].append(f"Parent directory doesn't exist for {path_key}: {path.parent}")
+        except (ValueError, KeyError):
+            report['warnings'].append(f"Path configuration missing: {path_key}")
+    
+    return report
 
 

@@ -196,8 +196,12 @@ class MetadataDownloadProcessor:
                 file_uuid = str(uuid.uuid4())
                 
                 # Get file extension
-                _, ext = os.path.splitext(local_file)
-                s3_key = f"files/{file_uuid}{ext}"
+                # DRY CONSOLIDATION - Step 2: Use centralized extension handling
+                from utils.path_utils import extract_extension
+                ext = extract_extension(local_file)
+                # DRY CONSOLIDATION - Step 1: Use centralized S3 key generation
+                from utils.s3_manager import UnifiedS3Manager
+                s3_key = UnifiedS3Manager.generate_uuid_s3_key(file_uuid, ext)
                 
                 # Upload to S3
                 self.s3_client.upload_file(local_file, self.bucket_name, s3_key)

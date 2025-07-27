@@ -585,6 +585,9 @@ def handle_network_operations(operation_name: str, return_on_error: Any = None,
     """
     Decorator for standardized network operation error handling
     
+    This decorator now delegates to the centralized retry_utils module
+    for consistent retry behavior across the codebase.
+    
     Args:
         operation_name: Name of the network operation for error messages
         return_on_error: Value to return if error occurs
@@ -592,51 +595,57 @@ def handle_network_operations(operation_name: str, return_on_error: Any = None,
         log_errors: Whether to log errors
         context: Additional context for error handling
     """
+    # Import centralized retry utilities
+    try:
+        from retry_utils import network_retry
+    except ImportError:
+        from .retry_utils import network_retry
+    
     def decorator(func: Callable) -> Callable:
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
             logger = get_logger(func.__module__)
             error_handler = ErrorHandler(logger)
             
-            for attempt in range(retry_count + 1):
+            # Apply centralized network retry logic
+            if retry_count > 0:
+                retry_decorator = network_retry(
+                    max_attempts=retry_count + 1,
+                    operation_name=operation_name
+                )
+                retried_func = retry_decorator(func)
+                
                 try:
-                    return func(*args, **kwargs)
-                    
-                except (ConnectionError, TimeoutError) as e:
-                    error_msg = ErrorMessages.format_error('NETWORK', 'CONNECTION_TIMEOUT', 
-                                                         timeout=30, resource=operation_name)
-                    
-                    if attempt < retry_count:
-                        if log_errors:
-                            logger.warning(f"Attempt {attempt + 1}/{retry_count + 1} failed: {error_msg}")
-                        continue
-                    else:
-                        if log_errors:
-                            logger.error(f"{operation_name} failed after {retry_count + 1} attempts: {error_msg}")
-                        
-                        error_context = {
-                            'operation': operation_name,
-                            'attempts': retry_count + 1,
-                            **(context or {})
-                        }
-                        error_handler.handle_error(e, error_context)
-                        return return_on_error
-                        
+                    return retried_func(*args, **kwargs)
                 except Exception as e:
-                    # Check if it's a network-related error based on message
-                    error_str = str(e).lower()
-                    if any(keyword in error_str for keyword in ['network', 'dns', 'ssl', 'connection']):
-                        error_msg = ErrorMessages.format_error('NETWORK', 'NETWORK_ERROR', 
-                                                             resource=operation_name, details=str(e))
+                    # Handle the final error after all retries exhausted
+                    if isinstance(e, (ConnectionError, TimeoutError)):
+                        error_msg = ErrorMessages.format_error('NETWORK', 'CONNECTION_TIMEOUT', 
+                                                             timeout=30, resource=operation_name)
                     else:
-                        error_msg = f"Unexpected error in {operation_name}: {str(e)}"
+                        error_msg = f"Network operation {operation_name} failed: {str(e)}"
                     
                     if log_errors:
-                        logger.error(error_msg)
+                        logger.error(f"{operation_name} failed after {retry_count + 1} attempts: {error_msg}")
                     
                     error_context = {
                         'operation': operation_name,
-                        'error_details': str(e),
+                        'attempts': retry_count + 1,
+                        **(context or {})
+                    }
+                    error_handler.handle_error(e, error_context)
+                    return return_on_error
+            else:
+                # No retries, execute once
+                try:
+                    return func(*args, **kwargs)
+                except Exception as e:
+                    if log_errors:
+                        logger.error(f"{operation_name} failed: {str(e)}")
+                    
+                    error_context = {
+                        'operation': operation_name,
+                        'attempts': 1,
                         **(context or {})
                     }
                     error_handler.handle_error(e, error_context)
@@ -735,6 +744,9 @@ def handle_download_operations(operation_name: str, return_on_error: Any = None,
     """
     Decorator for standardized download operation error handling
     
+    This decorator now delegates to the centralized retry_utils module
+    for consistent retry behavior across the codebase.
+    
     Args:
         operation_name: Name of the download operation for error messages
         return_on_error: Value to return if error occurs
@@ -742,17 +754,32 @@ def handle_download_operations(operation_name: str, return_on_error: Any = None,
         log_errors: Whether to log errors
         context: Additional context for error handling
     """
+    # Import centralized retry utilities
+    try:
+        from retry_utils import retry_with_backoff
+    except ImportError:
+        from .retry_utils import retry_with_backoff
+    
     def decorator(func: Callable) -> Callable:
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
             logger = get_logger(func.__module__)
             error_handler = ErrorHandler(logger)
             
-            for attempt in range(retry_count + 1):
+            # Apply centralized retry logic for downloads
+            if retry_count > 0:
+                retry_decorator = retry_with_backoff(
+                    max_attempts=retry_count + 1,
+                    base_delay=2.0,  # Appropriate for download operations
+                    exceptions=(Exception,),
+                    logger=logger
+                )
+                retried_func = retry_decorator(func)
+                
                 try:
-                    return func(*args, **kwargs)
-                    
+                    return retried_func(*args, **kwargs)
                 except Exception as e:
+                    # Handle the final error after all retries exhausted
                     error_str = str(e).lower()
                     
                     # Classify download error
@@ -766,22 +793,33 @@ def handle_download_operations(operation_name: str, return_on_error: Any = None,
                         error_msg = ErrorMessages.format_error('DOWNLOAD', 'DOWNLOAD_FAILED',
                                                              url='unknown', error=str(e))
                     
-                    if attempt < retry_count:
-                        if log_errors:
-                            logger.warning(f"Download attempt {attempt + 1}/{retry_count + 1} failed: {error_msg}")
-                        continue
-                    else:
-                        if log_errors:
-                            logger.error(f"{operation_name} failed after {retry_count + 1} attempts: {error_msg}")
-                        
-                        error_context = {
-                            'operation': operation_name,
-                            'attempts': retry_count + 1,
-                            'download_type': context.get('download_type', 'unknown') if context else 'unknown',
-                            **(context or {})
-                        }
-                        error_handler.handle_error(e, error_context)
-                        return return_on_error
+                    if log_errors:
+                        logger.error(f"{operation_name} failed after {retry_count + 1} attempts: {error_msg}")
+                    
+                    error_context = {
+                        'operation': operation_name,
+                        'attempts': retry_count + 1,
+                        'download_type': context.get('download_type', 'unknown') if context else 'unknown',
+                        **(context or {})
+                    }
+                    error_handler.handle_error(e, error_context)
+                    return return_on_error
+            else:
+                # No retries, execute once
+                try:
+                    return func(*args, **kwargs)
+                except Exception as e:
+                    if log_errors:
+                        logger.error(f"{operation_name} failed: {str(e)}")
+                    
+                    error_context = {
+                        'operation': operation_name,
+                        'attempts': 1,
+                        'download_type': context.get('download_type', 'unknown') if context else 'unknown',
+                        **(context or {})
+                    }
+                    error_handler.handle_error(e, error_context)
+                    return return_on_error
                         
         return wrapper
     return decorator
@@ -1012,6 +1050,216 @@ def system_error(error_type: str, **kwargs) -> str:
 
 
 # ============================================================================
+# UNIFIED ERROR HANDLING PATTERNS (DRY ITERATION 3 - Step 2)
+# ============================================================================
+
+def try_operation(func: Callable, *args, operation_name: str = None, 
+                 default_return: Any = None, log_errors: bool = True,
+                 reraise: bool = False, **kwargs) -> Any:
+    """
+    Unified try/except pattern to eliminate 189+ duplicate try/except blocks.
+    
+    ELIMINATES PATTERNS LIKE:
+    - try: result = func() except Exception as e: logger.error(f"Error: {e}"); return None
+    - try: do_something() except Exception as e: logger.error(f"Failed: {e}"); raise
+    
+    Args:
+        func: Function to execute
+        *args: Arguments for function
+        operation_name: Name of operation for error messages
+        default_return: Value to return on error (None, False, [], etc.)
+        log_errors: Whether to log errors
+        reraise: Whether to re-raise exceptions
+        **kwargs: Keyword arguments for function
+        
+    Returns:
+        Function result or default_return on error
+        
+    Example:
+        # Replace this:
+        try:
+            result = s3_client.upload_file(local_path, bucket, key)
+            return result
+        except Exception as e:
+            logger.error(f"Upload failed: {e}")
+            return False
+            
+        # With this:
+        return try_operation(s3_client.upload_file, local_path, bucket, key,
+                           operation_name="S3 upload", default_return=False)
+    """
+    operation_name = operation_name or func.__name__
+    
+    try:
+        return func(*args, **kwargs)
+    except Exception as e:
+        if log_errors:
+            logger = get_logger(__name__)
+            error_msg = f"{operation_name} failed: {str(e)}"
+            
+            # Add context if available
+            if hasattr(e, '__traceback__'):
+                tb_str = ''.join(traceback.format_tb(e.__traceback__))
+                logger.error(f"{error_msg}\nTraceback:\n{tb_str}")
+            else:
+                logger.error(error_msg)
+        
+        if reraise:
+            raise
+            
+        return default_return
+
+
+def safe_execute(operation_name: str, default_return: Any = None, 
+                log_level: str = "error", capture_traceback: bool = True):
+    """
+    Decorator for unified error handling across operations.
+    
+    CONSOLIDATES 189+ TRY/EXCEPT PATTERNS into a single decorator.
+    
+    Args:
+        operation_name: Name of the operation for error messages
+        default_return: Value to return on error
+        log_level: Logging level ('error', 'warning', 'info')
+        capture_traceback: Whether to capture and log full traceback
+        
+    Example:
+        @safe_execute("Download file", default_return=False)
+        def download_file(url, path):
+            # No need for try/except - decorator handles it
+            response = requests.get(url)
+            response.raise_for_status()
+            with open(path, 'wb') as f:
+                f.write(response.content)
+            return True
+    """
+    def decorator(func):
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            logger = get_logger(func.__module__)
+            
+            try:
+                return func(*args, **kwargs)
+            except Exception as e:
+                error_msg = f"{operation_name} failed: {str(e)}"
+                
+                if capture_traceback:
+                    tb_str = ''.join(traceback.format_tb(e.__traceback__))
+                    error_msg += f"\nTraceback:\n{tb_str}"
+                
+                # Log at appropriate level
+                log_func = getattr(logger, log_level, logger.error)
+                log_func(error_msg)
+                
+                # Optional: Store error for monitoring
+                error_handler = ErrorHandler()
+                context = error_handler.create_error_context(
+                    e, operation=operation_name, 
+                    severity=ErrorSeverity.ERROR if log_level == "error" else ErrorSeverity.WARNING
+                )
+                error_handler.handle_error(context)
+                
+                return default_return
+                
+        return wrapper
+    return decorator
+
+
+class UnifiedRetryHandler:
+    """
+    Unified retry handler to eliminate 20+ duplicate retry implementations.
+    
+    CONSOLIDATES PATTERNS:
+    - for attempt in range(max_retries): try: ... except: if attempt < max_retries - 1: time.sleep(delay)
+    - Various @retry decorators with different strategies
+    
+    BUSINESS IMPACT: Consistent retry behavior across all operations
+    """
+    
+    def __init__(self, max_attempts: int = 3, initial_delay: float = 1.0,
+                 backoff_factor: float = 2.0, max_delay: float = 60.0,
+                 retryable_exceptions: Tuple[Type[Exception], ...] = (Exception,)):
+        self.max_attempts = max_attempts
+        self.initial_delay = initial_delay
+        self.backoff_factor = backoff_factor
+        self.max_delay = max_delay
+        self.retryable_exceptions = retryable_exceptions
+    
+    def retry_operation(self, func: Callable, *args, operation_name: str = None, **kwargs) -> Any:
+        """
+        Execute operation with retry logic.
+        
+        Example:
+            retry_handler = UnifiedRetryHandler(max_attempts=3)
+            result = retry_handler.retry_operation(
+                s3_client.upload_file, local_path, bucket, key,
+                operation_name="S3 upload"
+            )
+        """
+        operation_name = operation_name or func.__name__
+        delay = self.initial_delay
+        last_exception = None
+        
+        for attempt in range(self.max_attempts):
+            try:
+                return func(*args, **kwargs)
+            except self.retryable_exceptions as e:
+                last_exception = e
+                
+                if attempt < self.max_attempts - 1:
+                    logger = get_logger(__name__)
+                    logger.warning(f"{operation_name} failed (attempt {attempt + 1}/{self.max_attempts}): {str(e)}")
+                    
+                    # Exponential backoff with jitter
+                    import random
+                    jittered_delay = delay * (0.5 + random.random())
+                    actual_delay = min(jittered_delay, self.max_delay)
+                    
+                    logger.info(f"Retrying in {actual_delay:.1f} seconds...")
+                    import time
+                    time.sleep(actual_delay)
+                    
+                    delay *= self.backoff_factor
+        
+        # All retries exhausted
+        raise RuntimeError(f"{operation_name} failed after {self.max_attempts} attempts") from last_exception
+    
+    def as_decorator(self, operation_name: str = None):
+        """
+        Use as a decorator for automatic retry.
+        
+        Example:
+            @UnifiedRetryHandler(max_attempts=3).as_decorator("API call")
+            def call_api(endpoint):
+                response = requests.get(endpoint)
+                response.raise_for_status()
+                return response.json()
+        """
+        def decorator(func):
+            @functools.wraps(func)
+            def wrapper(*args, **kwargs):
+                op_name = operation_name or func.__name__
+                return self.retry_operation(func, *args, operation_name=op_name, **kwargs)
+            return wrapper
+        return decorator
+
+
+# Global retry handlers for common patterns
+network_retry = UnifiedRetryHandler(
+    max_attempts=3,
+    initial_delay=1.0,
+    retryable_exceptions=(ConnectionError, TimeoutError, OSError)
+)
+
+s3_retry = UnifiedRetryHandler(
+    max_attempts=5,
+    initial_delay=0.5,
+    backoff_factor=2.0,
+    retryable_exceptions=(Exception,)  # S3 can throw various exceptions
+)
+
+
+# ============================================================================
 # BACKWARDS COMPATIBILITY
 # ============================================================================
 
@@ -1022,5 +1270,7 @@ __all__ = [
     'handle_csv_operations', 'handle_download_operations', 'handle_validation_errors',
     'file_error', 'network_error', 'validation_error', 'download_error', 'csv_error', 'system_error',
     # DRY error handling decorators
-    'with_traceback_logging', 'try_except_log', 'retry_with_traceback'
+    'with_traceback_logging', 'try_except_log', 'retry_with_traceback',
+    # DRY ITERATION 3 - Unified patterns
+    'try_operation', 'safe_execute', 'UnifiedRetryHandler', 'network_retry', 's3_retry'
 ]

@@ -1,2 +1,0 @@
-[2025-07-26T02:23:44.850307] INFO: Recovery session started | Data: {"session_id": "05b03779", "timestamp": "2025-07-26T02:23:44.850088"}
-[2025-07-26T02:23:45.038078] INFO: Starting deep file content analysis | Data: {"method": "content_analysis"}
