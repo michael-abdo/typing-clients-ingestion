@@ -7,7 +7,7 @@ Also includes Selenium helpers for consistent web automation
 
 import re
 import time
-from typing import Pattern, Dict
+from typing import Pattern, Dict, List
 from selenium.webdriver.chrome.options import Options
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
@@ -127,6 +127,43 @@ def generate_doc_export_url(doc_id: str, format_type: str = "txt") -> str:
     """Generate export URL for a Google Doc"""
     return f"https://docs.google.com/document/d/{doc_id}/export?format={format_type}"
 
+
+# DRY CONSOLIDATION: File Extension Detection Patterns
+MEDIA_EXTENSIONS = {
+    'video': ['.mp4', '.avi', '.mov', '.mkv', '.webm', '.flv', '.wmv', '.m4v'],
+    'audio': ['.mp3', '.wav', '.m4a', '.aac', '.flac', '.ogg', '.wma'],
+    'image': ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.tiff', '.svg'],
+    'document': ['.pdf', '.doc', '.docx', '.txt', '.rtf', '.odt'],
+    'archive': ['.zip', '.rar', '.7z', '.tar', '.gz', '.bz2'],
+    'data': ['.csv', '.json', '.xml', '.xlsx', '.xls']
+}
+
+def get_file_type(filename: str) -> str:
+    """
+    Standardized file type detection (DRY consolidation).
+    
+    Args:
+        filename: Name of the file
+        
+    Returns:
+        File type category ('video', 'audio', 'image', 'document', 'archive', 'data', 'unknown')
+    """
+    from pathlib import Path
+    ext = Path(filename).suffix.lower()
+    
+    for file_type, extensions in MEDIA_EXTENSIONS.items():
+        if ext in extensions:
+            return file_type
+    return 'unknown'
+
+def is_media_file(filename: str) -> bool:
+    """Check if file is a media file (video or audio)"""
+    file_type = get_file_type(filename)
+    return file_type in ['video', 'audio']
+
+def get_file_extensions_by_type(file_type: str) -> List[str]:
+    """Get list of extensions for a specific file type"""
+    return MEDIA_EXTENSIONS.get(file_type, [])
 
 def clean_url(url: str) -> str:
     """Clean URL using centralized patterns"""

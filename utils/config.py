@@ -101,6 +101,22 @@ def get_config(config_path: Optional[str] = None) -> Config:
     return _config
 
 
+# DRY CONSOLIDATION: S3 Configuration
+S3_CONFIG = {
+    'default_bucket': 'typing-clients-uuid-system',
+    'backup_bucket': 'typing-clients-backups',
+    'temp_prefix': 'temp/',
+    'files_prefix': 'files/'
+}
+
+def get_s3_bucket(bucket_type: str = 'default') -> str:
+    """Get S3 bucket name for specified type."""
+    return S3_CONFIG.get(f'{bucket_type}_bucket', S3_CONFIG['default_bucket'])
+
+def get_s3_prefix(prefix_type: str = 'files') -> str:
+    """Get S3 prefix for specified type."""
+    return S3_CONFIG.get(f'{prefix_type}_prefix', '')
+
 # Convenience functions for common config values
 def get_youtube_downloads_dir() -> str:
     """Get YouTube downloads directory."""

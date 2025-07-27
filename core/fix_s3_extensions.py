@@ -5,12 +5,14 @@ import pandas as pd
 import json
 from datetime import datetime
 from utils.csv_manager import CSVManager
+from utils.config import get_s3_bucket
 
 def fix_s3_file_extensions():
     """Fix the .bin extensions on S3 files to proper media extensions."""
     
     s3_client = boto3.client('s3')
-    bucket_name = 'typing-clients-uuid-system'
+    # DRY: Use centralized S3 bucket configuration
+    bucket_name = get_s3_bucket()
     
     # Mapping from UUID to correct filename and extension
     file_mappings = {

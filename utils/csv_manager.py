@@ -16,7 +16,7 @@ import glob
 import re
 import warnings
 from pathlib import Path
-from typing import List, Optional, Dict, Any, Callable, Union
+from typing import List, Optional, Dict, Any, Callable, Union, Tuple
 from datetime import datetime
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -56,6 +56,15 @@ except ImportError:
 
 # Setup module logger
 logger = get_logger(__name__)
+
+# DRY CONSOLIDATION: CSV Column Schema Definitions
+CSV_SCHEMA = {
+    'required_columns': ['row_id', 'name', 'processed'],
+    'tracking_columns': ['s3_paths', 'file_uuids', 'download_errors', 'last_download_attempt'],
+    'youtube_columns': ['youtube_playlist', 'youtube_status', 'youtube_files', 'youtube_media_id'],
+    'drive_columns': ['google_drive', 'drive_status', 'drive_files', 'drive_media_id'], 
+    'optional_columns': ['document_text', 'extracted_links', 'permanent_failure']
+}
 
 # Get configuration
 config = get_config()
@@ -775,8 +784,16 @@ class CSVManager:
         Returns:
             Row as pandas Series or None if not found
         """
+        # DRY: Use centralized row ID validation
+        from .validation import validate_row_id
+        is_valid, validated_id = validate_row_id(row_id)
+        
+        if not is_valid:
+            logger.warning(f"Invalid row ID provided: {row_id}")
+            return None
+        
         df = self.read_csv_safe()
-        mask = df['row_id'].astype(str) == str(row_id)
+        mask = df['row_id'].astype(str) == str(validated_id)
         
         if mask.any():
             return df[mask].iloc[0]
@@ -853,6 +870,38 @@ class CSVManager:
         for idx, row in df.iterrows():
             if filter_func is None or filter_func(row):
                 yield idx, row
+    
+    # === CSV SCHEMA OPERATIONS (DRY) ===
+    
+    @staticmethod
+    def get_standard_columns() -> List[str]:
+        """Get standard CSV columns for consistent schema"""
+        return (CSV_SCHEMA['required_columns'] + 
+                CSV_SCHEMA['tracking_columns'] + 
+                CSV_SCHEMA['youtube_columns'] + 
+                CSV_SCHEMA['drive_columns'] + 
+                CSV_SCHEMA['optional_columns'])
+    
+    @staticmethod
+    def get_required_columns() -> List[str]:
+        """Get required columns that must be present"""
+        return CSV_SCHEMA['required_columns']
+    
+    @staticmethod 
+    def get_columns_by_type(column_type: str) -> List[str]:
+        """Get columns by type (required, tracking, youtube, drive, optional)"""
+        return CSV_SCHEMA.get(f'{column_type}_columns', [])
+    
+    def validate_schema(self, df: pd.DataFrame) -> Tuple[bool, List[str]]:
+        """Validate DataFrame has required columns"""
+        missing_cols = []
+        required = self.get_required_columns()
+        
+        for col in required:
+            if col not in df.columns:
+                missing_cols.append(col)
+        
+        return len(missing_cols) == 0, missing_cols
     
     # === BACKUP & UTILITY OPERATIONS ===
     

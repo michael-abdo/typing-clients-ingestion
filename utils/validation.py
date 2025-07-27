@@ -952,3 +952,46 @@ def run_validation():
         print(f"Drive URL {url}: {is_valid_drive_url(url)}")
     
     print("Validation tests complete.")
+
+
+def validate_row_id(row_id: Any) -> Tuple[bool, Optional[int]]:
+    """
+    Standardized row ID validation across all modules (DRY consolidation).
+    
+    Args:
+        row_id: Row ID to validate (can be str, int, float, or None)
+        
+    Returns:
+        Tuple of (is_valid, validated_id)
+        - is_valid: True if row ID is valid, False otherwise
+        - validated_id: Integer row ID if valid, None if invalid
+        
+    Business Rules:
+        - Row IDs must be positive integers
+        - Empty/None values are invalid
+        - String representations like "123.0" are converted to integers
+        - Values <= 0 are invalid
+    """
+    from typing import Any, Optional, Tuple
+    
+    if row_id is None or row_id == '':
+        return False, None
+    
+    try:
+        # Handle string representations
+        if isinstance(row_id, str):
+            row_id = row_id.strip()
+            if not row_id or row_id.lower() in ['nan', 'none', 'null']:
+                return False, None
+        
+        # Convert to integer (handles "123.0" strings and floats)
+        valid_id = int(float(str(row_id)))
+        
+        # Business rule: Row IDs must be positive
+        if valid_id <= 0:
+            return False, None
+            
+        return True, valid_id
+        
+    except (ValueError, TypeError, OverflowError):
+        return False, None

@@ -135,11 +135,9 @@ class MetadataDownloadProcessor:
             import os
             import uuid
             
-            # Create output directory
-            output_dir = f"youtube_downloads/row_{row_context.row_id}_{row_context.name.replace(' ', '_')}"
-            # DRY: Use ensure_directory from path_utils
-            from utils.path_utils import ensure_directory
-            ensure_directory(output_dir)
+            # DRY: Use standardized download path creation
+            from utils.path_utils import create_download_path
+            output_dir = create_download_path(row_context.row_id, row_context.name, 'youtube')
             
             # Extract playlist ID
             playlist_match = re.search(r'list=([a-zA-Z0-9_-]+)', url)

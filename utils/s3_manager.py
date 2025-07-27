@@ -27,12 +27,12 @@ import mimetypes
 
 # DRY CONSOLIDATION: Simplified import pattern
 try:
-    from .config import get_config
+    from .config import get_config, get_s3_bucket
     from .logging_config import get_logger
     from .sanitization import sanitize_error_message
     from .database_manager import get_database_manager
 except ImportError:
-    from config import get_config
+    from config import get_config, get_s3_bucket
     from logging_config import get_logger
     from sanitization import sanitize_error_message
     from database_manager import get_database_manager
@@ -48,7 +48,7 @@ class UploadMode(Enum):
 @dataclass
 class S3Config:
     """Configuration for S3 operations"""
-    bucket_name: str = 'typing-clients-uuid-system'
+    bucket_name: str = None  # Will use get_s3_bucket() if None
     region: str = 'us-east-1'
     upload_mode: UploadMode = UploadMode.LOCAL_THEN_UPLOAD
     organize_by_person: bool = True
@@ -78,6 +78,10 @@ class UnifiedS3Manager:
     def __init__(self, config: Optional[S3Config] = None):
         self.config = config or S3Config()
         self.logger = get_logger(__name__)
+        
+        # DRY: Use centralized S3 bucket configuration
+        if self.config.bucket_name is None:
+            self.config.bucket_name = get_s3_bucket()
         
         # Initialize S3 client
         self.s3_client = boto3.client('s3', region_name=self.config.region)
@@ -715,7 +719,7 @@ class UnifiedS3Manager:
             self.logger.info(f"⏱️ Average upload time: {avg_time:.2f} seconds")
 
 
-def create_local_uploader(bucket_name: str = 'typing-clients-uuid-system') -> UnifiedS3Manager:
+def create_local_uploader(bucket_name: str = None) -> UnifiedS3Manager:
     """Create S3 manager for local-then-upload mode"""
     config = S3Config(
         bucket_name=bucket_name,
@@ -726,7 +730,7 @@ def create_local_uploader(bucket_name: str = 'typing-clients-uuid-system') -> Un
     return UnifiedS3Manager(config)
 
 
-def create_streaming_uploader(bucket_name: str = 'typing-clients-uuid-system') -> UnifiedS3Manager:
+def create_streaming_uploader(bucket_name: str = None) -> UnifiedS3Manager:
     """Create S3 manager for direct streaming mode"""
     config = S3Config(
         bucket_name=bucket_name,
@@ -741,7 +745,7 @@ if __name__ == "__main__":
     import argparse
     
     parser = argparse.ArgumentParser(description='Unified S3 Upload Manager')
-    parser.add_argument('--bucket', default='typing-clients-uuid-system', help='S3 bucket name')
+    parser.add_argument('--bucket', default=None, help='S3 bucket name (uses config default if not specified)')
     parser.add_argument('--mode', choices=['local', 'streaming', 'database'], default='local', help='Upload mode')
     parser.add_argument('--csv', default='outputs/output.csv', help='CSV file to update')
     parser.add_argument('--downloads-dir', default='downloads', help='Downloads directory')

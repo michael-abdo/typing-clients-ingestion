@@ -186,3 +186,51 @@ def format_validation_error(field: str, value: Any, reason: str) -> str:
         Formatted validation error message
     """
     return f"❌ Validation failed for {field}='{value}': {reason}"
+
+def format_operation_error(operation: str, target: str, error: Exception, 
+                          context: Optional[Dict] = None) -> str:
+    """
+    Standard format for all operation errors (DRY consolidation).
+    
+    Args:
+        operation: Operation that failed (e.g., "download", "upload", "process")
+        target: Target of the operation (e.g., URL, filename, row_id)
+        error: Exception that occurred
+        context: Optional context information
+        
+    Returns:
+        Formatted error message
+    """
+    base_msg = f"❌ {operation} failed for {target}: {str(error)}"
+    
+    if context:
+        context_str = ", ".join(f"{k}={v}" for k, v in context.items())
+        base_msg += f" (Context: {context_str})"
+    
+    return base_msg
+
+def format_operation_success(operation: str, target: str, 
+                           result: Optional[str] = None, 
+                           context: Optional[Dict] = None) -> str:
+    """
+    Standard format for operation success messages.
+    
+    Args:
+        operation: Operation that succeeded
+        target: Target of the operation
+        result: Optional result description
+        context: Optional context information
+        
+    Returns:
+        Formatted success message
+    """
+    base_msg = f"✅ {operation} completed for {target}"
+    
+    if result:
+        base_msg += f": {result}"
+    
+    if context:
+        context_str = ", ".join(f"{k}={v}" for k, v in context.items())
+        base_msg += f" (Context: {context_str})"
+    
+    return base_msg

@@ -40,6 +40,30 @@ def create_download_directory(row_id: int, person_name: str, base_dir: str = "do
     full_path = Path(base_dir) / dir_name
     return ensure_directory(full_path)
 
+def create_download_path(row_id: int, person_name: str, content_type: str) -> Path:
+    """
+    Create standardized download path for all content types (DRY consolidation).
+    
+    Args:
+        row_id: Row identifier
+        person_name: Person's name  
+        content_type: Content type ('youtube', 'drive', or 'general')
+    
+    Returns:
+        Path to the created directory
+    """
+    clean_name = person_name.replace(' ', '_').replace('/', '_').replace('\\', '_')
+    
+    if content_type == 'youtube':
+        base = 'youtube_downloads'
+    elif content_type == 'drive':
+        base = 'drive_downloads'
+    else:
+        base = 'downloads'
+    
+    dir_name = f"row_{row_id}_{clean_name}"
+    return ensure_directory(Path(base) / dir_name)
+
 def create_cache_directory(cache_name: str = "cache") -> Path:
     """
     Create cache directory in standard location.
