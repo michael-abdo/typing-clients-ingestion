@@ -32,7 +32,14 @@ class CSVS3Versioning:
         """
         self.bucket_name = bucket_name or config.get('downloads.s3.default_bucket', 'typing-clients-uuid-system')
         self.folder_prefix = folder_prefix
-        self.s3_client = boto3.client('s3')
+        
+        # Use profile-aware S3 client
+        try:
+            from .s3_manager import get_s3_client
+            self.s3_client = get_s3_client()
+        except ImportError:
+            from s3_manager import get_s3_client
+            self.s3_client = get_s3_client()
         
     def generate_versioned_name(self, original_path: Path) -> str:
         """Generate timestamped version name for CSV

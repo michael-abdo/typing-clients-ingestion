@@ -33,6 +33,7 @@ downloads:
     default_bucket: "typing-clients-uuid-system"
     streaming_enabled: true
     skip_local_storage: true
+
   youtube:
     default_resolution: "720"
     default_format: "mp4"
@@ -64,6 +65,10 @@ retry:
   download:
     max_attempts: 3
     base_delay: 5.0
+
+# AWS Configuration
+aws_profile: "zenex"  # AWS profile for S3 access
+aws_region: "us-west-2"  # AWS region
 
 # Timeout Settings (in seconds)
 timeouts:

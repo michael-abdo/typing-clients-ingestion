@@ -58,13 +58,24 @@ def get_s3_client(region_name: str = 'us-east-1') -> boto3.client:
         s3_client = get_s3_client('us-west-2')
     """
     try:
-        # Get region from config if available
+        # Get region and profile from config if available
         config = get_config()
         aws_region = config.get('aws_region', region_name)
+        aws_profile = config.get('aws_profile', None)
     except Exception:
         aws_region = region_name
+        aws_profile = None
     
-    return boto3.client('s3', region_name=aws_region)
+    # Check environment variable for AWS profile
+    import os
+    aws_profile = os.environ.get('AWS_PROFILE', aws_profile)
+    
+    # Create session with profile if specified
+    if aws_profile:
+        session = boto3.Session(profile_name=aws_profile)
+        return session.client('s3', region_name=aws_region)
+    else:
+        return boto3.client('s3', region_name=aws_region)
 
 
 class UploadMode(Enum):

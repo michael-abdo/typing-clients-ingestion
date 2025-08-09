@@ -28,7 +28,7 @@ from utils.extract_links import extract_google_doc_text, extract_actual_url, ext
 from utils.csv_manager import CSVManager
 from utils.http_pool import get as http_get  # Centralized HTTP requests (DRY)
 from utils.streaming_integration import stream_extracted_links
-from utils.constants import CSVConstants
+from utils.constants import CSVConstants, URLPatterns
 from utils.s3_manager import UnifiedS3Manager, S3Config, UploadMode
 
 
@@ -298,9 +298,6 @@ def step4_extract_links(doc_content, doc_text=""):
         'drive_folders': [],
         'all_links': []
     }
-    
-    # DRY CONSOLIDATION - Step 2: Use centralized patterns and URL construction
-    from utils.constants import URLPatterns
     
     # Use centralized YouTube patterns (DRY)
     youtube_patterns = [
