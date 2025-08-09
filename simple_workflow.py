@@ -23,7 +23,7 @@ from selenium.webdriver.support import expected_conditions as EC
 
 # Import centralized configuration, path utilities, error handling, patterns, and CSV operations (DRY)
 from utils.config import get_config, ensure_parent_dir, ensure_directory, format_error_message, load_json_state, save_json_state
-from utils.patterns import PatternRegistry, extract_youtube_id, extract_drive_id, clean_url, normalize_whitespace, cleanup_selenium_driver
+from utils.patterns import PatternRegistry, extract_youtube_id, extract_drive_id, clean_url, normalize_whitespace, cleanup_selenium_driver, get_selenium_driver
 from utils.extract_links import extract_google_doc_text, extract_actual_url, extract_text_with_retry
 from utils.csv_manager import CSVManager
 from utils.http_pool import get as http_get  # Centralized HTTP requests (DRY)
@@ -62,16 +62,104 @@ def step1_download_sheet():
     """Step 1: Download a local copy of the Google Sheet"""
     print("Step 1: Downloading Google Sheet...")
     
-    response = http_get(config.get("google_sheets.url"))  # Use centralized HTTP pool (DRY)
-    response.raise_for_status()
+    # First try HTTP request (faster)
+    try:
+        print("  Trying HTTP download...")
+        response = http_get(config.get("google_sheets.url"))
+        response.raise_for_status()
+        html_content = response.text
+        
+        # Quick check if we got actual data
+        soup = BeautifulSoup(html_content, "html.parser")
+        
+        # Look for the specific div with target ID
+        target_div = soup.find("div", {"id": str(config.get("google_sheets.target_div_id"))})
+        if target_div:
+            table = target_div.find("table")
+        else:
+            # Fallback to any table
+            table = soup.find("table", {"class": "waffle"})
+            if not table:
+                tables = soup.find_all("table")
+                table = tables[0] if tables else None
+        
+        # Check if we found a table with rows
+        if table:
+            rows = table.find_all("tr")
+            if len(rows) > 1:  # More than just header
+                # Save the HTML
+                sheet_cache_path = get_config().get('paths.sheet_cache', 'sheet.html')
+                with open(sheet_cache_path, "w", encoding="utf-8") as f:
+                    f.write(html_content)
+                
+                print(f"  ✓ Sheet downloaded via HTTP (found {len(rows)} rows)")
+                return html_content
+        
+        print("  ✗ HTTP download incomplete (no table data found)")
+        print("  Falling back to Selenium...")
+        
+    except Exception as e:
+        print(f"  ✗ HTTP download failed: {e}")
+        print("  Falling back to Selenium...")
     
-    # Save the HTML
-    sheet_cache_path = get_config().get('paths.sheet_cache', 'sheet.html')
-    with open(sheet_cache_path, "w", encoding="utf-8") as f:
-        f.write(response.text)
-    
-    print("✓ Sheet downloaded")
-    return response.text
+    # Fallback to Selenium for JavaScript-rendered content
+    driver = None
+    try:
+        driver = get_selenium_driver()
+        
+        # Navigate directly to the PROFILE LIST sheet tab
+        sheet_url = "https://docs.google.com/spreadsheets/u/1/d/e/2PACX-1vRqqjqoaj8sEZBfZRw0Og7g8ms_0yTL2MsegTubcjhhBnXr1s1jFBwIVAsbkyj1xD0TMj06LvGTQIHU/pubhtml/sheet?pli=1&headers=false&gid=1159146182"
+        
+        driver.get(sheet_url)
+        
+        # Wait for the table to load
+        wait = WebDriverWait(driver, 20)
+        
+        # Try to find the table with the specific div ID first
+        target_div_id = str(config.get("google_sheets.target_div_id"))
+        try:
+            target_div = wait.until(
+                EC.presence_of_element_located((By.ID, target_div_id))
+            )
+            print(f"  ✓ Found target div with ID: {target_div_id}")
+        except:
+            print(f"  ✗ Target div {target_div_id} not found, looking for any table...")
+            
+        # Wait for any table to be present
+        wait.until(
+            EC.presence_of_element_located((By.TAG_NAME, "table"))
+        )
+        
+        # Additional wait to ensure data is loaded
+        time.sleep(3)
+        
+        # Try to find table with waffle class (Google Sheets specific)
+        try:
+            wait.until(
+                EC.presence_of_element_located((By.CLASS_NAME, "waffle"))
+            )
+            print("  ✓ Found Google Sheets table")
+        except:
+            print("  ✗ No waffle table found, using any table")
+        
+        # Get the page source after JavaScript has executed
+        html_content = driver.page_source
+        
+        # Save the HTML
+        sheet_cache_path = get_config().get('paths.sheet_cache', 'sheet.html')
+        with open(sheet_cache_path, "w", encoding="utf-8") as f:
+            f.write(html_content)
+        
+        print("✓ Sheet downloaded with Selenium")
+        return html_content
+        
+    except Exception as e:
+        print(f"✗ Failed to download sheet with Selenium: {e}")
+        raise Exception("Failed to download sheet with both HTTP and Selenium methods")
+        
+    finally:
+        if driver:
+            driver.quit()
 
 def step2_extract_people_and_docs(html_content):
     """Step 2: Extract people data and Google Doc links from the sheet"""
