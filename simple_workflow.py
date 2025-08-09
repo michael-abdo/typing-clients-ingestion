@@ -653,6 +653,53 @@ def step6_map_data(processed_records, basic_mode=False, text_mode=False, output_
     
     return df
 
+
+def update_csv_incrementally(all_records, current_index, record, basic_mode=False, text_mode=False, output_file=None):
+    """Update CSV incrementally after each successful S3 process"""
+    # Update the record at the current index
+    all_records[current_index] = record
+    
+    # Handle different column sets based on processing mode
+    if basic_mode:
+        required_columns = config.get('csv_columns.basic')
+    elif text_mode:
+        required_columns = config.get('csv_columns.text')
+    else:
+        required_columns = config.get('csv_columns.full')
+    
+    # Ensure all required columns are present in all records
+    for rec in all_records:
+        for col in required_columns:
+            if col not in rec:
+                rec[col] = ''
+    
+    # Filter records to only include required columns in correct order
+    filtered_records = []
+    for rec in all_records:
+        filtered_record = {col: rec.get(col, '') for col in required_columns}
+        filtered_records.append(filtered_record)
+    
+    # Determine output file
+    if not output_file:
+        if basic_mode:
+            output_file = config.get("paths.output_csv", "simple_output.csv")
+        elif text_mode:
+            output_file = "text_extraction_output.csv"
+        else:
+            output_file = config.get("paths.output_csv", "simple_output.csv")
+    
+    # Create DataFrame for CSV operations
+    df = pd.DataFrame(filtered_records)
+    
+    # Write to CSV
+    csv_manager = CSVManager(csv_path=output_file)
+    csv_success = csv_manager.safe_csv_write(df, operation_name=f"incremental_update_{current_index}")
+    
+    if not csv_success:
+        print(f"  ❌ Failed to update CSV after processing record {current_index}")
+    
+    return csv_success
+
 def parse_arguments():
     """Parse command line arguments"""
     parser = argparse.ArgumentParser(description='Simple 6-Step Workflow - Unified Processing')
@@ -720,17 +767,25 @@ def main():
     # Create a lookup for people with docs for efficient processing
     people_with_docs_dict = {person['row_id']: person for person in people_with_docs}
     
+    # Pre-initialize all records with basic data for incremental updates
+    all_records = []
+    for person in all_people:
+        # Create basic record for each person
+        basic_record = CSVManager.create_record(person, mode='basic')
+        all_records.append(basic_record)
+    
     # Determine processing approach based on mode
     if basic_mode:
         print(f"\n🚀 BASIC MODE: Processing {len(all_people)} people (basic data only)...")
-        # Basic processing - just extract core data, no document processing
-        for i, person in enumerate(all_people):
-            if test_limit and i >= test_limit:
-                print(f"Test limit reached: {test_limit}")
-                break
-            record = CSVManager.create_record(person, mode='basic')
-            processed_records.append(record)
-        print(f"✓ Processed {len(processed_records)} records in basic mode")
+        # Basic processing - just write the pre-initialized records
+        people_to_process = all_people[:test_limit] if test_limit else all_people
+        
+        # Write all basic records in one go for basic mode
+        if all_records:
+            print("  📝 Writing all basic records to CSV...")
+            step6_map_data(all_records[:len(people_to_process)], basic_mode=basic_mode, text_mode=text_mode, output_file=output_file)
+        
+        print(f"✓ Processed {len(people_to_process)} records in basic mode")
     
     elif text_mode:
         print(f"\n🚀 TEXT EXTRACTION MODE: Processing {len(people_with_docs)} documents...")
@@ -741,11 +796,15 @@ def main():
         progress = load_json_state(config.get("paths.extraction_progress", "extraction_progress.json"), default_progress) if args.resume else default_progress
         failed_docs = load_failed_docs() if args.retry_failed else []
         
-        # Process all people first (add basic records for those without docs)
-        for person in all_people:
-            if not person.get('doc_link'):
-                record = CSVManager.create_record(person, mode='text')
-                processed_records.append(record)
+        # Update all_records to text mode format
+        for i, person in enumerate(all_people):
+            # Update basic record to text mode record
+            text_record = CSVManager.create_record(person, mode='text')
+            all_records[i] = text_record
+        
+        # Write initial CSV with all records in text mode format
+        print("\n📝 Writing initial CSV with text mode columns...")
+        update_csv_incrementally(all_records, 0, all_records[0], basic_mode=basic_mode, text_mode=text_mode, output_file=output_file)
         
         # Determine which documents to process
         if args.retry_failed and failed_docs:
@@ -793,7 +852,13 @@ def main():
                     progress['completed'].append(person['doc_link'])
                     record = CSVManager.create_record(person, mode='text', doc_text=doc_text)
                 
-                processed_records.append(record)
+                # Find the index in all_records for this person
+                record_index = next((idx for idx, rec in enumerate(all_records) if rec['row_id'] == person['row_id']), -1)
+                if record_index >= 0:
+                    # Update CSV incrementally after each document extraction
+                    print("  📝 Updating CSV...")
+                    update_csv_incrementally(all_records, record_index, record, basic_mode=basic_mode, text_mode=text_mode, output_file=output_file)
+                
                 progress['total_processed'] += 1
                 
                 # Add delay between documents
@@ -824,8 +889,15 @@ def main():
         # Full processing of all people (both with and without docs)
         people_to_process = all_people[:test_limit] if test_limit else all_people
         
+        # Write initial CSV with all basic records
+        print("\n📝 Writing initial CSV with basic data for all people...")
+        update_csv_incrementally(all_records, 0, all_records[0], basic_mode=basic_mode, text_mode=text_mode, output_file=output_file)
+        
         for i, person in enumerate(people_to_process):
             print(f"\nProcessing person {i+1}/{len(people_to_process)}: {person['name']} (Row {person.get('row_id', 'Unknown')})")
+            
+            # Find the index in all_records for this person
+            record_index = next((idx for idx, rec in enumerate(all_records) if rec['row_id'] == person['row_id']), i)
             
             # Check if this person has a link
             if person.get('doc_link'):
@@ -841,9 +913,12 @@ def main():
                     # Step 4: Extract links from HTML content and document text
                     links = step4_extract_links(doc_content, doc_text)
                     
-                    # Step 5: Process extracted data
+                    # Step 5: Process extracted data (includes S3 streaming)
                     record = step5_process_extracted_data(person, links, doc_text)
-                    processed_records.append(record)
+                    
+                    # Update CSV incrementally after successful S3 process
+                    print("  📝 Updating CSV...")
+                    update_csv_incrementally(all_records, record_index, record, basic_mode=basic_mode, text_mode=text_mode, output_file=output_file)
                 
                 # Handle direct YouTube/Drive links (Case 2)
                 elif "youtube.com" in link or "youtu.be" in link or "drive.google.com/file" in link:
@@ -865,9 +940,12 @@ def main():
                     
                     links['all_links'].append(person['doc_link'])
                     
-                    # Process without doc scraping
+                    # Process without doc scraping (includes S3 streaming)
                     record = step5_process_extracted_data(person, links, '')
-                    processed_records.append(record)
+                    
+                    # Update CSV incrementally after successful S3 process
+                    print("  📝 Updating CSV...")
+                    update_csv_incrementally(all_records, record_index, record, basic_mode=basic_mode, text_mode=text_mode, output_file=output_file)
                 
                 else:
                     print(f"  → Has unknown link type: {person['doc_link']}")
@@ -875,18 +953,24 @@ def main():
                     doc_content, doc_text = step3_scrape_doc_contents(person['doc_link'])
                     links = step4_extract_links(doc_content, doc_text)
                     record = step5_process_extracted_data(person, links, doc_text)
-                    processed_records.append(record)
+                    
+                    # Update CSV incrementally after successful S3 process
+                    print("  📝 Updating CSV...")
+                    update_csv_incrementally(all_records, record_index, record, basic_mode=basic_mode, text_mode=text_mode, output_file=output_file)
             else:
                 print(f"  → No document")
                 # Create record for person without document using factory (DRY)
                 record = CSVManager.create_record(person, mode='full', doc_text='', links=None)
-                processed_records.append(record)
+                
+                # Update CSV incrementally (even for no-doc cases to maintain consistency)
+                update_csv_incrementally(all_records, record_index, record, basic_mode=basic_mode, text_mode=text_mode, output_file=output_file)
     
-    # Step 6: Map all data
-    if processed_records:
-        step6_map_data(processed_records, basic_mode=basic_mode, text_mode=text_mode, output_file=output_file)
-    else:
-        print("No records to map")
+    # Step 6 is now done incrementally, so just print summary
+    print("\n" + "=" * 50)
+    print("📊 FINAL SUMMARY")
+    print(f"  Total people processed: {len(people_to_process) if 'people_to_process' in locals() else len(processed_records)}")
+    print(f"  CSV updated incrementally after each S3 process")
+    print(f"  Final CSV location: {output_file}")
     
     # Cleanup Selenium driver
     cleanup_selenium_driver()
