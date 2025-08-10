@@ -1,0 +1,1359 @@
+{
+  "timestamp": "2025-06-30T12:52:33.840041",
+  "total_mappings": 149,
+  "mapping_sources": {
+    "definitive": [
+      {
+        "file_path": "drive_downloads/Pro Tips.mp3",
+        "row_id": "134",
+        "source": "definitive"
+      },
+      {
+        "file_path": "drive_downloads/1DqJ9g954W0kT4V3yAFFTY7gbP0JrFgOm.html",
+        "row_id": "429",
+        "source": "definitive"
+      },
+      {
+        "file_path": "drive_downloads/Not tester! My bad.m4a",
+        "row_id": "451",
+        "source": "definitive"
+      },
+      {
+        "file_path": "drive_downloads/Number 1.MOV",
+        "row_id": "451",
+        "source": "definitive"
+      },
+      {
+        "file_path": "drive_downloads/Intro.mp4",
+        "row_id": "398",
+        "source": "definitive"
+      },
+      {
+        "file_path": "drive_downloads/Google Doc 2023.m4a",
+        "row_id": "409",
+        "source": "definitive"
+      },
+      {
+        "file_path": "drive_downloads/taro official vedio.mp4",
+        "row_id": "483",
+        "source": "definitive"
+      },
+      {
+        "file_path": "drive_downloads/Number 2.MOV",
+        "row_id": "451",
+        "source": "definitive"
+      },
+      {
+        "file_path": "drive_downloads/2.Questions I answered.docx",
+        "row_id": "484",
+        "source": "definitive"
+      },
+      {
+        "file_path": "drive_downloads/1BrhqUmDolICYdsH4ZvuUyUw47T1oExAM.html",
+        "row_id": "433",
+        "source": "definitive"
+      },
+      {
+        "file_path": "drive_downloads/social_audio.mp3",
+        "row_id": "280",
+        "source": "definitive"
+      },
+      {
+        "file_path": "drive_downloads/KIKO OPS Vedio words.txt",
+        "row_id": "492",
+        "source": "definitive"
+      },
+      {
+        "file_path": "drive_downloads/1KicEfmftS5zc6BIeOKs7y7TMokOuQAmJ.html",
+        "row_id": "462",
+        "source": "definitive"
+      },
+      {
+        "file_path": "drive_downloads/Number 4.MOV",
+        "row_id": "451",
+        "source": "definitive"
+      },
+      {
+        "file_path": "drive_downloads/1DAZmv6myb2W3URfWEVhBWWDfDOnEDrIA.html",
+        "row_id": "419",
+        "source": "definitive"
+      },
+      {
+        "file_path": "drive_downloads/1u4vS-_WKpW-RHCpIS4hls6K5grOii56F.html",
+        "row_id": "474",
+        "source": "definitive"
+      },
+      {
+        "file_path": "drive_downloads/Number 3.MOV",
+        "row_id": "451",
+        "source": "definitive"
+      },
+      {
+        "file_path": "drive_downloads/Captions.srt",
+        "row_id": "442",
+        "source": "definitive"
+      },
+      {
+        "file_path": "drive_downloads/Tester? Kinesthetic? Idk.m4a",
+        "row_id": "451",
+        "source": "definitive"
+      },
+      {
+        "file_path": "drive_downloads/17A0hgMKHfL8lF_1P4KocWo0TLz3eK-gN.html",
+        "row_id": "429",
+        "source": "definitive"
+      },
+      {
+        "file_path": "drive_downloads/Patryk Makara - OPS Typing Video.mp4",
+        "row_id": "476",
+        "source": "definitive"
+      },
+      {
+        "file_path": "drive_downloads/1_dwbrXDDTlEYMGlJcQR3OsOxbAe2Ri2r.html",
+        "row_id": "486",
+        "source": "definitive"
+      },
+      {
+        "file_path": "drive_downloads/14wo6rD4AqZDH60FW-Creve2yj3mpF-y-.html",
+        "row_id": "429",
+        "source": "definitive"
+      },
+      {
+        "file_path": "drive_downloads/Nytt opptak 4.mp3",
+        "row_id": "308",
+        "source": "definitive"
+      },
+      {
+        "file_path": "drive_downloads/q4.mp4",
+        "row_id": "398",
+        "source": "definitive"
+      },
+      {
+        "file_path": "drive_downloads/q9.mp4",
+        "row_id": "398",
+        "source": "definitive"
+      },
+      {
+        "file_path": "drive_downloads/1EHSk76Pyj_HLlGtdXZCYde9ZEHV6CbQu.html",
+        "row_id": "462",
+        "source": "definitive"
+      },
+      {
+        "file_path": "drive_downloads/IMG_0397.MOV",
+        "row_id": "295",
+        "source": "definitive"
+      },
+      {
+        "file_path": "drive_downloads/Gugu2.txt",
+        "row_id": "459",
+        "source": "definitive"
+      },
+      {
+        "file_path": "drive_downloads/Gugu2.mp4",
+        "row_id": "459",
+        "source": "definitive"
+      },
+      {
+        "file_path": "drive_downloads/q3.mp4",
+        "row_id": "398",
+        "source": "definitive"
+      },
+      {
+        "file_path": "drive_downloads/1.Please read me.docx",
+        "row_id": "484",
+        "source": "definitive"
+      },
+      {
+        "file_path": "drive_downloads/19v8EN0EfTFPw-vvXNq_6fNBN4oUcyQw1.html",
+        "row_id": "429",
+        "source": "definitive"
+      },
+      {
+        "file_path": "drive_downloads/Saints falcons.mp3",
+        "row_id": "295",
+        "source": "definitive"
+      },
+      {
+        "file_path": "drive_downloads/1ABmYjWqBckozdrYH_a84EP31h6Y0Zj_h.html",
+        "row_id": "426",
+        "source": "definitive"
+      },
+      {
+        "file_path": "drive_downloads/10hZB1lCyg5F8JaQxK-5gLaphxTguM79l.html",
+        "row_id": "461",
+        "source": "definitive"
+      },
+      {
+        "file_path": "drive_downloads/Random guitar faces.mp4",
+        "row_id": "476",
+        "source": "definitive"
+      },
+      {
+        "file_path": "drive_downloads/q7.mp4",
+        "row_id": "398",
+        "source": "definitive"
+      },
+      {
+        "file_path": "drive_downloads/10KVsN4w8gnDCIPhqZWX_4zjFRI9ocQW5.html",
+        "row_id": "460",
+        "source": "definitive"
+      },
+      {
+        "file_path": "drive_downloads/kiko ops vedio.mp4",
+        "row_id": "492",
+        "source": "definitive"
+      },
+      {
+        "file_path": "drive_downloads/126gCQWEx1hm4G5jDVGsG8m06wdFibG9P.html",
+        "row_id": "457",
+        "source": "definitive"
+      },
+      {
+        "file_path": "drive_downloads/Clarifying C over B.m4a",
+        "row_id": "426",
+        "source": "definitive"
+      },
+      {
+        "file_path": "drive_downloads/Optional - Old Typing Video worse quality.mp4",
+        "row_id": "476",
+        "source": "definitive"
+      },
+      {
+        "file_path": "drive_downloads/taro offical TXT.txt",
+        "row_id": "483",
+        "source": "definitive"
+      },
+      {
+        "file_path": "drive_downloads/1vp9yPbkD0mTtPRzPDHA6XjE1cwJOpbL4.html",
+        "row_id": "477",
+        "source": "definitive"
+      },
+      {
+        "file_path": "drive_downloads/q10.mp4",
+        "row_id": "398",
+        "source": "definitive"
+      },
+      {
+        "file_path": "drive_downloads/q6.mp4",
+        "row_id": "398",
+        "source": "definitive"
+      },
+      {
+        "file_path": "drive_downloads/Lifting weight.mp4",
+        "row_id": "476",
+        "source": "definitive"
+      },
+      {
+        "file_path": "drive_downloads/Vtuber Design Concept (Not Yet Launched).pdf",
+        "row_id": "462",
+        "source": "definitive"
+      },
+      {
+        "file_path": "drive_downloads/Blooper 2.mp4",
+        "row_id": "476",
+        "source": "definitive"
+      },
+      {
+        "file_path": "drive_downloads/q1.mp4",
+        "row_id": "398",
+        "source": "definitive"
+      },
+      {
+        "file_path": "drive_downloads/q2.mp4",
+        "row_id": "398",
+        "source": "definitive"
+      },
+      {
+        "file_path": "drive_downloads/Blooper 1.mp4",
+        "row_id": "476",
+        "source": "definitive"
+      },
+      {
+        "file_path": "drive_downloads/q8.mp4",
+        "row_id": "398",
+        "source": "definitive"
+      },
+      {
+        "file_path": "drive_downloads/gugu.srt",
+        "row_id": "459",
+        "source": "definitive"
+      },
+      {
+        "file_path": "drive_downloads/1qbN54cdHSzth4YvpA2TOJQ1W4z6uW9vg.html",
+        "row_id": "429",
+        "source": "definitive"
+      },
+      {
+        "file_path": "drive_downloads/q5.mp4",
+        "row_id": "398",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/c0O6zlu9fFA.mp4",
+        "row_id": "150",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/2iwahDWerSQ_transcript.vtt",
+        "row_id": "487",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/wHTDAAZo63U.mp4",
+        "row_id": "143",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/d6IR17a0M2o_transcript.vtt",
+        "row_id": "488",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/gzc-VS7G1PU.mp4",
+        "row_id": "448",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/nMHFEvJjtL4_transcript.vtt",
+        "row_id": "450",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/hWrKIv5BX3g_transcript.vtt",
+        "row_id": "421",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/1mH0rvBUiyc_transcript.vtt",
+        "row_id": "295",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/d6IR17a0M2o.mp4",
+        "row_id": "488",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/hIn9CG5np68.mp4",
+        "row_id": "480",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/JfES_NdO4uM_transcript.vtt",
+        "row_id": "26",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/gzc-VS7G1PU_transcript.vtt",
+        "row_id": "448",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/WhmnolRhF1g_transcript.vtt",
+        "row_id": "430",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/c0O6zlu9fFA_transcript.vtt",
+        "row_id": "150",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/rp1GfzolEuQ_transcript.vtt",
+        "row_id": "35",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/xP47DYfxQ-c_transcript.vtt",
+        "row_id": "270",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/koFHwqlyDMQ_transcript.vtt",
+        "row_id": "413",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/BtSNvQ9Rc90.mp4",
+        "row_id": "494",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/Fn8JPuOuVYs.mp4",
+        "row_id": "439",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/GLUw5j3btmM_transcript.vtt",
+        "row_id": "437",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/WhmnolRhF1g.mp4",
+        "row_id": "430",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/E_MD2buVsJk.mp4",
+        "row_id": "443",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/rIdFu9zfWpw_transcript.vtt",
+        "row_id": "148",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/d9aTIYnZa4U.mp4",
+        "row_id": "39",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/3zCkiF_o7zw_transcript.vtt",
+        "row_id": "496",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/NyEJvtYCgAc.mp4",
+        "row_id": "472",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/QOVuBg8WCOQ_transcript.vtt",
+        "row_id": "131",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/A3jqeDdizWQ.mp4",
+        "row_id": "395",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/9uJ2fQj53mA_transcript.vtt",
+        "row_id": "116",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/0mqY6-vhPhY_transcript.vtt",
+        "row_id": "496",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/JfES_NdO4uM.mp4",
+        "row_id": "26",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/NyEJvtYCgAc_transcript.vtt",
+        "row_id": "472",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/rIdFu9zfWpw.mp4",
+        "row_id": "148",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/hIn9CG5np68_transcript.vtt",
+        "row_id": "480",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/Fn8JPuOuVYs_transcript.vtt",
+        "row_id": "439",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/QOVuBg8WCOQ.mp4",
+        "row_id": "131",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/2OD3ioKmDXg.mp4",
+        "row_id": "280",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/xZgV8iz5rz8_transcript.vtt",
+        "row_id": "434",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/dREsim4XdAo_transcript.vtt",
+        "row_id": "297",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/upxtvZtFaFE.mp4",
+        "row_id": "327",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/xP47DYfxQ-c.mp4",
+        "row_id": "270",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/7q_OJyEIYEI.mp4",
+        "row_id": "464",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/4HfkyhvaaWc_transcript.vtt",
+        "row_id": "493",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/wHTDAAZo63U_transcript.vtt",
+        "row_id": "143",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/mHP_eRur0Ek_transcript.vtt",
+        "row_id": "44",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/nMHFEvJjtL4.mp4",
+        "row_id": "450",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/izE8_-fijsw_transcript.vtt",
+        "row_id": "41",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/3zCkiF_o7zw.mp4",
+        "row_id": "496",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/d9aTIYnZa4U_transcript.vtt",
+        "row_id": "39",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/7q_OJyEIYEI_transcript.vtt",
+        "row_id": "464",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/upxtvZtFaFE_transcript.vtt",
+        "row_id": "327",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/izE8_-fijsw.mp4",
+        "row_id": "41",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/2iwahDWerSQ.mp4",
+        "row_id": "487",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/pM-fs9n93P8.mp4",
+        "row_id": "271",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/GLUw5j3btmM.mp4",
+        "row_id": "437",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/2OD3ioKmDXg_transcript.vtt",
+        "row_id": "280",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/frRRv_mX-g8_transcript.vtt",
+        "row_id": "460",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/ZBuff3DGbUM_transcript.vtt",
+        "row_id": "494",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/A3jqeDdizWQ_transcript.vtt",
+        "row_id": "395",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/mHP_eRur0Ek.mp4",
+        "row_id": "44",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/9uJ2fQj53mA.mp4",
+        "row_id": "116",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/AXAis3yy-BE_transcript.vtt",
+        "row_id": "415",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/xZgV8iz5rz8.mp4",
+        "row_id": "434",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/2HUmYvfcs6c_transcript.vtt",
+        "row_id": "133",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/7huzOSYKEAk.mp4",
+        "row_id": "83",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/1mH0rvBUiyc.mp4",
+        "row_id": "295",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/AXAis3yy-BE.mp4",
+        "row_id": "415",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/E_MD2buVsJk_transcript.vtt",
+        "row_id": "443",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/BtSNvQ9Rc90_transcript.vtt",
+        "row_id": "494",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/frRRv_mX-g8.mp4",
+        "row_id": "460",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/Zhihkc1AgGo_transcript.vtt",
+        "row_id": "496",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/zwh48UtZQAg.mp4",
+        "row_id": "496",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/Zhihkc1AgGo.mp4",
+        "row_id": "496",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/EykvaGXlGV0.mp4",
+        "row_id": "360",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/x2jejX4YbrA.mp4",
+        "row_id": "485",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/rp1GfzolEuQ.mp4",
+        "row_id": "35",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/O3CB41AwERM.mp4",
+        "row_id": "396",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/dREsim4XdAo.mp4",
+        "row_id": "297",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/koFHwqlyDMQ.mp4",
+        "row_id": "413",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/0mqY6-vhPhY.f605.mp4.part",
+        "row_id": "496",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/0mqY6-vhPhY.f605.mp4.ytdl",
+        "row_id": "496",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/0WnSsriqIyQ.mp4",
+        "row_id": "36",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/ZBuff3DGbUM.mp4",
+        "row_id": "494",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/EykvaGXlGV0_transcript.vtt",
+        "row_id": "360",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/0WnSsriqIyQ_transcript.vtt",
+        "row_id": "36",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/x2jejX4YbrA_transcript.vtt",
+        "row_id": "485",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/0mqY6-vhPhY.mp4",
+        "row_id": "496",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/hWrKIv5BX3g.mp4",
+        "row_id": "421",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/2HUmYvfcs6c.mp4",
+        "row_id": "133",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/O3CB41AwERM_transcript.vtt",
+        "row_id": "396",
+        "source": "definitive"
+      },
+      {
+        "file_path": "youtube_downloads/7huzOSYKEAk_transcript.vtt",
+        "row_id": "83",
+        "source": "definitive"
+      }
+    ],
+    "original_metadata": [
+      {
+        "file_path": "drive_downloads/Gugu.mp4",
+        "row_id": "459",
+        "source": "original_metadata"
+      }
+    ]
+  },
+  "gold_standard_mappings": {
+    "drive_downloads/Pro Tips.mp3": {
+      "row_id": "134",
+      "source": "definitive"
+    },
+    "drive_downloads/1DqJ9g954W0kT4V3yAFFTY7gbP0JrFgOm.html": {
+      "row_id": "429",
+      "source": "definitive"
+    },
+    "drive_downloads/Not tester! My bad.m4a": {
+      "row_id": "451",
+      "source": "definitive"
+    },
+    "drive_downloads/Number 1.MOV": {
+      "row_id": "451",
+      "source": "definitive"
+    },
+    "drive_downloads/Intro.mp4": {
+      "row_id": "398",
+      "source": "definitive"
+    },
+    "drive_downloads/Google Doc 2023.m4a": {
+      "row_id": "409",
+      "source": "definitive"
+    },
+    "drive_downloads/taro official vedio.mp4": {
+      "row_id": "483",
+      "source": "definitive"
+    },
+    "drive_downloads/Number 2.MOV": {
+      "row_id": "451",
+      "source": "definitive"
+    },
+    "drive_downloads/2.Questions I answered.docx": {
+      "row_id": "484",
+      "source": "definitive"
+    },
+    "drive_downloads/1BrhqUmDolICYdsH4ZvuUyUw47T1oExAM.html": {
+      "row_id": "433",
+      "source": "definitive"
+    },
+    "drive_downloads/social_audio.mp3": {
+      "row_id": "280",
+      "source": "definitive"
+    },
+    "drive_downloads/KIKO OPS Vedio words.txt": {
+      "row_id": "492",
+      "source": "definitive"
+    },
+    "drive_downloads/1KicEfmftS5zc6BIeOKs7y7TMokOuQAmJ.html": {
+      "row_id": "462",
+      "source": "definitive"
+    },
+    "drive_downloads/Number 4.MOV": {
+      "row_id": "451",
+      "source": "definitive"
+    },
+    "drive_downloads/1DAZmv6myb2W3URfWEVhBWWDfDOnEDrIA.html": {
+      "row_id": "419",
+      "source": "definitive"
+    },
+    "drive_downloads/1u4vS-_WKpW-RHCpIS4hls6K5grOii56F.html": {
+      "row_id": "474",
+      "source": "definitive"
+    },
+    "drive_downloads/Number 3.MOV": {
+      "row_id": "451",
+      "source": "definitive"
+    },
+    "drive_downloads/Captions.srt": {
+      "row_id": "442",
+      "source": "definitive"
+    },
+    "drive_downloads/Tester? Kinesthetic? Idk.m4a": {
+      "row_id": "451",
+      "source": "definitive"
+    },
+    "drive_downloads/17A0hgMKHfL8lF_1P4KocWo0TLz3eK-gN.html": {
+      "row_id": "429",
+      "source": "definitive"
+    },
+    "drive_downloads/Patryk Makara - OPS Typing Video.mp4": {
+      "row_id": "476",
+      "source": "definitive"
+    },
+    "drive_downloads/1_dwbrXDDTlEYMGlJcQR3OsOxbAe2Ri2r.html": {
+      "row_id": "486",
+      "source": "definitive"
+    },
+    "drive_downloads/14wo6rD4AqZDH60FW-Creve2yj3mpF-y-.html": {
+      "row_id": "429",
+      "source": "definitive"
+    },
+    "drive_downloads/Nytt opptak 4.mp3": {
+      "row_id": "308",
+      "source": "definitive"
+    },
+    "drive_downloads/q4.mp4": {
+      "row_id": "398",
+      "source": "definitive"
+    },
+    "drive_downloads/q9.mp4": {
+      "row_id": "398",
+      "source": "definitive"
+    },
+    "drive_downloads/1EHSk76Pyj_HLlGtdXZCYde9ZEHV6CbQu.html": {
+      "row_id": "462",
+      "source": "definitive"
+    },
+    "drive_downloads/IMG_0397.MOV": {
+      "row_id": "295",
+      "source": "definitive"
+    },
+    "drive_downloads/Gugu2.txt": {
+      "row_id": "459",
+      "source": "definitive"
+    },
+    "drive_downloads/Gugu2.mp4": {
+      "row_id": "459",
+      "source": "definitive"
+    },
+    "drive_downloads/q3.mp4": {
+      "row_id": "398",
+      "source": "definitive"
+    },
+    "drive_downloads/1.Please read me.docx": {
+      "row_id": "484",
+      "source": "definitive"
+    },
+    "drive_downloads/19v8EN0EfTFPw-vvXNq_6fNBN4oUcyQw1.html": {
+      "row_id": "429",
+      "source": "definitive"
+    },
+    "drive_downloads/Saints falcons.mp3": {
+      "row_id": "295",
+      "source": "definitive"
+    },
+    "drive_downloads/1ABmYjWqBckozdrYH_a84EP31h6Y0Zj_h.html": {
+      "row_id": "426",
+      "source": "definitive"
+    },
+    "drive_downloads/10hZB1lCyg5F8JaQxK-5gLaphxTguM79l.html": {
+      "row_id": "461",
+      "source": "definitive"
+    },
+    "drive_downloads/Random guitar faces.mp4": {
+      "row_id": "476",
+      "source": "definitive"
+    },
+    "drive_downloads/q7.mp4": {
+      "row_id": "398",
+      "source": "definitive"
+    },
+    "drive_downloads/10KVsN4w8gnDCIPhqZWX_4zjFRI9ocQW5.html": {
+      "row_id": "460",
+      "source": "definitive"
+    },
+    "drive_downloads/kiko ops vedio.mp4": {
+      "row_id": "492",
+      "source": "definitive"
+    },
+    "drive_downloads/126gCQWEx1hm4G5jDVGsG8m06wdFibG9P.html": {
+      "row_id": "457",
+      "source": "definitive"
+    },
+    "drive_downloads/Clarifying C over B.m4a": {
+      "row_id": "426",
+      "source": "definitive"
+    },
+    "drive_downloads/Optional - Old Typing Video worse quality.mp4": {
+      "row_id": "476",
+      "source": "definitive"
+    },
+    "drive_downloads/taro offical TXT.txt": {
+      "row_id": "483",
+      "source": "definitive"
+    },
+    "drive_downloads/1vp9yPbkD0mTtPRzPDHA6XjE1cwJOpbL4.html": {
+      "row_id": "477",
+      "source": "definitive"
+    },
+    "drive_downloads/q10.mp4": {
+      "row_id": "398",
+      "source": "definitive"
+    },
+    "drive_downloads/q6.mp4": {
+      "row_id": "398",
+      "source": "definitive"
+    },
+    "drive_downloads/Lifting weight.mp4": {
+      "row_id": "476",
+      "source": "definitive"
+    },
+    "drive_downloads/Vtuber Design Concept (Not Yet Launched).pdf": {
+      "row_id": "462",
+      "source": "definitive"
+    },
+    "drive_downloads/Blooper 2.mp4": {
+      "row_id": "476",
+      "source": "definitive"
+    },
+    "drive_downloads/q1.mp4": {
+      "row_id": "398",
+      "source": "definitive"
+    },
+    "drive_downloads/q2.mp4": {
+      "row_id": "398",
+      "source": "definitive"
+    },
+    "drive_downloads/Blooper 1.mp4": {
+      "row_id": "476",
+      "source": "definitive"
+    },
+    "drive_downloads/q8.mp4": {
+      "row_id": "398",
+      "source": "definitive"
+    },
+    "drive_downloads/gugu.srt": {
+      "row_id": "459",
+      "source": "definitive"
+    },
+    "drive_downloads/1qbN54cdHSzth4YvpA2TOJQ1W4z6uW9vg.html": {
+      "row_id": "429",
+      "source": "definitive"
+    },
+    "drive_downloads/q5.mp4": {
+      "row_id": "398",
+      "source": "definitive"
+    },
+    "youtube_downloads/c0O6zlu9fFA.mp4": {
+      "row_id": "150",
+      "source": "definitive"
+    },
+    "youtube_downloads/2iwahDWerSQ_transcript.vtt": {
+      "row_id": "487",
+      "source": "definitive"
+    },
+    "youtube_downloads/wHTDAAZo63U.mp4": {
+      "row_id": "143",
+      "source": "definitive"
+    },
+    "youtube_downloads/d6IR17a0M2o_transcript.vtt": {
+      "row_id": "488",
+      "source": "definitive"
+    },
+    "youtube_downloads/gzc-VS7G1PU.mp4": {
+      "row_id": "448",
+      "source": "definitive"
+    },
+    "youtube_downloads/nMHFEvJjtL4_transcript.vtt": {
+      "row_id": "450",
+      "source": "definitive"
+    },
+    "youtube_downloads/hWrKIv5BX3g_transcript.vtt": {
+      "row_id": "421",
+      "source": "definitive"
+    },
+    "youtube_downloads/1mH0rvBUiyc_transcript.vtt": {
+      "row_id": "295",
+      "source": "definitive"
+    },
+    "youtube_downloads/d6IR17a0M2o.mp4": {
+      "row_id": "488",
+      "source": "definitive"
+    },
+    "youtube_downloads/hIn9CG5np68.mp4": {
+      "row_id": "480",
+      "source": "definitive"
+    },
+    "youtube_downloads/JfES_NdO4uM_transcript.vtt": {
+      "row_id": "26",
+      "source": "definitive"
+    },
+    "youtube_downloads/gzc-VS7G1PU_transcript.vtt": {
+      "row_id": "448",
+      "source": "definitive"
+    },
+    "youtube_downloads/WhmnolRhF1g_transcript.vtt": {
+      "row_id": "430",
+      "source": "definitive"
+    },
+    "youtube_downloads/c0O6zlu9fFA_transcript.vtt": {
+      "row_id": "150",
+      "source": "definitive"
+    },
+    "youtube_downloads/rp1GfzolEuQ_transcript.vtt": {
+      "row_id": "35",
+      "source": "definitive"
+    },
+    "youtube_downloads/xP47DYfxQ-c_transcript.vtt": {
+      "row_id": "270",
+      "source": "definitive"
+    },
+    "youtube_downloads/koFHwqlyDMQ_transcript.vtt": {
+      "row_id": "413",
+      "source": "definitive"
+    },
+    "youtube_downloads/BtSNvQ9Rc90.mp4": {
+      "row_id": "494",
+      "source": "definitive"
+    },
+    "youtube_downloads/Fn8JPuOuVYs.mp4": {
+      "row_id": "439",
+      "source": "definitive"
+    },
+    "youtube_downloads/GLUw5j3btmM_transcript.vtt": {
+      "row_id": "437",
+      "source": "definitive"
+    },
+    "youtube_downloads/WhmnolRhF1g.mp4": {
+      "row_id": "430",
+      "source": "definitive"
+    },
+    "youtube_downloads/E_MD2buVsJk.mp4": {
+      "row_id": "443",
+      "source": "definitive"
+    },
+    "youtube_downloads/rIdFu9zfWpw_transcript.vtt": {
+      "row_id": "148",
+      "source": "definitive"
+    },
+    "youtube_downloads/d9aTIYnZa4U.mp4": {
+      "row_id": "39",
+      "source": "definitive"
+    },
+    "youtube_downloads/3zCkiF_o7zw_transcript.vtt": {
+      "row_id": "496",
+      "source": "definitive"
+    },
+    "youtube_downloads/NyEJvtYCgAc.mp4": {
+      "row_id": "472",
+      "source": "definitive"
+    },
+    "youtube_downloads/QOVuBg8WCOQ_transcript.vtt": {
+      "row_id": "131",
+      "source": "definitive"
+    },
+    "youtube_downloads/A3jqeDdizWQ.mp4": {
+      "row_id": "395",
+      "source": "definitive"
+    },
+    "youtube_downloads/9uJ2fQj53mA_transcript.vtt": {
+      "row_id": "116",
+      "source": "definitive"
+    },
+    "youtube_downloads/0mqY6-vhPhY_transcript.vtt": {
+      "row_id": "496",
+      "source": "definitive"
+    },
+    "youtube_downloads/JfES_NdO4uM.mp4": {
+      "row_id": "26",
+      "source": "definitive"
+    },
+    "youtube_downloads/NyEJvtYCgAc_transcript.vtt": {
+      "row_id": "472",
+      "source": "definitive"
+    },
+    "youtube_downloads/rIdFu9zfWpw.mp4": {
+      "row_id": "148",
+      "source": "definitive"
+    },
+    "youtube_downloads/hIn9CG5np68_transcript.vtt": {
+      "row_id": "480",
+      "source": "definitive"
+    },
+    "youtube_downloads/Fn8JPuOuVYs_transcript.vtt": {
+      "row_id": "439",
+      "source": "definitive"
+    },
+    "youtube_downloads/QOVuBg8WCOQ.mp4": {
+      "row_id": "131",
+      "source": "definitive"
+    },
+    "youtube_downloads/2OD3ioKmDXg.mp4": {
+      "row_id": "280",
+      "source": "definitive"
+    },
+    "youtube_downloads/xZgV8iz5rz8_transcript.vtt": {
+      "row_id": "434",
+      "source": "definitive"
+    },
+    "youtube_downloads/dREsim4XdAo_transcript.vtt": {
+      "row_id": "297",
+      "source": "definitive"
+    },
+    "youtube_downloads/upxtvZtFaFE.mp4": {
+      "row_id": "327",
+      "source": "definitive"
+    },
+    "youtube_downloads/xP47DYfxQ-c.mp4": {
+      "row_id": "270",
+      "source": "definitive"
+    },
+    "youtube_downloads/7q_OJyEIYEI.mp4": {
+      "row_id": "464",
+      "source": "definitive"
+    },
+    "youtube_downloads/4HfkyhvaaWc_transcript.vtt": {
+      "row_id": "493",
+      "source": "definitive"
+    },
+    "youtube_downloads/wHTDAAZo63U_transcript.vtt": {
+      "row_id": "143",
+      "source": "definitive"
+    },
+    "youtube_downloads/mHP_eRur0Ek_transcript.vtt": {
+      "row_id": "44",
+      "source": "definitive"
+    },
+    "youtube_downloads/nMHFEvJjtL4.mp4": {
+      "row_id": "450",
+      "source": "definitive"
+    },
+    "youtube_downloads/izE8_-fijsw_transcript.vtt": {
+      "row_id": "41",
+      "source": "definitive"
+    },
+    "youtube_downloads/3zCkiF_o7zw.mp4": {
+      "row_id": "496",
+      "source": "definitive"
+    },
+    "youtube_downloads/d9aTIYnZa4U_transcript.vtt": {
+      "row_id": "39",
+      "source": "definitive"
+    },
+    "youtube_downloads/7q_OJyEIYEI_transcript.vtt": {
+      "row_id": "464",
+      "source": "definitive"
+    },
+    "youtube_downloads/upxtvZtFaFE_transcript.vtt": {
+      "row_id": "327",
+      "source": "definitive"
+    },
+    "youtube_downloads/izE8_-fijsw.mp4": {
+      "row_id": "41",
+      "source": "definitive"
+    },
+    "youtube_downloads/2iwahDWerSQ.mp4": {
+      "row_id": "487",
+      "source": "definitive"
+    },
+    "youtube_downloads/pM-fs9n93P8.mp4": {
+      "row_id": "271",
+      "source": "definitive"
+    },
+    "youtube_downloads/GLUw5j3btmM.mp4": {
+      "row_id": "437",
+      "source": "definitive"
+    },
+    "youtube_downloads/2OD3ioKmDXg_transcript.vtt": {
+      "row_id": "280",
+      "source": "definitive"
+    },
+    "youtube_downloads/frRRv_mX-g8_transcript.vtt": {
+      "row_id": "460",
+      "source": "definitive"
+    },
+    "youtube_downloads/ZBuff3DGbUM_transcript.vtt": {
+      "row_id": "494",
+      "source": "definitive"
+    },
+    "youtube_downloads/A3jqeDdizWQ_transcript.vtt": {
+      "row_id": "395",
+      "source": "definitive"
+    },
+    "youtube_downloads/mHP_eRur0Ek.mp4": {
+      "row_id": "44",
+      "source": "definitive"
+    },
+    "youtube_downloads/9uJ2fQj53mA.mp4": {
+      "row_id": "116",
+      "source": "definitive"
+    },
+    "youtube_downloads/AXAis3yy-BE_transcript.vtt": {
+      "row_id": "415",
+      "source": "definitive"
+    },
+    "youtube_downloads/xZgV8iz5rz8.mp4": {
+      "row_id": "434",
+      "source": "definitive"
+    },
+    "youtube_downloads/2HUmYvfcs6c_transcript.vtt": {
+      "row_id": "133",
+      "source": "definitive"
+    },
+    "youtube_downloads/7huzOSYKEAk.mp4": {
+      "row_id": "83",
+      "source": "definitive"
+    },
+    "youtube_downloads/1mH0rvBUiyc.mp4": {
+      "row_id": "295",
+      "source": "definitive"
+    },
+    "youtube_downloads/AXAis3yy-BE.mp4": {
+      "row_id": "415",
+      "source": "definitive"
+    },
+    "youtube_downloads/E_MD2buVsJk_transcript.vtt": {
+      "row_id": "443",
+      "source": "definitive"
+    },
+    "youtube_downloads/BtSNvQ9Rc90_transcript.vtt": {
+      "row_id": "494",
+      "source": "definitive"
+    },
+    "youtube_downloads/frRRv_mX-g8.mp4": {
+      "row_id": "460",
+      "source": "definitive"
+    },
+    "youtube_downloads/Zhihkc1AgGo_transcript.vtt": {
+      "row_id": "496",
+      "source": "definitive"
+    },
+    "youtube_downloads/zwh48UtZQAg.mp4": {
+      "row_id": "496",
+      "source": "definitive"
+    },
+    "youtube_downloads/Zhihkc1AgGo.mp4": {
+      "row_id": "496",
+      "source": "definitive"
+    },
+    "youtube_downloads/EykvaGXlGV0.mp4": {
+      "row_id": "360",
+      "source": "definitive"
+    },
+    "youtube_downloads/x2jejX4YbrA.mp4": {
+      "row_id": "485",
+      "source": "definitive"
+    },
+    "youtube_downloads/rp1GfzolEuQ.mp4": {
+      "row_id": "35",
+      "source": "definitive"
+    },
+    "youtube_downloads/O3CB41AwERM.mp4": {
+      "row_id": "396",
+      "source": "definitive"
+    },
+    "youtube_downloads/dREsim4XdAo.mp4": {
+      "row_id": "297",
+      "source": "definitive"
+    },
+    "youtube_downloads/koFHwqlyDMQ.mp4": {
+      "row_id": "413",
+      "source": "definitive"
+    },
+    "youtube_downloads/0mqY6-vhPhY.f605.mp4.part": {
+      "row_id": "496",
+      "source": "definitive"
+    },
+    "youtube_downloads/0mqY6-vhPhY.f605.mp4.ytdl": {
+      "row_id": "496",
+      "source": "definitive"
+    },
+    "youtube_downloads/0WnSsriqIyQ.mp4": {
+      "row_id": "36",
+      "source": "definitive"
+    },
+    "youtube_downloads/ZBuff3DGbUM.mp4": {
+      "row_id": "494",
+      "source": "definitive"
+    },
+    "youtube_downloads/EykvaGXlGV0_transcript.vtt": {
+      "row_id": "360",
+      "source": "definitive"
+    },
+    "youtube_downloads/0WnSsriqIyQ_transcript.vtt": {
+      "row_id": "36",
+      "source": "definitive"
+    },
+    "youtube_downloads/x2jejX4YbrA_transcript.vtt": {
+      "row_id": "485",
+      "source": "definitive"
+    },
+    "youtube_downloads/0mqY6-vhPhY.mp4": {
+      "row_id": "496",
+      "source": "definitive"
+    },
+    "youtube_downloads/hWrKIv5BX3g.mp4": {
+      "row_id": "421",
+      "source": "definitive"
+    },
+    "youtube_downloads/2HUmYvfcs6c.mp4": {
+      "row_id": "133",
+      "source": "definitive"
+    },
+    "youtube_downloads/O3CB41AwERM_transcript.vtt": {
+      "row_id": "396",
+      "source": "definitive"
+    },
+    "youtube_downloads/7huzOSYKEAk_transcript.vtt": {
+      "row_id": "83",
+      "source": "definitive"
+    },
+    "drive_downloads/Gugu.mp4": {
+      "row_id": "459",
+      "source": "original_metadata"
+    }
+  },
+  "metadata": {
+    "purpose": "Immutable backup of high-quality file-to-row mappings",
+    "quality_threshold": "definitive source only",
+    "total_files_mapped": 149,
+    "backup_type": "complete_system_state"
+  }
+}
