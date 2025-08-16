@@ -3,6 +3,17 @@
 CSV Manager - Unified CSV operations with atomic, streaming, tracking, and integrity capabilities
 Consolidates functionality from csv_tracker.py, atomic_csv.py, streaming_csv.py, 
 csv_file_integrity_mapper.py, and fix_csv_file_mappings.py
+
+⚠️  DEPRECATION NOTICE: DATABASE-NATIVE MIGRATION COMPLETED ⚠️
+The system has been migrated to database-native operations (PostgreSQL).
+This CSV Manager is preserved for:
+- Legacy compatibility during transition period
+- Migration tooling and testing
+- Historical data access if needed
+
+For new development, use: utils/database_native_operations.py
+Migration completed: August 16, 2025 (Archive ID: 20250816_133414)
+Status: All CSV files archived, system operates database-native only
 """
 
 import os

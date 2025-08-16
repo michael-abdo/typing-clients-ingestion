@@ -1,0 +1,11 @@
+{
+  "original_path": "outputs/output_pre_migration_backup_20250816_075929.csv",
+  "archive_path": "archive/csv_migration_20250816_133414/csv_files/output_pre_migration_backup_20250816_075929_20250816_133414.csv",
+  "original_size": 85988,
+  "archive_size": 85988,
+  "original_checksum": "a7fd1b9b165c4e231bd55469880d0d63fc14676d40f34f67d19e4260bcf00dfc",
+  "archive_checksum": "a7fd1b9b165c4e231bd55469880d0d63fc14676d40f34f67d19e4260bcf00dfc",
+  "copy_verified": true,
+  "archived_at": "2025-08-16T13:34:14.163018",
+  "original_modified": "2025-08-16T07:59:29.367839"
+}

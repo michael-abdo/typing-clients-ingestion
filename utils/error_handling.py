@@ -487,9 +487,7 @@ def with_standard_error_handling(operation_name: str, return_on_error: Any = Non
                 return func(*args, **kwargs)
             except Exception as e:
                 context = {
-                    'operation': operation_name,
-                    'function': func.__name__,
-                    'module': func.__module__
+                    'details': f"Operation: {operation_name}, Function: {func.__name__}, Module: {func.__module__}"
                 }
                 
                 error_handler.handle_error(e, context, raise_after_handling)

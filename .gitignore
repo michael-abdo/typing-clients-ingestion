@@ -92,4 +92,5 @@ htmlcov/
 
 # Documentation builds
 docs/_build/
-site/
+site/mass-download/
+retry_downloads/*.mp4

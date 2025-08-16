@@ -212,11 +212,10 @@ google_docs:
 
 # Database Configuration (S3 UUID System)
 database:
-  type: "postgresql"
   host: "localhost"
   port: 5432
-  database: "typing_clients_uuid"
-  username: "migration_user"
+  name: "typing_clients_uuid"
+  user: "migration_user"
   password: "${DB_PASSWORD:-}"  # Set via environment variable
   connection_pool:
     min_connections: 1
