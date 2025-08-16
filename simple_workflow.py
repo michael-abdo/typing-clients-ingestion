@@ -722,6 +722,8 @@ def parse_arguments():
                        help='Retry previously failed extractions')
     parser.add_argument('--output', type=str, metavar='FILE',
                        help='Override output CSV filename')
+    parser.add_argument('--no-yt-dlp-update', action='store_true',
+                       help='Skip automatic yt-dlp update before processing')
     
     return parser.parse_args()
 

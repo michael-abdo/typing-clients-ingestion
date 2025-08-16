@@ -31,11 +31,13 @@ try:
     from .logging_config import get_logger
     from .sanitization import sanitize_error_message
     from .database_manager import get_database_manager
+    from .yt_dlp_updater import ensure_yt_dlp_updated, get_yt_dlp_command
 except ImportError:
     from config import get_config, get_s3_bucket
     from logging_config import get_logger
     from sanitization import sanitize_error_message
     from database_manager import get_database_manager
+    from yt_dlp_updater import ensure_yt_dlp_updated, get_yt_dlp_command
 
 
 def get_s3_client(region_name: str = 'us-east-1') -> boto3.client:
@@ -301,6 +303,14 @@ class UnifiedS3Manager:
             raise TimeoutError(f"Named pipe operation timed out after 60 seconds on {pipe_path}")
         
         try:
+            # Ensure yt-dlp is updated to latest version (if enabled in config)
+            config = get_config()
+            if config.get("downloads.youtube.auto_update_yt_dlp", True):
+                self.logger.info("🔄 Ensuring yt-dlp is up to date...")
+                ensure_yt_dlp_updated()
+            else:
+                self.logger.info("⏭️ Skipping yt-dlp update (disabled in config)")
+            
             # Create named pipe
             if os.path.exists(pipe_path):
                 os.remove(pipe_path)
@@ -309,8 +319,8 @@ class UnifiedS3Manager:
             
             self.logger.info(f"  📥 Streaming YouTube to S3: {s3_key}")
             
-            # Start yt-dlp process - use best video format for mp4
-            cmd = ["yt-dlp", "-f", "best[ext=mp4]/best", "-o", pipe_path, url]
+            # Start yt-dlp process - use best video format for mp4 with updated command
+            cmd = get_yt_dlp_command(["-f", "best[ext=mp4]/best", "-o", pipe_path, url])
             self.logger.info(f"🚀 PROCESS_START: {' '.join(cmd)}")
             process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
             

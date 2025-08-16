@@ -44,6 +44,7 @@ downloads:
     # DRY Phase 3 additions
     quality: "128K"  # Default audio quality for audio downloads
     format: "mp3"    # Default audio format for audio downloads
+    auto_update_yt_dlp: true  # Automatically update yt-dlp before downloads
   drive:
     chunk_sizes:
       small: 1048576      # 1MB for files < 10MB
