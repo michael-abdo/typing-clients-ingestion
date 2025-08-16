@@ -1257,7 +1257,7 @@ def aggregate_csv_data(file_paths: List[str],
         
         # Apply aggregation rules for duplicate columns
         for col in df.columns:
-            if col \!= key_column and col in result_df.columns:
+            if col != key_column and col in result_df.columns:
                 new_col = f"{col}_new"
                 if new_col in result_df.columns:
                     rule = aggregation_rules.get(col, 'keep_first')
@@ -1268,7 +1268,7 @@ def aggregate_csv_data(file_paths: List[str],
                         result_df[col] = result_df[new_col].fillna(result_df[col])
                     elif rule == 'combine':
                         # Combine non-null values
-                        mask = result_df[col].isna()  < /dev/null |  (result_df[col] == '')
+                        mask = result_df[col].isna() | (result_df[col] == '')
                         result_df.loc[mask, col] = result_df.loc[mask, new_col]
                     
                     # Remove the temporary column
